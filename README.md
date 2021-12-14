@@ -1,2 +1,3 @@
 # lotusdb
-fast k/v db compatible with lsm and b+tree.
+fast k/v storage compatible with lsm and b+tree.
+
