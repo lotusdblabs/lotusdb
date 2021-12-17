@@ -99,19 +99,11 @@ func Debugf(format string, v ...interface{}) {
 }
 
 func Warn(v ...interface{}) {
-	_log.Warning(v...)
+	_log.Warn(v...)
 }
 
 func Warnf(format string, v ...interface{}) {
-	_log.Warningf(format, v...)
-}
-
-func Warning(v ...interface{}) {
-	_log.Warning(v...)
-}
-
-func Warningf(format string, v ...interface{}) {
-	_log.Warningf(format, v...)
+	_log.Warnf(format, v...)
 }
 
 func Error(v ...interface{}) {
@@ -209,11 +201,11 @@ func (l *Logger) Errorf(format string, v ...interface{}) {
 	l.logf(LogError, format, v...)
 }
 
-func (l *Logger) Warning(v ...interface{}) {
+func (l *Logger) Warn(v ...interface{}) {
 	l.log(LogWarning, v...)
 }
 
-func (l *Logger) Warningf(format string, v ...interface{}) {
+func (l *Logger) Warnf(format string, v ...interface{}) {
 	l.logf(LogWarning, format, v...)
 }
 

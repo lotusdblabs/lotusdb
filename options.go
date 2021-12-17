@@ -1,7 +1,14 @@
 package lotusdb
 
 type Options struct {
-	WalMMap      bool
+	// MemtableSize
 	MemtableSize uint64
-	MemtableNum  int
+
+	MemtableNum int
+
+	WalDir string
+
+	WalMMap bool
+
+	ColumnFamilyDir string
 }
