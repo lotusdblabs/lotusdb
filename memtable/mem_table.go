@@ -1,12 +1,19 @@
 package memtable
 
-type Memtable interface {
+import "github.com/flowercorp/lotusdb/wal"
+
+type IMemtable interface {
 	Put(key []byte, value interface{}) *Element
 	Get(key []byte) *Element
 	Exist(key []byte) bool
 	Remove(key []byte) *Element
 	Foreach(fun handleEle)
 	FindPrefix(prefix []byte) *Element
+}
+
+type Memtable struct {
+	mem IMemtable
+	wal *wal.Wal
 }
 
 type (
