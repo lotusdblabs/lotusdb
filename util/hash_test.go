@@ -3,6 +3,7 @@ package util
 import (
 	"github.com/stretchr/testify/assert"
 	"strconv"
+	"sync"
 	"testing"
 )
 
@@ -41,6 +42,30 @@ func TestMemHash2(t *testing.T) {
 	}
 	// all hash values should be the same in one process.
 	assert.Equal(t, 1, len(m))
+}
+
+func TestMemHash3(t *testing.T) {
+	// different groutines
+	key := []byte("lotusdb")
+	wg := sync.WaitGroup{}
+	wg.Add(2)
+
+	var (
+		hash1 uint64
+		hash2 uint64
+	)
+	go func() {
+		hash1 = MemHash(key)
+		wg.Done()
+	}()
+
+	go func() {
+		hash2 = MemHash(key)
+		wg.Done()
+	}()
+
+	wg.Wait()
+	assert.Equal(t, hash1, hash2)
 }
 
 func BenchmarkMemHash(b *testing.B) {
