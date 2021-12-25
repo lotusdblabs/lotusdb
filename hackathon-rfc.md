@@ -2,22 +2,19 @@
 
 ## 成员
 
-* roseduan：开源爱好者，分布式存储发烧友
+* roseduan：开源爱好者，开源项目 [rosedb](https://github.com/flower-corp/rosedb)、[lotusdb](https://github.com/flower-corp/lotusdb) 开发者，分布式存储发烧友
 
-* 杨振远：
-* 尹港：
-* 侯盛鑫：
+* 南风：开源项目 [lotusdb](https://github.com/flower-corp/lotusdb) 开发者，北京大学研究生在读，喜欢学习和 coding，对数据库开发很感兴趣，期待大家共同进步
+* wsyingang：开源项目 [lotusdb](https://github.com/flower-corp/lotusdb) 开发者，就职于字节跳动，主要做时序数据库方向，对数据库相关原理很感兴趣
+* 侯盛鑫：昵称[大云]，开源爱好者，[lotusdb](https://github.com/flower-corp/lotusdb) 的开发者之一，对数据库和分布式系统很感兴趣
 
 ## 项目进展
 
 - [ ] kv 整体管理，对外接口提供
-
+- [ ] Column Family 支持
 - [ ] 事务
-
 - [ ] memtable
-
 - [ ] WAL 日志
-
 - [ ] 磁盘数据管理
 
 # 项目介绍
