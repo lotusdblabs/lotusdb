@@ -17,23 +17,28 @@ const (
 )
 
 type (
+	// LockMgr lock manager for read and write keys.lockMaps
 	LockMgr struct {
 		lockMaps     map[int]*LockMap
 		mapStripeNum int
 		sync.Mutex
 	}
 
+	// LockMap maps all keys in a column family.
 	LockMap struct {
 		stripes   []*LockMapStripe
 		stripeNum int
 	}
 
+	// LockMapStripe
 	LockMapStripe struct {
+		// chn is used as a  lock of stripe, must hold the lock before modify keys map.
 		chn     chan struct{}
 		keys    map[uint64]*LockInfo
 		waiters waitersMap
 	}
 
+	// LockInfo
 	LockInfo struct {
 		exclusive bool
 		txnIds    map[uint64]struct{}
@@ -42,6 +47,7 @@ type (
 	waitersMap map[uint64]map[uint64]chan struct{}
 )
 
+// NewLockManager creata a new LockManager.
 func NewLockManager(stripeNum int) *LockMgr {
 	num := stripeNumFor(stripeNum)
 	return &LockMgr{
@@ -65,32 +71,38 @@ func newLockMapStripe() *LockMapStripe {
 	chn := make(chan struct{}, 1)
 	chn <- struct{}{}
 	return &LockMapStripe{
-		keys: make(map[uint64]*LockInfo),
-		chn:  chn,
+		keys:    make(map[uint64]*LockInfo),
+		waiters: make(waitersMap),
+		chn:     chn,
 	}
 }
 
-// TryLockKey 解锁位置要再看看
+// TryLockKey try lock a key with timeout.
 func (lm *LockMgr) TryLockKey(txnId uint64, cfId int, key uint64, timeout time.Duration, exclusive bool) error {
+	// find the lock map of column family id.
 	lockMap := lm.getLockMap(cfId)
 	stripe := lm.getMapStripe(lockMap, key)
 
 	// must hold stripe`s mutex.
-	now := time.Now()
+	moment := time.Now()
 	if locked := stripe.lockTimeout(timeout); !locked {
 		return ErrLockWaitTimeout
 	}
+	defer func() {
+		if stripe.isLocked() {
+			stripe.unLock()
+		}
+	}()
 
-	// fast path, acquire lock immediately.
+	// Fast path: acquire lock immediately.
 	acquied := lm.acquireLock(stripe, txnId, key, exclusive)
 	if acquied {
 		return nil
 	}
 
-	spent := time.Now().Sub(now)
+	spent := time.Now().Sub(moment)
 	timeout -= spent
-
-	// 拿不到，并且还有超时时间
+	// if we don`t acquire lock successfully, but there is stll timeout, wait and retry.
 	if timeout != 0 {
 		ctx, cancelFunc := context.WithTimeout(context.Background(), timeout)
 		defer cancelFunc()
@@ -102,6 +114,9 @@ func (lm *LockMgr) TryLockKey(txnId uint64, cfId int, key uint64, timeout time.D
 				return ErrLockWaitTimeout
 			default:
 				waiter := make(chan struct{})
+				if stripe.waiters[key] == nil {
+					stripe.waiters[key] = make(map[uint64]chan struct{})
+				}
 				stripe.waiters[key][txnId] = waiter
 				stripe.unLock()
 
@@ -113,39 +128,50 @@ func (lm *LockMgr) TryLockKey(txnId uint64, cfId int, key uint64, timeout time.D
 				}
 
 				// try to acquire lock again, must hold stripe`s mutex.
-				lock := stripe.lockTimeout(timeout)
-				if lock {
+				locked := stripe.lockTimeout(timeout)
+				if locked {
 					acquied = lm.acquireLock(stripe, txnId, key, exclusive)
+				}
+				if acquied {
+					return nil
 				}
 			}
 		}
-		return nil
 	}
 	return ErrLockWaitTimeout
 }
 
 func (lm *LockMgr) UnlockKey(txnId uint64, cfId int, key uint64) {
+	// find the lock map of column family id.
 	lockMap := lm.getLockMap(cfId)
 	stripe := lm.getMapStripe(lockMap, key)
 
+	// must hold strpe`s lock, wait indefinitely when unlock a key.
 	stripe.lock()
 	lockInfo := stripe.keys[key]
+	// lock is not be held.
 	if lockInfo == nil {
 		stripe.unLock()
 		return
 	}
-	delete(lockInfo.txnIds, txnId)
+
+	if _, ok := lockInfo.txnIds[txnId]; ok {
+		delete(lockInfo.txnIds, txnId)
+	}
+
 	var waiters []chan struct{}
 	if len(lockInfo.txnIds) == 0 || lockInfo.exclusive {
 		for _, ch := range stripe.waiters[key] {
 			waiters = append(waiters, ch)
 		}
+		stripe.keys[key] = nil
+		stripe.waiters[key] = nil
 	} else {
 		waiters = append(waiters, stripe.waiters[key][txnId])
 	}
 	stripe.unLock()
 
-	// notify
+	// notify all waiters.
 	for _, w := range waiters {
 		close(w)
 	}
@@ -172,8 +198,8 @@ func (lm *LockMgr) getMapStripe(lockMap *LockMap, key uint64) *LockMapStripe {
 
 func (lm *LockMgr) acquireLock(stripe *LockMapStripe, txnId, key uint64, exclusive bool) bool {
 	lkInfo := stripe.keys[key]
+	// lock is not be held.
 	if lkInfo == nil {
-		// 拿到锁，直接返回
 		txnIds := make(map[uint64]struct{})
 		txnIds[txnId] = struct{}{}
 		lkInfo := &LockInfo{
@@ -183,8 +209,9 @@ func (lm *LockMgr) acquireLock(stripe *LockMapStripe, txnId, key uint64, exclusi
 		stripe.keys[key] = lkInfo
 		return true
 	}
+
+	// acquire a shared lock.
 	if !exclusive && !lkInfo.exclusive {
-		// 共享锁能拿到
 		lkInfo.txnIds[txnId] = struct{}{}
 		stripe.keys[key] = lkInfo
 		return true
@@ -212,6 +239,10 @@ func (sp *LockMapStripe) unLock() {
 	default:
 		panic("unlock of unlocked mutex")
 	}
+}
+
+func (sp *LockMapStripe) isLocked() bool {
+	return len(sp.chn) == 0
 }
 
 func stripeNumFor(stripeNum int) int {
