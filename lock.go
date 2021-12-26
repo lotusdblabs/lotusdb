@@ -13,7 +13,8 @@ var (
 )
 
 const (
-	maxStripeNum = 1 << 16
+	maxStripeNum     = 1 << 16
+	defaultStripeNum = 16
 )
 
 type (
@@ -49,6 +50,9 @@ type (
 
 // NewLockManager creata a new LockManager.
 func NewLockManager(stripeNum int) *LockMgr {
+	if stripeNum <= 0 {
+		stripeNum = defaultStripeNum
+	}
 	num := stripeNumFor(stripeNum)
 	return &LockMgr{
 		lockMaps:     make(map[int]*LockMap),

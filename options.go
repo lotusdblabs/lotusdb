@@ -10,5 +10,9 @@ type Options struct {
 
 	WalMMap bool
 
+	DisableWal bool
+}
+
+type ColumnFamilyOptions struct {
 	ColumnFamilyDir string
 }
