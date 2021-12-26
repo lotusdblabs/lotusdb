@@ -7,7 +7,9 @@ import (
 
 const entryHeaderSize = 20
 
+
 type LogEntry struct {
+	Header    entryHeader
 	Key       []byte
 	Value     []byte
 	ExpiredAt uint64 // time.Unix
@@ -20,12 +22,12 @@ type entryHeader struct {
 	crc32     uint32 // check sum
 }
 
-func (e *LogEntry) size() int {
-	return entryHeaderSize + len(e.Key) + len(e.Value)
+func (e *LogEntry) Size() int {
+	return entryHeaderSize + len(e.Key) + len(e.Value)+8
 }
 
 func encodeEntry(e *LogEntry) []byte {
-	buf := make([]byte, e.size())
+	buf := make([]byte, e.Size())
 	// encode header.
 	binary.LittleEndian.PutUint32(buf[4:8], uint32(len(e.Key)))
 	binary.LittleEndian.PutUint32(buf[8:12], uint32(len(e.Value)))
@@ -56,3 +58,4 @@ func getEntryCrc(e *LogEntry, h []byte) uint32 {
 	crc = crc32.Update(crc, crc32.IEEETable, e.Value)
 	return crc
 }
+
