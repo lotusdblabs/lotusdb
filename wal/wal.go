@@ -1,7 +1,9 @@
 package wal
 
-import "os"
+import (
+	"github.com/flowercorp/lotusdb/logfile"
+)
 
 type Wal struct {
-	logFile *os.File
+	logFile logfile.LogFileIO
 }

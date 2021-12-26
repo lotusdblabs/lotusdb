@@ -1,13 +1,25 @@
 package lotusdb
 
-import "github.com/flowercorp/lotusdb/memtable"
+import (
+	"errors"
+	"github.com/flowercorp/lotusdb/memtable"
+	"github.com/flowercorp/lotusdb/vlog"
+)
+
+var (
+	ErrColoumnFamilyNameNil = errors.New("column family name is nil")
+)
 
 type ColumnFamily struct {
 	activeMem *memtable.Memtable   // Active memtable for writing.
 	immuMems  []*memtable.Memtable // Immutable memtables, waiting to be flushed to disk.
+	vlog      *vlog.ValueLog
 }
 
-func (db *LotusDB) CreateColumnFamily(opts ColumnFamilyOptions) (*ColumnFamily, error) {
+func (db *LotusDB) CreateColumnFamily(name string, opts ColumnFamilyOptions) (*ColumnFamily, error) {
+	if name == "" {
+		return nil, ErrColoumnFamilyNameNil
+	}
 	// create columm family path.
 
 	// open a memtable.

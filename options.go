@@ -1,6 +1,21 @@
 package lotusdb
 
+const (
+	DefaultDBPath = "/tmp/lotusdb"
+)
+
+const (
+	DefaultVLogBlockSize = 16 * 1024 * 1024 // 16MB
+)
+
 type Options struct {
+	DBPath string
+}
+
+type ColumnFamilyOptions struct {
+	// DirPath
+	DirPath string
+
 	// MemtableSize
 	MemtableSize uint64
 
@@ -11,8 +26,6 @@ type Options struct {
 	WalMMap bool
 
 	DisableWal bool
-}
 
-type ColumnFamilyOptions struct {
-	ColumnFamilyDir string
+	ValueLogBlockSize int64
 }
