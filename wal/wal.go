@@ -5,7 +5,7 @@ import (
 )
 
 type Wal struct {
-	logfile.LogFileIO
+	logfile.LogFile
 	path string
 }
 

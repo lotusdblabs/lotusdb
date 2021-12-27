@@ -1,33 +1,136 @@
 package logfile
 
-import "fmt"
-
-const (
-	// FilePerm default permission of the new created log file.
-	FilePerm = 0644
+import (
+	"errors"
+	"fmt"
+	"github.com/flowercorp/lotusdb/io"
+	"os"
 )
 
-type LogFileType int8
+var (
+	ErrInvalidCrc = errors.New("logfile: invalid crc")
+)
 
 const (
-	WAL LogFileType = iota
+	// PathSeparator default path separator.
+	PathSeparator = string(os.PathSeparator)
+
+	// WalSuffixName log file suffix name of write ahead log.
+	WalSuffixName = ".wal"
+
+	// VLogSuffixName log file suffix name of value log.
+	VLogSuffixName = ".vlog"
+)
+
+// FileType log file of wal and value log.
+type FileType int8
+
+const (
+	// WAL write ahead log.
+	WAL FileType = iota
+
+	// ValueLog value log.
 	ValueLog
 )
 
-type LogFile interface {
-	Write([]byte) error
-	Read(off int64) *logEntry
-	Sync() error
-	Close() error
+type IOType int8
+
+const (
+	FileIO = iota
+	MMap
+)
+
+type LogFile struct {
+	fid        uint32
+	writeOff   int64
+	ioSelector io.IOSelector
 }
 
-func getLogFileName(path string, fid uint32, ftype LogFileType) string {
-	fname := path + fmt.Sprintf("%9d", fid)
-	if ftype == WAL {
-		fname += ".wal"
+func OpenLogFile(path string, fid uint32, fsize int64, ftype FileType, ioType IOType) (lf *LogFile, err error) {
+	lf = &LogFile{fid: fid}
+	fileName := lf.getLogFileName(path, fid, ftype)
+
+	var selector io.IOSelector
+	switch ioType {
+	case FileIO:
+		if selector, err = io.NewFileIOSelector(fileName, fsize); err != nil {
+			return
+		}
+	case MMap:
+		if selector, err = io.NewMMapSelector(fileName, fsize); err != nil {
+			return
+		}
+	default:
+		panic(fmt.Sprintf("unsupported io type : %d", ioType))
 	}
-	if ftype == ValueLog {
-		fname += ".vlog"
+
+	lf.ioSelector = selector
+	return
+}
+
+// Read .
+func (lf *LogFile) Read(offset int64) (*logEntry, error) {
+	// read entry header.
+	headerBuf, err := lf.readBytes(offset, entryHeaderSize)
+	if err != nil {
+		return nil, err
 	}
-	return fname
+	header := decodeHeader(headerBuf)
+
+	kSize, vSize := int64(header.kSize), int64(header.vSize)
+	// read entry key and value.
+	kvBuf, err := lf.readBytes(offset+entryHeaderSize, kSize+vSize)
+	if err != nil {
+		return nil, err
+	}
+
+	e := &logEntry{
+		key:       kvBuf[:kSize],
+		value:     kvBuf[kSize:],
+		expiredAt: header.expiredAt,
+	}
+	// crc32 check.
+	if crc := getEntryCrc(e, headerBuf); crc != header.crc32 {
+		return nil, ErrInvalidCrc
+	}
+	return e, nil
+}
+
+// Write .
+func (lf *LogFile) Write(e *logEntry) error {
+	buf := encodeEntry(e)
+	n, err := lf.ioSelector.Write(buf, lf.writeOff)
+	if err != nil {
+		return err
+	}
+	lf.writeOff += int64(n)
+	return nil
+}
+
+// Sync .
+func (lf *LogFile) Sync() error {
+	return lf.ioSelector.Sync()
+}
+
+// Close .
+func (lf *LogFile) Close() error {
+	return lf.ioSelector.Close()
+}
+
+func (lf *LogFile) readBytes(offset, n int64) (buf []byte, err error) {
+	buf = make([]byte, n)
+	_, err = lf.ioSelector.Read(buf, offset)
+	return
+}
+
+func (lf *LogFile) getLogFileName(path string, fid uint32, ftype FileType) string {
+	fname := path + PathSeparator + fmt.Sprintf("%09d", fid)
+	switch ftype {
+	case WAL:
+		return fname + WalSuffixName
+	case ValueLog:
+		return fname + VLogSuffixName
+	default:
+		panic(fmt.Sprintf("unsupported log file type: %d", ftype))
+	}
 }
