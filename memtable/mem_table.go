@@ -1,6 +1,21 @@
 package memtable
 
-import "github.com/flowercorp/lotusdb/wal"
+import (
+	"errors"
+	"github.com/flowercorp/lotusdb/wal"
+)
+
+type memAlg int
+
+const (
+	Skl memAlg = iota
+	HashSkl
+	APT
+)
+
+var (
+	writeWALErr = errors.New("can not write wal file")
+)
 
 type IMemtable interface {
 	Put(key []byte, value interface{}) *Element
@@ -16,37 +31,38 @@ type Memtable struct {
 	wal *wal.Wal
 }
 
-type (
-	// Node the skip list node.
-	Node struct {
-		next []*Element
+func getIMemtable(mode memAlg) IMemtable {
+	switch mode {
+	case Skl:
+		return NewSkipList()
+	case HashSkl:
+		return nil
+	case APT:
+		return nil
+	default:
+		return NewSkipList()
+	}
+}
+
+func newMemTable(path string, mode memAlg) *Memtable {
+	return &Memtable{
+		mem: getIMemtable(mode),
+		wal: wal.NewWal(path),
+	}
+}
+
+func (mt *Memtable) Put(key []byte, value interface{}) error {
+	if mt.wal != nil {
+		// TODO 需要修改成写入一个entry
+		if err := mt.wal.Write(key); err != nil {
+			return writeWALErr
+		}
 	}
 
-	// Element element is the data stored.
-	Element struct {
-		Node
-		key   []byte
-		value interface{}
-	}
-)
-
-// Key the key of the Element.
-func (e *Element) Key() []byte {
-	return e.key
+	mt.mem.Put(key, value)
+	return nil
 }
 
-// Value the value of the Element.
-func (e *Element) Value() interface{} {
-	return e.value
-}
-
-// SetValue set the element value.
-func (e *Element) SetValue(val interface{}) {
-	e.value = val
-}
-
-// Next the first-level index of the skip list is the original data, which is arranged in an orderly manner.
-// A linked list of all data in series can be obtained according to the Next method.
-func (e *Element) Next() *Element {
-	return e.next[0]
+func (mt *Memtable) SyncWAL() error {
+	return mt.wal.Sync()
 }
