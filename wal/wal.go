@@ -5,5 +5,5 @@ import (
 )
 
 type Wal struct {
-	logFile logfile.LogFileIO
+	logFile *logfile.LogFile
 }
