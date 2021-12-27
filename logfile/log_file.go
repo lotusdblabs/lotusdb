@@ -5,6 +5,7 @@ import (
 	"fmt"
 	"github.com/flowercorp/lotusdb/io"
 	"os"
+	"sync"
 )
 
 var (
@@ -41,13 +42,14 @@ const (
 )
 
 type LogFile struct {
-	fid        uint32
+	sync.RWMutex
+	Fid        uint32
 	writeOff   int64
 	ioSelector io.IOSelector
 }
 
 func OpenLogFile(path string, fid uint32, fsize int64, ftype FileType, ioType IOType) (lf *LogFile, err error) {
-	lf = &LogFile{fid: fid}
+	lf = &LogFile{Fid: fid}
 	fileName := lf.getLogFileName(path, fid, ftype)
 
 	var selector io.IOSelector
@@ -69,7 +71,7 @@ func OpenLogFile(path string, fid uint32, fsize int64, ftype FileType, ioType IO
 }
 
 // Read .
-func (lf *LogFile) Read(offset int64) (*logEntry, error) {
+func (lf *LogFile) Read(offset int64) (*LogEntry, error) {
 	// read entry header.
 	headerBuf, err := lf.readBytes(offset, entryHeaderSize)
 	if err != nil {
@@ -84,10 +86,10 @@ func (lf *LogFile) Read(offset int64) (*logEntry, error) {
 		return nil, err
 	}
 
-	e := &logEntry{
-		key:       kvBuf[:kSize],
-		value:     kvBuf[kSize:],
-		expiredAt: header.expiredAt,
+	e := &LogEntry{
+		Key:       kvBuf[:kSize],
+		Value:     kvBuf[kSize:],
+		ExpiredAt: header.expiredAt,
 	}
 	// crc32 check.
 	if crc := getEntryCrc(e, headerBuf); crc != header.crc32 {
@@ -97,7 +99,7 @@ func (lf *LogFile) Read(offset int64) (*logEntry, error) {
 }
 
 // Write .
-func (lf *LogFile) Write(e *logEntry) error {
+func (lf *LogFile) Write(e *LogEntry) error {
 	buf := encodeEntry(e)
 	n, err := lf.ioSelector.Write(buf, lf.writeOff)
 	if err != nil {

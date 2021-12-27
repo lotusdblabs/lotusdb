@@ -7,10 +7,10 @@ import (
 
 const entryHeaderSize = 20
 
-type logEntry struct {
-	key       []byte
-	value     []byte
-	expiredAt uint64 // time.Unix
+type LogEntry struct {
+	Key       []byte
+	Value     []byte
+	ExpiredAt uint64 // time.Unix
 }
 
 type entryHeader struct {
@@ -20,20 +20,20 @@ type entryHeader struct {
 	crc32     uint32 // check sum
 }
 
-func (e *logEntry) size() int {
-	return entryHeaderSize + len(e.key) + len(e.value)
+func (e *LogEntry) size() int {
+	return entryHeaderSize + len(e.Key) + len(e.Value)
 }
 
-func encodeEntry(e *logEntry) []byte {
+func encodeEntry(e *LogEntry) []byte {
 	buf := make([]byte, e.size())
 	// encode header.
-	binary.LittleEndian.PutUint32(buf[4:8], uint32(len(e.key)))
-	binary.LittleEndian.PutUint32(buf[8:12], uint32(len(e.value)))
-	binary.LittleEndian.PutUint64(buf[12:20], e.expiredAt)
+	binary.LittleEndian.PutUint32(buf[4:8], uint32(len(e.Key)))
+	binary.LittleEndian.PutUint32(buf[8:12], uint32(len(e.Value)))
+	binary.LittleEndian.PutUint64(buf[12:20], e.ExpiredAt)
 
 	// key and value.
-	copy(buf[entryHeaderSize:], e.key)
-	copy(buf[entryHeaderSize+len(e.key):], e.value)
+	copy(buf[entryHeaderSize:], e.Key)
+	copy(buf[entryHeaderSize+len(e.Key):], e.Value)
 
 	// crc32.
 	crc := crc32.ChecksumIEEE(buf[4:])
@@ -50,9 +50,9 @@ func decodeHeader(buf []byte) *entryHeader {
 	}
 }
 
-func getEntryCrc(e *logEntry, h []byte) uint32 {
+func getEntryCrc(e *LogEntry, h []byte) uint32 {
 	crc := crc32.ChecksumIEEE(h[4:])
-	crc = crc32.Update(crc, crc32.IEEETable, e.key)
-	crc = crc32.Update(crc, crc32.IEEETable, e.value)
+	crc = crc32.Update(crc, crc32.IEEETable, e.Key)
+	crc = crc32.Update(crc, crc32.IEEETable, e.Value)
 	return crc
 }

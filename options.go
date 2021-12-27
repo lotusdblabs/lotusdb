@@ -8,10 +8,12 @@ const (
 	DefaultVLogBlockSize = 16 * 1024 * 1024 // 16MB
 )
 
+// Options for db.
 type Options struct {
 	DBPath string
 }
 
+// ColumnFamilyOptions for column family.
 type ColumnFamilyOptions struct {
 	// DirPath
 	DirPath string
