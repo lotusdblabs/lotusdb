@@ -54,7 +54,6 @@ func (e *Element) Next() *Element {
 	return e.next[0]
 }
 
-
 type SkipList struct {
 	Node
 	maxLevel       int

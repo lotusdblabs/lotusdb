@@ -2,6 +2,7 @@ package memtable
 
 import (
 	"errors"
+	"github.com/flowercorp/lotusdb/logfile"
 	"github.com/flowercorp/lotusdb/wal"
 )
 
@@ -30,6 +31,15 @@ type Memtable struct {
 	wal *wal.Wal
 }
 
+type MemOption struct {
+	size       int64  // memtable size
+	mode       MemAlg // algorithm kind
+	walMMap    bool   //
+	disableWal bool   //
+	fileType   int
+	ioType     int
+}
+
 func getIMemtable(mode MemAlg) IMemtable {
 	switch mode {
 	case Skl:
@@ -41,6 +51,25 @@ func getIMemtable(mode MemAlg) IMemtable {
 	}
 }
 
+func OpenMemTable(path string, fid uint32, opt *MemOption) *Memtable {
+	var memtable Memtable
+
+	imem := getIMemtable(opt.mode)
+	memtable.mem = imem
+
+	if !opt.disableWal {
+
+		lf, err := logfile.OpenLogFile(path, fid, opt.size, FileType(opt.fileType), IOType(opt.ioType))
+		if err != nil {
+			return nil
+		}
+		memtable.wal = lf
+		memtable.UpdateMemtable()
+	}
+
+	return &memtable
+}
+
 func newMemTable(path string, mode MemAlg) *Memtable {
 	return &Memtable{
 		mem: getIMemtable(mode),
@@ -50,7 +79,7 @@ func newMemTable(path string, mode MemAlg) *Memtable {
 
 func (mt *Memtable) Put(key []byte, value interface{}) error {
 	if mt.wal != nil {
-
+		mt.wal.Write(key, value)
 	}
 
 	mt.mem.Put(key, value)
@@ -59,4 +88,14 @@ func (mt *Memtable) Put(key []byte, value interface{}) error {
 
 func (mt *Memtable) SyncWAL() error {
 	return mt.wal.Sync()
+}
+
+func (mt *Memtable) Get(key []byte) interface{} {
+	return mt.mem.Get(key).Value()
+}
+
+func (mt *Memtable) UpdateMemtable() {
+	if mt.wal != nil {
+		mt.wal.Read()
+	}
 }
