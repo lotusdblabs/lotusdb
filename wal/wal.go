@@ -5,12 +5,16 @@ import (
 )
 
 type Wal struct {
-	logfile.LogFile
-	path string
+	logFile *logfile.LogFile
+	path    string
 }
 
 func NewWal(path string) *Wal {
 	return &Wal{
 		path: path,
 	}
+}
+
+func (w *Wal) Sync() error {
+	return nil
 }

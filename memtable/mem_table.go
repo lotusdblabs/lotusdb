@@ -1,19 +1,14 @@
 package memtable
 
 import (
-	"errors"
 	"github.com/flowercorp/lotusdb/wal"
 )
 
-type MemAlg int
-
-var (
-	writeWALErr = errors.New("can not write wal file")
-)
+type TableType int8
 
 const (
-	Skl MemAlg = iota
-	HashSkl
+	SkipListRep TableType = iota
+	HashSkipListRep
 )
 
 type IMemtable interface {
@@ -30,18 +25,7 @@ type Memtable struct {
 	wal *wal.Wal
 }
 
-func getIMemtable(mode MemAlg) IMemtable {
-	switch mode {
-	case Skl:
-		return NewSkipList()
-	case HashSkl:
-		return nil
-	default:
-		return NewSkipList()
-	}
-}
-
-func newMemTable(path string, mode MemAlg) *Memtable {
+func MewMemTable(path string, mode TableType) *Memtable {
 	return &Memtable{
 		mem: getIMemtable(mode),
 		wal: wal.NewWal(path),
@@ -59,4 +43,14 @@ func (mt *Memtable) Put(key []byte, value interface{}) error {
 
 func (mt *Memtable) SyncWAL() error {
 	return mt.wal.Sync()
+}
+
+func getIMemtable(mode TableType) IMemtable {
+	switch mode {
+	case HashSkipListRep:
+		// NewHashKsipList
+		return nil
+	default:
+		return NewSkipList()
+	}
 }

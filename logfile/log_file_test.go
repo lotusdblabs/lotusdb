@@ -207,10 +207,10 @@ func TestLogFile_Close(t *testing.T) {
 	})
 }
 
-func getLogEntry() *logEntry {
-	return &logEntry{
-		key:       []byte("lotusdb"),
-		value:     []byte("lotusdb"),
-		expiredAt: uint64(time.Now().Add(time.Hour).Unix()),
+func getLogEntry() *LogEntry {
+	return &LogEntry{
+		Key:       []byte("lotusdb"),
+		Value:     []byte("lotusdb"),
+		ExpiredAt: uint64(time.Now().Add(time.Hour).Unix()),
 	}
 }
