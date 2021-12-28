@@ -7,9 +7,7 @@ import (
 
 const entryHeaderSize = 20
 
-
 type LogEntry struct {
-	Header    entryHeader
 	Key       []byte
 	Value     []byte
 	ExpiredAt uint64 // time.Unix
@@ -23,7 +21,7 @@ type entryHeader struct {
 }
 
 func (e *LogEntry) Size() int {
-	return entryHeaderSize + len(e.Key) + len(e.Value)+8
+	return entryHeaderSize + len(e.Key) + len(e.Value)
 }
 
 func encodeEntry(e *LogEntry) []byte {
@@ -58,4 +56,3 @@ func getEntryCrc(e *LogEntry, h []byte) uint32 {
 	crc = crc32.Update(crc, crc32.IEEETable, e.Value)
 	return crc
 }
-
