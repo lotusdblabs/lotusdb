@@ -72,11 +72,33 @@ func (vlog *ValueLog) ReadValue(pos *ValuePos) ([]byte, error) {
 }
 
 func (vlog *ValueLog) Write(e *logfile.LogEntry) (*ValuePos, error) {
+	eSize := int64(e.Size())
+	// if active is reach to thereshold, close it and open a new one.
+	if vlog.activeLogFile.WriteAt+eSize >= vlog.opt.blockSize {
+		if err := vlog.activeLogFile.Close(); err != nil {
+			return nil, err
+		}
+		vlog.Lock()
+		vlog.logFiles[vlog.activeLogFile.Fid] = vlog.activeLogFile
+
+		logFile, err := vlog.createLogFile()
+		if err != nil {
+			vlog.Unlock()
+			return nil, err
+		}
+		vlog.activeLogFile = logFile
+		vlog.Unlock()
+	}
 	err := vlog.activeLogFile.Write(e)
 	if err != nil {
-		return nil, nil
+		return nil, err
 	}
-	return nil, nil
+
+	return &ValuePos{
+		fid:    vlog.activeLogFile.Fid,
+		offset: vlog.activeLogFile.WriteAt - eSize,
+		size:   uint32(eSize),
+	}, nil
 }
 
 func (vlog *ValueLog) Sync() error {
@@ -97,6 +119,16 @@ func (vlog *ValueLog) Close() error {
 	vlog.activeLogFile.Lock()
 	defer vlog.activeLogFile.Unlock()
 	return vlog.activeLogFile.Close()
+}
+
+func (vlog *ValueLog) createLogFile() (*logfile.LogFile, error) {
+	opt := vlog.opt
+	fid := vlog.activeLogFile.Fid
+	logFile, err := logfile.OpenLogFile(opt.path, fid+1, opt.blockSize, logfile.ValueLog, opt.IoType)
+	if err != nil {
+		return nil, err
+	}
+	return logFile, nil
 }
 
 // do it later.
