@@ -5,16 +5,15 @@ import (
 	"github.com/flowercorp/lotusdb/wal"
 )
 
-type memAlg int
-
-const (
-	Skl memAlg = iota
-	HashSkl
-	APT
-)
+type MemAlg int
 
 var (
 	writeWALErr = errors.New("can not write wal file")
+)
+
+const (
+	Skl MemAlg = iota
+	HashSkl
 )
 
 type IMemtable interface {
@@ -31,20 +30,18 @@ type Memtable struct {
 	wal *wal.Wal
 }
 
-func getIMemtable(mode memAlg) IMemtable {
+func getIMemtable(mode MemAlg) IMemtable {
 	switch mode {
 	case Skl:
 		return NewSkipList()
 	case HashSkl:
-		return nil
-	case APT:
 		return nil
 	default:
 		return NewSkipList()
 	}
 }
 
-func newMemTable(path string, mode memAlg) *Memtable {
+func newMemTable(path string, mode MemAlg) *Memtable {
 	return &Memtable{
 		mem: getIMemtable(mode),
 		wal: wal.NewWal(path),
@@ -53,10 +50,7 @@ func newMemTable(path string, mode memAlg) *Memtable {
 
 func (mt *Memtable) Put(key []byte, value interface{}) error {
 	if mt.wal != nil {
-		// TODO 需要修改成写入一个entry
-		if err := mt.wal.Write(key); err != nil {
-			return writeWALErr
-		}
+
 	}
 
 	mt.mem.Put(key, value)

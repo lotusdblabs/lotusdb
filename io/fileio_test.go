@@ -23,7 +23,7 @@ func TestFileIOSelector_Write(t *testing.T) {
 }
 
 func TestFileIOSelector_Read(t *testing.T) {
-	selector, err := NewFileIOSelector(mmapName, msize)
+	selector, err := NewFileIOSelector(fileName, fsize)
 	assert.Nil(t, err)
 	offsets := writeSomeData(selector, t)
 
