@@ -25,7 +25,7 @@ type Memtable struct {
 	wal *wal.Wal
 }
 
-func MewMemTable(path string, mode TableType) *Memtable {
+func OpenMemTable(path string, mode TableType) *Memtable {
 	return &Memtable{
 		mem: getIMemtable(mode),
 		wal: wal.NewWal(path),
