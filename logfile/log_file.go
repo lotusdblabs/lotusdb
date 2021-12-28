@@ -44,7 +44,7 @@ const (
 type LogFile struct {
 	sync.RWMutex
 	Fid        uint32
-	writeOff   int64
+	writeAt   int64
 	ioSelector io.IOSelector
 }
 
@@ -101,11 +101,11 @@ func (lf *LogFile) Read(offset int64) (*LogEntry, error) {
 // Write .
 func (lf *LogFile) Write(e *LogEntry) error {
 	buf := encodeEntry(e)
-	n, err := lf.ioSelector.Write(buf, lf.writeOff)
+	n, err := lf.ioSelector.Write(buf, lf.writeAt)
 	if err != nil {
 		return err
 	}
-	lf.writeOff += int64(n)
+	lf.writeAt += int64(n)
 	return nil
 }
 
