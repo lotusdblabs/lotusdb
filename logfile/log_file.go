@@ -81,7 +81,7 @@ func (lf *LogFile) Read(offset int64) (*LogEntry, error) {
 
 	kSize, vSize := int64(header.kSize), int64(header.vSize)
 	// read entry key and value.
-	kvBuf, err := lf.readBytes(offset+kSize, kSize+vSize)
+	kvBuf, err := lf.readBytes(offset+entryHeaderSize, kSize+vSize)
 	if err != nil {
 		return nil, err
 	}
@@ -126,7 +126,7 @@ func (lf *LogFile) readBytes(offset, n int64) (buf []byte, err error) {
 }
 
 func (lf *LogFile) getLogFileName(path string, fid uint32, ftype FileType) string {
-	fname := path + PathSeparator + fmt.Sprintf("%9d", fid)
+	fname := path + PathSeparator + fmt.Sprintf("%09d", fid)
 	switch ftype {
 	case WAL:
 		return fname + WalSuffixName

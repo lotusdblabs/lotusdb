@@ -25,18 +25,25 @@ func TestFileIOSelector_Write(t *testing.T) {
 func TestFileIOSelector_Read(t *testing.T) {
 	selector, err := NewFileIOSelector(fileName, fsize)
 	assert.Nil(t, err)
-
 	offsets := writeSomeData(selector, t)
 
-	read := func(offset int64, n int) {
+	tests := [][]byte{
+		[]byte(""),
+		[]byte("0"),
+		[]byte("1"),
+		[]byte("lotusdb"),
+	}
+
+	read := func(offset int64, n int, expected []byte) {
 		buf := make([]byte, n)
 		_, err := selector.Read(buf, offset)
 		assert.Nil(t, err)
+		assert.Equal(t, expected, buf)
 	}
 
 	n := []int{0, 1, 1, 7}
 	for i, off := range offsets {
-		read(off, n[i])
+		read(off, n[i], tests[i])
 	}
 }
 

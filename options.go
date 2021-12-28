@@ -21,7 +21,10 @@ type ColumnFamilyOptions struct {
 	// MemtableSize
 	MemtableSize uint64
 
+	// the number of memtable
 	MemtableNum int
+
+	MentableAlgorithm int
 
 	WalDir string
 

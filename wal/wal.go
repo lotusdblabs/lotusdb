@@ -5,5 +5,12 @@ import (
 )
 
 type Wal struct {
-	logFile *logfile.LogFile
+	logfile.LogFile
+	path string
+}
+
+func NewWal(path string) *Wal {
+	return &Wal{
+		path: path,
+	}
 }
