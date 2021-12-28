@@ -1,138 +1,61 @@
 package logfile
 
 import (
-	"errors"
-	"fmt"
-	"github.com/flowercorp/lotusdb/io"
-	"os"
-	"sync"
+	"encoding/binary"
+	"hash/crc32"
 )
 
-var (
-	ErrInvalidCrc = errors.New("logfile: invalid crc")
-)
+const entryHeaderSize = 20
 
-const (
-	// PathSeparator default path separator.
-	PathSeparator = string(os.PathSeparator)
 
-	// WalSuffixName log file suffix name of write ahead log.
-	WalSuffixName = ".wal"
-
-	// VLogSuffixName log file suffix name of value log.
-	VLogSuffixName = ".vlog"
-)
-
-// FileType log file of wal and value log.
-type FileType int8
-
-const (
-	// WAL write ahead log.
-	WAL FileType = iota
-
-	// ValueLog value log.
-	ValueLog
-)
-
-type IOType int8
-
-const (
-	FileIO = iota
-	MMap
-)
-
-type LogFile struct {
-	sync.RWMutex
-	Fid        uint32
-	writeAt   int64
-	ioSelector io.IOSelector
+type LogEntry struct {
+	Header    entryHeader
+	Key       []byte
+	Value     []byte
+	ExpiredAt uint64 // time.Unix
 }
 
-func OpenLogFile(path string, fid uint32, fsize int64, ftype FileType, ioType IOType) (lf *LogFile, err error) {
-	lf = &LogFile{Fid: fid}
-	fileName := lf.getLogFileName(path, fid, ftype)
-
-	var selector io.IOSelector
-	switch ioType {
-	case FileIO:
-		if selector, err = io.NewFileIOSelector(fileName, fsize); err != nil {
-			return
-		}
-	case MMap:
-		if selector, err = io.NewMMapSelector(fileName, fsize); err != nil {
-			return
-		}
-	default:
-		panic(fmt.Sprintf("unsupported io type : %d", ioType))
-	}
-
-	lf.ioSelector = selector
-	return
+type entryHeader struct {
+	kSize     uint32
+	vSize     uint32
+	expiredAt uint64 // time.Unix
+	crc32     uint32 // check sum
 }
 
-// Read .
-func (lf *LogFile) Read(offset int64) (*LogEntry, error) {
-	// read entry header.
-	headerBuf, err := lf.readBytes(offset, entryHeaderSize)
-	if err != nil {
-		return nil, err
-	}
-	header := decodeHeader(headerBuf)
-
-	kSize, vSize := int64(header.kSize), int64(header.vSize)
-	// read entry key and value.
-	kvBuf, err := lf.readBytes(offset+entryHeaderSize, kSize+vSize)
-	if err != nil {
-		return nil, err
-	}
-
-	e := &LogEntry{
-		Key:       kvBuf[:kSize],
-		Value:     kvBuf[kSize:],
-		ExpiredAt: header.expiredAt,
-	}
-	// crc32 check.
-	if crc := getEntryCrc(e, headerBuf); crc != header.crc32 {
-		return nil, ErrInvalidCrc
-	}
-	return e, nil
+func (e *LogEntry) Size() int {
+	return entryHeaderSize + len(e.Key) + len(e.Value)+8
 }
 
-// Write .
-func (lf *LogFile) Write(e *LogEntry) error {
-	buf := encodeEntry(e)
-	n, err := lf.ioSelector.Write(buf, lf.writeAt)
-	if err != nil {
-		return err
-	}
-	lf.writeAt += int64(n)
-	return nil
+func encodeEntry(e *LogEntry) []byte {
+	buf := make([]byte, e.Size())
+	// encode header.
+	binary.LittleEndian.PutUint32(buf[4:8], uint32(len(e.Key)))
+	binary.LittleEndian.PutUint32(buf[8:12], uint32(len(e.Value)))
+	binary.LittleEndian.PutUint64(buf[12:20], e.ExpiredAt)
+
+	// key and value.
+	copy(buf[entryHeaderSize:], e.Key)
+	copy(buf[entryHeaderSize+len(e.Key):], e.Value)
+
+	// crc32.
+	crc := crc32.ChecksumIEEE(buf[4:])
+	binary.LittleEndian.PutUint32(buf[:4], crc)
+	return buf
 }
 
-// Sync .
-func (lf *LogFile) Sync() error {
-	return lf.ioSelector.Sync()
-}
-
-// Close .
-func (lf *LogFile) Close() error {
-	return lf.ioSelector.Close()
-}
-
-func (lf *LogFile) readBytes(offset, n int64) (buf []byte, err error) {
-	buf = make([]byte, n)
-	_, err = lf.ioSelector.Read(buf, offset)
-	return
-}
-
-func (lf *LogFile) getLogFileName(path string, fid uint32, ftype FileType) string {
-	fname := path + PathSeparator + fmt.Sprintf("%09d", fid)
-	switch ftype {
-	case WAL:
-		return fname + WalSuffixName
-	case ValueLog:
-		return fname + VLogSuffixName
-	default:
-		panic(fmt.Sprintf("unsupported log file type: %d", ftype))
+func decodeHeader(buf []byte) *entryHeader {
+	return &entryHeader{
+		kSize:     binary.LittleEndian.Uint32(buf[4:8]),
+		vSize:     binary.LittleEndian.Uint32(buf[8:12]),
+		expiredAt: binary.LittleEndian.Uint64(buf[12:20]),
+		crc32:     binary.LittleEndian.Uint32(buf[:4]),
 	}
 }
+
+func getEntryCrc(e *LogEntry, h []byte) uint32 {
+	crc := crc32.ChecksumIEEE(h[4:])
+	crc = crc32.Update(crc, crc32.IEEETable, e.Key)
+	crc = crc32.Update(crc, crc32.IEEETable, e.Value)
+	return crc
+}
+
