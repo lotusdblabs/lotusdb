@@ -3,7 +3,9 @@ package lotusdb
 import (
 	"errors"
 	"github.com/flowercorp/lotusdb/memtable"
+	"github.com/flowercorp/lotusdb/util"
 	"github.com/flowercorp/lotusdb/vlog"
+	"os"
 )
 
 var (
@@ -20,11 +22,19 @@ func (db *LotusDB) CreateColumnFamily(name string, opts ColumnFamilyOptions) (*C
 	if name == "" {
 		return nil, ErrColoumnFamilyNameNil
 	}
+
 	// create columm family path.
+	if !util.PathExist(opts.DirPath) {
+		if err := os.MkdirAll(opts.DirPath, os.ModePerm); err != nil {
+			return nil, err
+		}
+	}
 
 	// open a memtable.
 
 	// open a wal for memtable(if necessary).
+
+	// open value log.
 
 	return nil, nil
 }
