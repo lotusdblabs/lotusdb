@@ -1,4 +1,4 @@
-package io
+package ioselector
 
 import (
 	"github.com/stretchr/testify/assert"

@@ -1,6 +1,7 @@
 package memtable
 
 import (
+	"github.com/flowercorp/lotusdb/logfile"
 	"github.com/spaolacci/murmur3"
 )
 
@@ -29,44 +30,34 @@ func getHash(key []byte) int64 {
 }
 
 func (h *HashSkipList) getSkipList(index int64) *SkipList {
+	if skl, ok := h.skls[index]; ok {
+		return skl
+	}
+
+	h.skls[index] = NewSkipList()
 	return h.skls[index]
 }
 
-func (h *HashSkipList) Put(key []byte, value interface{}) *Element {
+func (h *HashSkipList) Put(key []byte, value []byte) *logfile.LogEntry {
 	skl := h.getSkipList(getHash(key))
-	if skl == nil {
-		skl = NewSkipList()
-	}
 
 	return skl.Put(key, value)
 }
 
-func (h *HashSkipList) Get(key []byte) *Element {
+func (h *HashSkipList) Get(key []byte) *logfile.LogEntry {
 	skl := h.getSkipList(getHash(key))
-	if skl == nil {
-		skl = NewSkipList()
-		return nil
-	}
 
 	return skl.Get(key)
 }
 
 func (h *HashSkipList) Exist(key []byte) bool {
 	skl := h.getSkipList(getHash(key))
-	if skl == nil {
-		skl = NewSkipList()
-		return false
-	}
 
 	return skl.Exist(key)
 }
 
-func (h *HashSkipList) Remove(key []byte) *Element {
+func (h *HashSkipList) Remove(key []byte) *logfile.LogEntry {
 	skl := h.getSkipList(getHash(key))
-	if skl == nil {
-		skl = NewSkipList()
-		return nil
-	}
 
-	return skl.Get(key)
+	return skl.Remove(key)
 }

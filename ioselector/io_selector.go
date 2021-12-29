@@ -1,4 +1,4 @@
-package io
+package ioselector
 
 import (
 	"os"
@@ -32,14 +32,15 @@ func openFile(fName string, fsize int64) (*os.File, error) {
 		return nil, err
 	}
 
-	stat, err := fd.Stat()
+	_, err = fd.Stat()
 	if err != nil {
 		return nil, err
 	}
-	if stat.Size() < fsize {
-		if err := fd.Truncate(fsize); err != nil {
-			return nil, err
-		}
-	}
+
+	//if stat.Size() < fsize {
+	//	if err := fd.Truncate(fsize); err != nil {
+	//		return nil, err
+	//	}
+	//}
 	return fd, nil
 }

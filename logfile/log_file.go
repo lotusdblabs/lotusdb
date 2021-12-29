@@ -3,7 +3,8 @@ package logfile
 import (
 	"errors"
 	"fmt"
-	"github.com/flowercorp/lotusdb/io"
+	"github.com/flowercorp/lotusdb/ioselector"
+	"io"
 	"os"
 	"sync"
 )
@@ -44,29 +45,29 @@ const (
 type LogFile struct {
 	sync.RWMutex
 	Fid        uint32
-	writeAt   int64
-	ioSelector io.IOSelector
+	WriteAt    int64
+	IoSelector ioselector.IOSelector
 }
 
 func OpenLogFile(path string, fid uint32, fsize int64, ftype FileType, ioType IOType) (lf *LogFile, err error) {
 	lf = &LogFile{Fid: fid}
 	fileName := lf.getLogFileName(path, fid, ftype)
 
-	var selector io.IOSelector
+	var selector ioselector.IOSelector
 	switch ioType {
 	case FileIO:
-		if selector, err = io.NewFileIOSelector(fileName, fsize); err != nil {
+		if selector, err = ioselector.NewFileIOSelector(fileName, fsize); err != nil {
 			return
 		}
 	case MMap:
-		if selector, err = io.NewMMapSelector(fileName, fsize); err != nil {
+		if selector, err = ioselector.NewMMapSelector(fileName, fsize); err != nil {
 			return
 		}
 	default:
 		panic(fmt.Sprintf("unsupported io type : %d", ioType))
 	}
 
-	lf.ioSelector = selector
+	lf.IoSelector = selector
 	return
 }
 
@@ -80,6 +81,10 @@ func (lf *LogFile) Read(offset int64) (*LogEntry, error) {
 	header := decodeHeader(headerBuf)
 
 	kSize, vSize := int64(header.kSize), int64(header.vSize)
+	if kSize == 0 && vSize == 0 {
+		return nil, io.EOF
+	}
+
 	// read entry key and value.
 	kvBuf, err := lf.readBytes(offset+entryHeaderSize, kSize+vSize)
 	if err != nil {
@@ -101,27 +106,27 @@ func (lf *LogFile) Read(offset int64) (*LogEntry, error) {
 // Write .
 func (lf *LogFile) Write(e *LogEntry) error {
 	buf := encodeEntry(e)
-	n, err := lf.ioSelector.Write(buf, lf.writeAt)
+	n, err := lf.IoSelector.Write(buf, lf.WriteAt)
 	if err != nil {
 		return err
 	}
-	lf.writeAt += int64(n)
+	lf.WriteAt += int64(n)
 	return nil
 }
 
 // Sync .
 func (lf *LogFile) Sync() error {
-	return lf.ioSelector.Sync()
+	return lf.IoSelector.Sync()
 }
 
 // Close .
 func (lf *LogFile) Close() error {
-	return lf.ioSelector.Close()
+	return lf.IoSelector.Close()
 }
 
 func (lf *LogFile) readBytes(offset, n int64) (buf []byte, err error) {
 	buf = make([]byte, n)
-	_, err = lf.ioSelector.Read(buf, offset)
+	_, err = lf.IoSelector.Read(buf, offset)
 	return
 }
 

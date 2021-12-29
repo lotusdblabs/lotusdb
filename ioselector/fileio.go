@@ -1,4 +1,4 @@
-package io
+package ioselector
 
 import "os"
 

@@ -20,12 +20,12 @@ type entryHeader struct {
 	crc32     uint32 // check sum
 }
 
-func (e *LogEntry) size() int {
+func (e *LogEntry) Size() int {
 	return entryHeaderSize + len(e.Key) + len(e.Value)
 }
 
 func encodeEntry(e *LogEntry) []byte {
-	buf := make([]byte, e.size())
+	buf := make([]byte, e.Size())
 	// encode header.
 	binary.LittleEndian.PutUint32(buf[4:8], uint32(len(e.Key)))
 	binary.LittleEndian.PutUint32(buf[8:12], uint32(len(e.Value)))

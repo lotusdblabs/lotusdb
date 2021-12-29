@@ -5,6 +5,7 @@ package memtable
 // For a specific explanation of the skip list,  you can refer to Wikipedia: https://en.wikipedia.org/wiki/Skip_list.
 import (
 	"bytes"
+	"github.com/flowercorp/lotusdb/logfile"
 	"math"
 	"math/rand"
 	"time"
@@ -29,7 +30,7 @@ type (
 	Element struct {
 		Node
 		key   []byte
-		value interface{}
+		value []byte
 	}
 )
 
@@ -39,12 +40,12 @@ func (e *Element) Key() []byte {
 }
 
 // Value the value of the Element.
-func (e *Element) Value() interface{} {
+func (e *Element) Value() []byte {
 	return e.value
 }
 
 // SetValue set the element value.
-func (e *Element) SetValue(val interface{}) {
+func (e *Element) SetValue(val []byte) {
 	e.value = val
 }
 
@@ -87,13 +88,13 @@ func (t *SkipList) Front() *Element {
 }
 
 // Put an element into skip list, replace the value if key already exists.
-func (t *SkipList) Put(key []byte, value interface{}) *Element {
+func (t *SkipList) Put(key []byte, value []byte) *logfile.LogEntry {
 	var element *Element
 	prev := t.backNodes(key)
 
 	if element = prev[0].next[0]; element != nil && bytes.Compare(element.key, key) <= 0 {
 		element.value = value
-		return element
+		return getEntryByElement(element)
 	}
 
 	element = &Element{
@@ -110,11 +111,11 @@ func (t *SkipList) Put(key []byte, value interface{}) *Element {
 	}
 
 	t.Len++
-	return element
+	return getEntryByElement(element)
 }
 
 // Get find value by the key, returns nil if not found.
-func (t *SkipList) Get(key []byte) *Element {
+func (t *SkipList) Get(key []byte) *logfile.LogEntry {
 	var prev = &t.Node
 	var next *Element
 
@@ -128,7 +129,7 @@ func (t *SkipList) Get(key []byte) *Element {
 	}
 
 	if next != nil && bytes.Compare(next.key, key) <= 0 {
-		return next
+		return getEntryByElement(next)
 	}
 
 	return nil
@@ -140,7 +141,7 @@ func (t *SkipList) Exist(key []byte) bool {
 }
 
 // Remove element by the key.
-func (t *SkipList) Remove(key []byte) *Element {
+func (t *SkipList) Remove(key []byte) *logfile.LogEntry {
 	prev := t.backNodes(key)
 
 	if element := prev[0].next[0]; element != nil && bytes.Compare(element.key, key) <= 0 {
@@ -149,7 +150,7 @@ func (t *SkipList) Remove(key []byte) *Element {
 		}
 
 		t.Len--
-		return element
+		return getEntryByElement(element)
 	}
 	return nil
 }
@@ -222,4 +223,11 @@ func probabilityTable(probability float64, maxLevel int) (table []float64) {
 		table = append(table, prob)
 	}
 	return table
+}
+
+func getEntryByElement(ele *Element) *logfile.LogEntry {
+	return &logfile.LogEntry{
+		Key:   ele.key,
+		Value: ele.value,
+	}
 }
