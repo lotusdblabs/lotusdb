@@ -37,7 +37,7 @@ const (
 type IOType int8
 
 const (
-	FileIO = iota
+	FileIO IOType = iota
 	MMap
 )
 

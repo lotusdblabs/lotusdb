@@ -1,12 +1,33 @@
 package lotusdb
 
+import (
+	"github.com/flowercorp/lotusdb/util"
+	"os"
+)
+
 type LotusDB struct {
 	lockMgr *LockMgr                 // global lock manager that guarantees consistency of read and write.
 	cfs     map[string]*ColumnFamily // all column families.
+	opts    Options
 }
 
 func Open(opt Options) (*LotusDB, error) {
-	// load all column families.
+	// add dir lock? todo
+	if !util.PathExist(opt.DBPath) {
+		if err := os.MkdirAll(opt.DBPath, os.ModePerm); err != nil {
+			return nil, err
+		}
+	}
+
+	db := &LotusDB{opts: opt, cfs: make(map[string]*ColumnFamily)}
+	// load default column family.
+	cfopt := ColumnFamilyOptions{
+		Name:    defaultColumnFamilyName,
+		DirPath: opt.DBPath,
+	}
+	if _, err := db.OpenColumnFamily(cfopt); err != nil {
+		return nil, err
+	}
 	return nil, nil
 }
 

@@ -1,11 +1,18 @@
 package lotusdb
 
+import "os"
+
+const (
+	defaultColumnFamilyName = "cf_default"
+	pathSeparator           = string(os.PathSeparator)
+)
+
 const (
 	DefaultDBPath = "/tmp/lotusdb"
 )
 
 const (
-	DefaultVLogBlockSize = 16 * 1024 * 1024 // 16MB
+	DefaultVLogBlockSize = 256 * 1024 * 1024 // 256MB
 )
 
 // Options for db.
@@ -15,6 +22,7 @@ type Options struct {
 
 // ColumnFamilyOptions for column family.
 type ColumnFamilyOptions struct {
+	Name string
 	// DirPath
 	DirPath string
 
