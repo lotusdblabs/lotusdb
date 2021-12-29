@@ -2,7 +2,7 @@ package wal
 
 import (
 	"github.com/flowercorp/lotusdb/logfile"
-	"github.com/flowercorp/lotusdb/util"
+	"hash/crc32"
 	"os"
 	"sync"
 )
@@ -18,35 +18,38 @@ type Config struct {
 
 type Wal struct {
 	logFile     *logfile.LogFile
-	currentSize uint64
+	CurrentSize uint64
 	index       Index
-	path        string
+	Path        string
 	FileMaxSize uint64
 }
 
 type Index struct {
-	KeyOffsetMap   map[uint64]uint64
-	ValueOffsetMap map[uint64]uint64
+	KeyOffsetMap   map[uint32]uint64
+	ValueOffsetMap map[uint32]uint64
 	sync.RWMutex
 }
 
 func NewIndex() Index {
 	return Index{
-		KeyOffsetMap:   make(map[uint64]uint64),
-		ValueOffsetMap: make(map[uint64]uint64),
+		KeyOffsetMap:   make(map[uint32]uint64),
+		ValueOffsetMap: make(map[uint32]uint64),
 	}
 }
-func (idx *Index) SetKeyOffset(keyId, offset uint64) {
+
+func (idx *Index) setKeyOffset(keyId uint32, offset uint64) {
 	idx.Lock()
 	defer idx.Unlock()
 	idx.KeyOffsetMap[keyId] = offset
 }
-func (idx *Index) SetValueOffset(valueId, offset uint64) {
+
+func (idx *Index) setValueOffset(valueId uint32, offset uint64) {
 	idx.Lock()
 	defer idx.Unlock()
 	idx.ValueOffsetMap[valueId] = offset
 }
-func (idx *Index) GetOffsetByKeyId(kId uint64) uint64 {
+
+func (idx *Index) getOffsetByKeyId(kId uint32) uint64 {
 	idx.RLock()
 	defer idx.Unlock()
 	id, ok := idx.KeyOffsetMap[kId]
@@ -55,58 +58,77 @@ func (idx *Index) GetOffsetByKeyId(kId uint64) uint64 {
 	}
 	return id
 }
-func (idx *Index) GetOffsetByValueId(vId uint64) uint64 {
+
+func (idx *Index) getOffsetByValueId(vId uint32) uint64 {
 	idx.RLock()
 	defer idx.Unlock()
 	return idx.ValueOffsetMap[vId]
 }
 
-func (wal *Wal) Open(path string) error {
-	logFile, err := logfile.OpenLogFile(path, 1, 1<<20, logfile.WAL, logfile.MMap)
-	if err != nil {
-		return err
-	}
-	wal.logFile = logFile
-	return nil
-}
-
-func (wal *Wal) Write(entry *logfile.LogEntry) error {
-	hash := getKeyHash(entry.Key)
-	wal.index.SetKeyOffset(hash, wal.currentSize)
-	wal.currentSize += uint64(entry.Size())
-	return wal.logFile.Write(entry)
-}
-func (wal *Wal) Get(key []byte) (*logfile.LogEntry, error) {
-	keyId := getKeyHash(key)
-	offset := wal.getOffsetByKeyId(keyId)
-	return wal.logFile.Read(int64(offset))
-}
-
-func (wal *Wal) getOffsetByKeyId(kId uint64) uint64 {
-	return wal.index.GetOffsetByKeyId(kId)
-}
-
-func (wal *Wal) Delete() bool {
-	err := os.Remove(wal.path)
-	return err == nil
-}
-
-func getKeyHash(key []byte) uint64 {
-	return hash(key)
-}
-func hash(buf []byte) uint64 {
-	return util.MemHash(buf)
-}
-
 func NewWal(path string) *Wal {
 	return &Wal{
-		path:        path,
-		currentSize: 0,
+		Path:        path,
+		CurrentSize: 0,
 		FileMaxSize: FILE_MAX_SIZE,
 		index:       NewIndex(),
 	}
 }
 
-func (w *Wal) Sync() error {
+func (wal *Wal) getOffsetByKeyId(kId uint32) uint64 {
+	return wal.index.getOffsetByValueId(kId)
+}
+
+func (wal *Wal) setKeyOffset(keyId uint32, offset uint64) {
+	wal.index.setValueOffset(keyId, offset)
+}
+
+func (wal *Wal) Open(path string, fid uint32, fsize int64, ioType logfile.IOType) error {
+	logFile, err := logfile.OpenLogFile(path, fid, fsize, logfile.WAL, ioType)
+	if err != nil {
+		return err
+	}
+
+	wal.logFile = logFile
 	return nil
+}
+
+func (wal *Wal) Write(entry *logfile.LogEntry) error {
+	hash32 := getKeyHash(entry.Key)
+	wal.setKeyOffset(hash32, wal.CurrentSize)
+	wal.CurrentSize += uint64(entry.Size())
+
+	return wal.logFile.Write(entry)
+}
+
+func (wal *Wal) Get(key []byte) (*logfile.LogEntry, error) {
+	keyId := getKeyHash(key)
+	offset := wal.getOffsetByKeyId(keyId)
+
+	return wal.logFile.Read(int64(offset))
+}
+
+func (wal *Wal) Read(offset int64) (*logfile.LogEntry, error) {
+	return wal.logFile.Read(offset)
+}
+
+func (wal *Wal) Delete() bool {
+	err := os.Remove(wal.Path)
+
+	return err == nil
+}
+
+func (wal *Wal) Sync() error {
+	return wal.logFile.Sync()
+}
+
+func (wal *Wal) SetOffset(offset int64) {
+	wal.logFile.WriteAt = offset
+}
+
+func getKeyHash(key []byte) uint32 {
+	return hash(key)
+}
+
+func hash(buf []byte) uint32 {
+	return crc32.ChecksumIEEE(buf)
 }

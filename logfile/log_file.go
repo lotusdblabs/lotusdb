@@ -3,7 +3,8 @@ package logfile
 import (
 	"errors"
 	"fmt"
-	"github.com/flowercorp/lotusdb/io"
+	"github.com/flowercorp/lotusdb/ioselector"
+	"io"
 	"os"
 	"sync"
 )
@@ -44,22 +45,22 @@ const (
 type LogFile struct {
 	sync.RWMutex
 	Fid        uint32
-	WriteAt   int64
-	IoSelector io.IOSelector
+	WriteAt    int64
+	IoSelector ioselector.IOSelector
 }
 
 func OpenLogFile(path string, fid uint32, fsize int64, ftype FileType, ioType IOType) (lf *LogFile, err error) {
 	lf = &LogFile{Fid: fid}
 	fileName := lf.getLogFileName(path, fid, ftype)
 
-	var selector io.IOSelector
+	var selector ioselector.IOSelector
 	switch ioType {
 	case FileIO:
-		if selector, err = io.NewFileIOSelector(fileName, fsize); err != nil {
+		if selector, err = ioselector.NewFileIOSelector(fileName, fsize); err != nil {
 			return
 		}
 	case MMap:
-		if selector, err = io.NewMMapSelector(fileName, fsize); err != nil {
+		if selector, err = ioselector.NewMMapSelector(fileName, fsize); err != nil {
 			return
 		}
 	default:
@@ -80,6 +81,10 @@ func (lf *LogFile) Read(offset int64) (*LogEntry, error) {
 	header := decodeHeader(headerBuf)
 
 	kSize, vSize := int64(header.kSize), int64(header.vSize)
+	if kSize == 0 && vSize == 0 {
+		return nil, io.EOF
+	}
+
 	// read entry key and value.
 	kvBuf, err := lf.readBytes(offset+entryHeaderSize, kSize+vSize)
 	if err != nil {

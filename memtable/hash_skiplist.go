@@ -1,31 +1,63 @@
 package memtable
 
+import (
+	"github.com/flowercorp/lotusdb/logfile"
+	"github.com/spaolacci/murmur3"
+)
+
+const (
+	MaxSize = 10
+)
+
 // HashSkipList
 type HashSkipList struct {
 	skls map[int64]*SkipList
 }
 
-func (h HashSkipList) Put(key []byte, value interface{}) *Element {
-	panic("implement me")
+func NewHashSkipList() *HashSkipList {
+	return &HashSkipList{
+		make(map[int64]*SkipList),
+	}
 }
 
-func (h HashSkipList) Get(key []byte) *Element {
-	panic("implement me")
+func getHash(key []byte) int64 {
+	hash32 := murmur3.New32()
+	if _, err := hash32.Write(key); err != nil {
+		return 0
+	}
+
+	return int64(hash32.Sum32() % MaxSize)
 }
 
-func (h HashSkipList) Exist(key []byte) bool {
-	panic("implement me")
+func (h *HashSkipList) getSkipList(index int64) *SkipList {
+	if skl, ok := h.skls[index]; ok {
+		return skl
+	}
+
+	h.skls[index] = NewSkipList()
+	return h.skls[index]
 }
 
-func (h HashSkipList) Remove(key []byte) *Element {
-	panic("implement me")
+func (h *HashSkipList) Put(key []byte, value []byte) *logfile.LogEntry {
+	skl := h.getSkipList(getHash(key))
+
+	return skl.Put(key, value)
 }
 
-func (h HashSkipList) Foreach(fun handleEle) {
-	panic("implement me")
+func (h *HashSkipList) Get(key []byte) *logfile.LogEntry {
+	skl := h.getSkipList(getHash(key))
+
+	return skl.Get(key)
 }
 
-func (h HashSkipList) FindPrefix(prefix []byte) *Element {
-	panic("implement me")
+func (h *HashSkipList) Exist(key []byte) bool {
+	skl := h.getSkipList(getHash(key))
+
+	return skl.Exist(key)
 }
 
+func (h *HashSkipList) Remove(key []byte) *logfile.LogEntry {
+	skl := h.getSkipList(getHash(key))
+
+	return skl.Remove(key)
+}
