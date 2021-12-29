@@ -24,6 +24,6 @@ func (w *Wal) Write(key []byte, value interface{}) error {
 	return nil
 }
 
-func (w *Wal) Read() {
-
+func (w *Wal) Read() error {
+	return nil
 }

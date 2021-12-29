@@ -6,71 +6,64 @@ import (
 	"github.com/flowercorp/lotusdb/wal"
 )
 
-type MemAlg int
-
-var (
-	writeWALErr = errors.New("can not write wal file")
-)
+type TableType int8
 
 const (
-	Skl MemAlg = iota
-	HashSkl
+	SkipListRep TableType = iota
+	HashSkipListRep
 )
 
-type IMemtable interface {
-	Put(key []byte, value interface{}) *Element
-	Get(key []byte) *Element
-	Exist(key []byte) bool
-	Remove(key []byte) *Element
-	Foreach(fun handleEle)
-	FindPrefix(prefix []byte) *Element
-}
+var ErrOptionsNil = errors.New("options is null")
 
-type Memtable struct {
-	mem IMemtable
-	wal *wal.Wal
-}
-
-type MemOption struct {
-	size       int64  // memtable size
-	mode       MemAlg // algorithm kind
-	walMMap    bool   //
-	disableWal bool   //
-	fileType   int
-	ioType     int
-}
-
-func getIMemtable(mode MemAlg) IMemtable {
-	switch mode {
-	case Skl:
-		return NewSkipList()
-	case HashSkl:
-		return nil
-	default:
-		return NewSkipList()
+type (
+	IMemtable interface {
+		Put(key []byte, value interface{}) *Element
+		Get(key []byte) *Element
+		Exist(key []byte) bool
+		Remove(key []byte) *Element
 	}
-}
 
-func OpenMemTable(path string, fid uint32, opt *MemOption) *Memtable {
+	Memtable struct {
+		mem IMemtable
+		wal *wal.Wal
+	}
+
+	options struct {
+		size       int64
+		mode       TableType
+		walMMap    bool
+		disableWal bool
+		fileType   logfile.FileType
+		ioType     logfile.IOType
+	}
+)
+
+func OpenMemTable(path string, fid uint32, opt *options) (*Memtable, error) {
+	if opt == nil {
+		return nil, ErrOptionsNil
+	}
+
 	var memtable Memtable
-
 	imem := getIMemtable(opt.mode)
 	memtable.mem = imem
 
 	if !opt.disableWal {
 
-		lf, err := logfile.OpenLogFile(path, fid, opt.size, FileType(opt.fileType), IOType(opt.ioType))
+		_, err := logfile.OpenLogFile(path, fid, opt.size, opt.fileType, opt.ioType)
 		if err != nil {
-			return nil
+			return nil, err
 		}
-		memtable.wal = lf
-		memtable.UpdateMemtable()
+
+		err = memtable.UpdateMemtable()
+		if err != nil {
+			return nil, err
+		}
 	}
 
-	return &memtable
+	return &memtable, nil
 }
 
-func newMemTable(path string, mode MemAlg) *Memtable {
+func MewMemTable(path string, mode TableType) *Memtable {
 	return &Memtable{
 		mem: getIMemtable(mode),
 		wal: wal.NewWal(path),
@@ -94,8 +87,21 @@ func (mt *Memtable) Get(key []byte) interface{} {
 	return mt.mem.Get(key).Value()
 }
 
-func (mt *Memtable) UpdateMemtable() {
+func (mt *Memtable) UpdateMemtable() error {
 	if mt.wal != nil {
-		mt.wal.Read()
+		return mt.wal.Read()
+	}
+
+	return nil
+}
+
+func getIMemtable(mode TableType) IMemtable {
+	switch mode {
+	case HashSkipListRep:
+		return NewHashSkipList()
+	case SkipListRep:
+		return NewSkipList()
+	default:
+		return NewSkipList()
 	}
 }
