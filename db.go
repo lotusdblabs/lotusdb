@@ -21,14 +21,13 @@ func Open(opt Options) (*LotusDB, error) {
 
 	db := &LotusDB{opts: opt, cfs: make(map[string]*ColumnFamily)}
 	// load default column family.
-	cfopt := ColumnFamilyOptions{
-		Name:    defaultColumnFamilyName,
-		DirPath: opt.DBPath,
+	if opt.CfOpts.CfName == "" {
+		opt.CfOpts.CfName = defaultColumnFamilyName
 	}
-	if _, err := db.OpenColumnFamily(cfopt); err != nil {
+	if _, err := db.OpenColumnFamily(opt.CfOpts); err != nil {
 		return nil, err
 	}
-	return nil, nil
+	return db, nil
 }
 
 // Close close database.

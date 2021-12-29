@@ -10,7 +10,7 @@ import (
 )
 
 var (
-	ErrColoumnFamilyUsing = errors.New("default column family is being using")
+	ErrColoumnFamilyNil = errors.New("column family name is nil")
 )
 
 type ColumnFamily struct {
@@ -22,8 +22,8 @@ type ColumnFamily struct {
 
 // OpenColumnFamily open a new or existed column family.
 func (db *LotusDB) OpenColumnFamily(opts ColumnFamilyOptions) (*ColumnFamily, error) {
-	if opts.Name == "" {
-		return nil, ErrColoumnFamilyUsing
+	if opts.CfName == "" {
+		return nil, ErrColoumnFamilyNil
 	}
 
 	// create columm family path.

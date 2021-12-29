@@ -18,11 +18,12 @@ const (
 // Options for db.
 type Options struct {
 	DBPath string
+	CfOpts ColumnFamilyOptions
 }
 
 // ColumnFamilyOptions for column family.
 type ColumnFamilyOptions struct {
-	Name string
+	CfName string
 	// DirPath
 	DirPath string
 
@@ -32,7 +33,7 @@ type ColumnFamilyOptions struct {
 	// the number of memtable
 	MemtableNum int
 
-	MentableAlgorithm int
+	MemtableAlgo int
 
 	WalDir string
 
