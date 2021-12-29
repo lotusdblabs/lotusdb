@@ -32,5 +32,9 @@ type ColumnFamilyOptions struct {
 
 	DisableWal bool
 
+	ValueLogDir string
+
 	ValueLogBlockSize int64
+
+	ValueLogMmap bool
 }

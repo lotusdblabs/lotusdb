@@ -45,7 +45,7 @@ type LogFile struct {
 	sync.RWMutex
 	Fid        uint32
 	WriteAt   int64
-	ioSelector io.IOSelector
+	IoSelector io.IOSelector
 }
 
 func OpenLogFile(path string, fid uint32, fsize int64, ftype FileType, ioType IOType) (lf *LogFile, err error) {
@@ -66,7 +66,7 @@ func OpenLogFile(path string, fid uint32, fsize int64, ftype FileType, ioType IO
 		panic(fmt.Sprintf("unsupported io type : %d", ioType))
 	}
 
-	lf.ioSelector = selector
+	lf.IoSelector = selector
 	return
 }
 
@@ -101,7 +101,7 @@ func (lf *LogFile) Read(offset int64) (*LogEntry, error) {
 // Write .
 func (lf *LogFile) Write(e *LogEntry) error {
 	buf := encodeEntry(e)
-	n, err := lf.ioSelector.Write(buf, lf.WriteAt)
+	n, err := lf.IoSelector.Write(buf, lf.WriteAt)
 	if err != nil {
 		return err
 	}
@@ -111,17 +111,17 @@ func (lf *LogFile) Write(e *LogEntry) error {
 
 // Sync .
 func (lf *LogFile) Sync() error {
-	return lf.ioSelector.Sync()
+	return lf.IoSelector.Sync()
 }
 
 // Close .
 func (lf *LogFile) Close() error {
-	return lf.ioSelector.Close()
+	return lf.IoSelector.Close()
 }
 
 func (lf *LogFile) readBytes(offset, n int64) (buf []byte, err error) {
 	buf = make([]byte, n)
-	_, err = lf.ioSelector.Read(buf, offset)
+	_, err = lf.IoSelector.Read(buf, offset)
 	return
 }
 
