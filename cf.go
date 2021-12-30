@@ -59,6 +59,9 @@ func (db *LotusDB) OpenColumnFamily(opts ColumnFamilyOptions) (*ColumnFamily, er
 	}
 	cf.vlog = valueLog
 
+	db.mu.Lock()
+	db.cfs[opts.CfName] = cf
+	db.mu.Unlock()
 	return cf, nil
 }
 
@@ -66,17 +69,26 @@ func (cf *ColumnFamily) Close() error {
 	return nil
 }
 
-// Put put to default column family.
+// Put put to current column family.
 func (cf *ColumnFamily) Put(key, value []byte) error {
+	if err := cf.activeMem.Put(key, value); err != nil {
+		return err
+	}
 	return nil
 }
 
-// Get get from default column family.
-func (cf *ColumnFamily) Get(key []byte) error {
-	return nil
+// Get get from current column family.
+func (cf *ColumnFamily) Get(key []byte) ([]byte, error) {
+	// get from memtables.
+
+	// get from bptree.
+
+	// get value from value log.
+
+	return nil, nil
 }
 
-// Delete delete from default column family.
+// Delete delete from current column family.
 func (cf *ColumnFamily) Delete(key []byte) error {
 	return nil
 }
@@ -88,19 +100,21 @@ func (cf *ColumnFamily) openMemtables() error {
 		return err
 	}
 
+	// find all wal files`id.
 	var fids []uint32
 	for _, file := range fileInfos {
-		if strings.HasSuffix(file.Name(), logfile.WalSuffixName) {
-			splitNames := strings.Split(file.Name(), ".")
-			fid, err := strconv.Atoi(splitNames[0])
-			if err != nil {
-				return err
-			}
-			fids = append(fids, uint32(fid))
+		if !strings.HasSuffix(file.Name(), logfile.WalSuffixName) {
+			continue
 		}
+		splitNames := strings.Split(file.Name(), ".")
+		fid, err := strconv.Atoi(splitNames[0])
+		if err != nil {
+			return err
+		}
+		fids = append(fids, uint32(fid))
 	}
 
-	// load in descsending order.
+	// load in descending order.
 	sort.Slice(fids, func(i, j int) bool {
 		return fids[i] > fids[j]
 	})
@@ -112,7 +126,7 @@ func (cf *ColumnFamily) openMemtables() error {
 	}
 
 	if len(fids) == 0 {
-		fids = append(fids, 0)
+		fids = append(fids, logfile.InitialLogFileId)
 	}
 	for i, fid := range fids {
 		table, err := memtable.OpenMemTable(cf.opts.WalDir, fid, cf.opts.MemtableSize, tableType, ioType)

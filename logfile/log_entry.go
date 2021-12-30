@@ -5,49 +5,69 @@ import (
 	"hash/crc32"
 )
 
-const entryHeaderSize = 20
+// crc32	typ    kSize	vSize	expiredAt
+//  4    +   1   +   5   +   5    +    9      = 24
+const maxHeaderSize = 21
+
+type EntryType byte
+
+const (
+	TypeDelete EntryType = iota + 1
+)
 
 type LogEntry struct {
 	Key       []byte
 	Value     []byte
-	ExpiredAt uint64 // time.Unix
+	ExpiredAt int64 // time.Unix
+	Type      EntryType
 }
 
 type entryHeader struct {
+	crc32     uint32 // check sum
+	typ       EntryType
 	kSize     uint32
 	vSize     uint32
-	expiredAt uint64 // time.Unix
-	crc32     uint32 // check sum
+	expiredAt int64 // time.Unix
 }
 
-func (e *LogEntry) Size() int {
-	return entryHeaderSize + len(e.Key) + len(e.Value)
-}
-
-func encodeEntry(e *LogEntry) []byte {
-	buf := make([]byte, e.Size())
+func encodeEntry(e *LogEntry) ([]byte, int) {
+	header := make([]byte, maxHeaderSize)
 	// encode header.
-	binary.LittleEndian.PutUint32(buf[4:8], uint32(len(e.Key)))
-	binary.LittleEndian.PutUint32(buf[8:12], uint32(len(e.Value)))
-	binary.LittleEndian.PutUint64(buf[12:20], e.ExpiredAt)
+	header[4] = byte(e.Type)
+	var index = 5
+	index += binary.PutVarint(header[index:], int64(len(e.Key)))
+	index += binary.PutVarint(header[index:], int64(len(e.Value)))
+	index += binary.PutVarint(header[index:], e.ExpiredAt)
 
+	buf := make([]byte, index+len(e.Key)+len(e.Value))
+	copy(buf[:index], header[:])
 	// key and value.
-	copy(buf[entryHeaderSize:], e.Key)
-	copy(buf[entryHeaderSize+len(e.Key):], e.Value)
+	copy(buf[index:], e.Key)
+	copy(buf[index+len(e.Key):], e.Value)
 
 	// crc32.
 	crc := crc32.ChecksumIEEE(buf[4:])
 	binary.LittleEndian.PutUint32(buf[:4], crc)
-	return buf
+	return buf, 0
 }
 
-func decodeHeader(buf []byte) *entryHeader {
-	return &entryHeader{
-		kSize:     binary.LittleEndian.Uint32(buf[4:8]),
-		vSize:     binary.LittleEndian.Uint32(buf[8:12]),
-		expiredAt: binary.LittleEndian.Uint64(buf[12:20]),
-		crc32:     binary.LittleEndian.Uint32(buf[:4]),
+func decodeHeader(buf []byte) (*entryHeader, int64) {
+	h := &entryHeader{
+		crc32: binary.LittleEndian.Uint32(buf[:4]),
+		typ:   EntryType(buf[4]),
 	}
+	var index = 5
+	ksize, n := binary.Varint(buf[index:])
+	h.kSize = uint32(ksize)
+	index += n
+
+	vsize, n := binary.Varint(buf[index:])
+	h.vSize = uint32(vsize)
+	index += n
+
+	expiredAt, n := binary.Varint(buf[index:])
+	h.expiredAt = expiredAt
+	return h, int64(index + n)
 }
 
 func getEntryCrc(e *LogEntry, h []byte) uint32 {
