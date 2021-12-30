@@ -1,7 +1,7 @@
 package boltdb
 
 import (
-	"errors"
+	"sync"
 	"time"
 
 	"github.com/flowercorp/lotusdb/index/domain"
@@ -9,37 +9,44 @@ import (
 )
 
 type BboltdbConfig struct {
-	ReadIndexComponentType string
-	BatchSize              int
+	IndexComponentType string
+	BatchSize          int
+	DBName             string
+	BucketName         []byte
+	FilePath           string
+
 	// todo
 	MaxDataSize int64
-	DBName      string
-	// todo
-	FilePath   string
-	BucketName []byte
 }
 
 type bboltdb struct {
-	db *bbolt.DB
+	db   *bbolt.DB
+	conf *BboltdbConfig
+
 	// todo
 	metedatadb *bbolt.DB
-	conf       *BboltdbConfig
 }
 
-type Tx struct {
-	tx        *bbolt.Tx
-	writeFlag bool
+type boltManager struct {
+	boltdbMap map[string]*bboltdb
+	sync.RWMutex
 }
 
 const (
 	defaultBatchLoopNum = 1
 	defaultBatchSize    = 10000
 
-	ReadIndexComponentTyp = "boltdb"
+	IndexComponentTyp = "boltdb"
 )
 
+var manager *boltManager
+
+func init() {
+	manager = &boltManager{boltdbMap: make(map[string]*bboltdb)}
+}
+
 func (bc *BboltdbConfig) SetType(typ string) {
-	bc.ReadIndexComponentType = typ
+	bc.IndexComponentType = typ
 }
 
 func (bc *BboltdbConfig) SetDbName(dbname string) {
@@ -51,7 +58,7 @@ func (bc *BboltdbConfig) SetFilePath(filePath string) {
 }
 
 func (bc *BboltdbConfig) GetType() (typ string) {
-	return bc.ReadIndexComponentType
+	return bc.IndexComponentType
 }
 
 func (bc *BboltdbConfig) GetDbName() (dbname string) {
@@ -86,6 +93,24 @@ func checkBboltdbConf(conf *BboltdbConfig) error {
 func NewBboltdb(conf *BboltdbConfig) (*bboltdb, error) {
 	if err := checkBboltdbConf(conf); err != nil {
 		return nil, err
+	}
+
+	// check lock check -- clc
+	// check
+	manager.RLock()
+	if db, ok := manager.boltdbMap[conf.GetDbName()]; ok {
+		manager.RUnlock()
+		return db, nil
+	}
+
+	// lock
+	manager.RUnlock()
+	manager.Lock()
+	defer manager.Unlock()
+
+	// check
+	if db, ok := manager.boltdbMap[conf.GetDbName()]; ok {
+		return db, nil
 	}
 
 	// open metadatadb and db
@@ -136,35 +161,14 @@ func NewBboltdb(conf *BboltdbConfig) (*bboltdb, error) {
 		return nil, err
 	}
 
-	return &bboltdb{
+	b := &bboltdb{
 		metedatadb: metaDatadb,
 		db:         db,
 		conf:       conf,
-	}, err
-}
-
-// Begin start a transaction.
-// If you need to write a type of transaction,
-// please pass `true` for writeFlag, otherwise `false`.
-func (b *bboltdb) Begin(writeFlag bool) (domain.ReadIndexTx, error) {
-	tx, err := b.db.Begin(writeFlag)
-	if err != nil {
-		return nil, err
 	}
 
-	return &Tx{
-		tx:        tx,
-		writeFlag: writeFlag,
-	}, nil
-
-}
-
-func (b *bboltdb) Rollback(tx domain.ReadIndexTx) error {
-	t, ok := tx.(*Tx)
-	if !ok {
-		return ErrTypeFalse
-	}
-	return t.tx.Rollback()
+	manager.boltdbMap[conf.GetDbName()] = b
+	return b, nil
 }
 
 // The put method starts a transaction.
@@ -191,7 +195,7 @@ func (b *bboltdb) Put(k, v []byte) (err error) {
 // The offset marks the transaction write position of the current batch.
 // If this function fails during execution, we can write again from the offset position.
 // If offset == len(kv) - 1 , all writes are successful.
-func (b *bboltdb) PutBatch(kv []domain.ReadIndexComKvnode) (offset int, err error) {
+func (b *bboltdb) PutBatch(kv []domain.IndexComKvnode) (offset int, err error) {
 	var batchLoopNum = defaultBatchLoopNum
 	if len(kv) > b.conf.BatchSize {
 		batchLoopNum = len(kv) / b.conf.BatchSize
@@ -238,15 +242,6 @@ func (b *bboltdb) Delete(key []byte) error {
 	return tx.Bucket(b.conf.BucketName).Delete(key)
 }
 
-func (b *bboltdb) DeleteWithTx(tx domain.ReadIndexTx, key []byte) error {
-	t, ok := tx.(*Tx)
-	if !ok {
-		return ErrTypeFalse
-	}
-
-	return t.tx.Bucket(b.conf.BucketName).Delete(key)
-}
-
 // The put method starts a transaction.
 // This method reads the value from the bucket with key,
 func (b *bboltdb) Get(k []byte) (value []byte, err error) {
@@ -259,195 +254,64 @@ func (b *bboltdb) Get(k []byte) (value []byte, err error) {
 	return tx.Bucket(b.conf.BucketName).Get(k), nil
 }
 
-// The put method in a transaction.
-// This method reads the value from the bucket with key,
-func (b *bboltdb) GetWithTx(tx domain.ReadIndexTx, k []byte) (value []byte, err error) {
-	t, ok := tx.(*Tx)
-	if !ok {
-		return nil, ErrTypeFalse
-	}
-	return t.tx.Bucket(b.conf.BucketName).Get(k), nil
-}
-
-func (b *bboltdb) First() (key, value []byte) {
-	tx, err := b.db.Begin(false)
-	if err != nil {
-		return nil, nil
-	}
-	defer tx.Rollback()
-
-	return tx.Bucket(b.conf.BucketName).Cursor().First()
-}
-
-func (b *bboltdb) FirstWhitTx(tx domain.ReadIndexTx) (key, value []byte, err error) {
-	t, ok := tx.(*Tx)
-	if !ok {
-		return nil, nil, ErrTypeFalse
-	}
-	key, value = t.tx.Bucket(b.conf.BucketName).Cursor().First()
-	return
-}
-
-func (b *bboltdb) Last() (key, value []byte) {
-	tx, err := b.db.Begin(false)
-	if err != nil {
-		return nil, nil
-	}
-	defer tx.Rollback()
-
-	return tx.Bucket(b.conf.BucketName).Cursor().Last()
-}
-
-func (b *bboltdb) LastWhitTx(tx domain.ReadIndexTx) (key, value []byte, err error) {
-	t, ok := tx.(*Tx)
-	if !ok {
-		return nil, nil, ErrTypeFalse
-	}
-	key, value = t.tx.Bucket(b.conf.BucketName).Cursor().Last()
-	return
-}
-
-func (b *bboltdb) Seek(seek []byte) (key, value []byte) {
-	tx, err := b.db.Begin(false)
-	if err != nil {
-		return nil, nil
-	}
-	defer tx.Rollback()
-
-	return tx.Bucket(b.conf.BucketName).Cursor().Seek(seek)
-}
-
-func (b *bboltdb) SeekWithTx(tx domain.ReadIndexTx, seek []byte) (key, value []byte, err error) {
-	t, ok := tx.(*Tx)
-	if !ok {
-		return nil, nil, ErrTypeFalse
-	}
-	key, value = t.tx.Bucket(b.conf.BucketName).Cursor().Seek(seek)
-	return
-}
-
-func (b *bboltdb) Next() (key, value []byte) {
-	tx, err := b.db.Begin(false)
-	if err != nil {
-		return nil, nil
-	}
-	defer tx.Rollback()
-
-	return tx.Bucket(b.conf.BucketName).Cursor().Next()
-}
-
-func (b *bboltdb) NextWithTx(tx domain.ReadIndexTx) (key, value []byte, err error) {
-	t, ok := tx.(*Tx)
-	if !ok {
-		return nil, nil, ErrTypeFalse
-	}
-	key, value = t.tx.Bucket(b.conf.BucketName).Cursor().Next()
-	return
-}
-
-func (b *bboltdb) Prev() (key, value []byte) {
-	tx, err := b.db.Begin(false)
-	if err != nil {
-		return nil, nil
-	}
-	defer tx.Rollback()
-
-	return tx.Bucket(b.conf.BucketName).Cursor().Prev()
-}
-
-func (b *bboltdb) PrevWithTx(tx domain.ReadIndexTx) (key, value []byte, err error) {
-	t, ok := tx.(*Tx)
-	if !ok {
-		return nil, nil, ErrTypeFalse
-	}
-	key, value = t.tx.Bucket(b.conf.BucketName).Cursor().Prev()
-	return
-}
-
-func (b *bboltdb) IterDelete() error {
-	tx, err := b.db.Begin(true)
-	if err != nil {
-		return err
-	}
-	defer tx.Commit()
-
-	return tx.Bucket(b.conf.BucketName).Cursor().Delete()
-}
-
-func (b *bboltdb) IterDeleteWithTx(tx domain.ReadIndexTx) error {
-	t, ok := tx.(*Tx)
-	if !ok {
-		return ErrTypeFalse
-	}
-	return t.tx.Bucket(b.conf.BucketName).Cursor().Delete()
-}
-
-func (b *bboltdb) Commit(tx domain.ReadIndexTx) error {
-	t := tx.(*Tx)
-	return t.tx.Commit()
-}
-
 // Update executes a function within the context of a read-write managed transaction.
-func (b *bboltdb) Update(fn func(tx domain.ReadIndexTx) error) (err error) {
-	txIf, err := b.Begin(true)
-	if err != nil {
-		return
-	}
+// func (b *bboltdb) Update(fn func(tx domain.ReadIndexTx) error) (err error) {
+// 	tx, err := b.db.Begin(true)
+// 	if err != nil {
+// 		return
+// 	}
 
-	t := txIf.(*Tx)
+// 	defer func() {
+// 		if r := recover(); r != nil {
+// 			tx.Rollback()
+// 			switch x := r.(type) {
+// 			case string:
+// 				err = errors.New(x)
+// 			case error:
+// 				err = x
+// 			default:
+// 				err = errors.New("unknow panic")
+// 			}
+// 			return
+// 		}
+// 	}()
 
-	defer func() {
-		if r := recover(); r != nil {
-			t.tx.Rollback()
-			switch x := r.(type) {
-			case string:
-				err = errors.New(x)
-			case error:
-				err = x
-			default:
-				err = errors.New("unknow panic")
-			}
-			return
-		}
-	}()
+// 	if err := fn(tx); err != nil {
+// 		tx.Rollback()
+// 		return err
+// 	}
 
-	if err := fn(t); err != nil {
-		t.tx.Rollback()
-		return err
-	}
+// 	return tx.Commit()
+// }
 
-	return t.tx.Commit()
-}
+// func (b *bboltdb) View(fn func(tx domain.ReadIndexTx) error) (err error) {
+// 	tx, err := b.db.Begin(false)
+// 	if err != nil {
+// 		return
+// 	}
 
-func (b *bboltdb) View(fn func(tx domain.ReadIndexTx) error) (err error) {
-	txIf, err := b.Begin(false)
-	if err != nil {
-		return
-	}
-	t := txIf.(*Tx)
+// 	defer func() {
+// 		if r := recover(); r != nil {
+// 			tx.Rollback()
+// 			switch x := r.(type) {
+// 			case string:
+// 				err = errors.New(x)
+// 			case error:
+// 				err = x
+// 			default:
+// 				err = errors.New("unknow panic")
+// 			}
+// 			return
+// 		}
+// 	}()
 
-	defer func() {
-		if r := recover(); r != nil {
-			t.tx.Rollback()
-			switch x := r.(type) {
-			case string:
-				err = errors.New(x)
-			case error:
-				err = x
-			default:
-				err = errors.New("unknow panic")
-			}
-			return
-		}
-	}()
+// 	if err = fn(tx); err != nil {
+// 		tx.Rollback()
+// 		return err
+// 	}
 
-	if err = fn(t); err != nil {
-		t.tx.Rollback()
-		return err
-	}
-
-	return t.tx.Rollback()
-}
+// 	return tx.Rollback()
+// }
 
 func (b *bboltdb) Close() (err error) {
 	if err := b.db.Close(); err != nil {
