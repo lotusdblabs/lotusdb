@@ -10,7 +10,8 @@ import (
 )
 
 var (
-	ErrInvalidCrc = errors.New("logfile: invalid crc")
+	ErrInvalidCrc        = errors.New("logfile: invalid crc")
+	ErrWriteSizeNotEqual = errors.New("write size is not equal to entry size")
 )
 
 const (
@@ -76,11 +77,11 @@ func OpenLogFile(path string, fid uint32, fsize int64, ftype FileType, ioType IO
 // Read .
 func (lf *LogFile) Read(offset int64) (*LogEntry, error) {
 	// read entry header.
-	headerBuf, err := lf.readBytes(offset, entryHeaderSize)
+	headerBuf, err := lf.readBytes(offset, maxHeaderSize)
 	if err != nil {
 		return nil, err
 	}
-	header := decodeHeader(headerBuf)
+	header, size := decodeHeader(headerBuf)
 
 	kSize, vSize := int64(header.kSize), int64(header.vSize)
 	if kSize == 0 && vSize == 0 {
@@ -88,7 +89,7 @@ func (lf *LogFile) Read(offset int64) (*LogEntry, error) {
 	}
 
 	// read entry key and value.
-	kvBuf, err := lf.readBytes(offset+entryHeaderSize, kSize+vSize)
+	kvBuf, err := lf.readBytes(offset+size, kSize+vSize)
 	if err != nil {
 		return nil, err
 	}
@@ -107,12 +108,15 @@ func (lf *LogFile) Read(offset int64) (*LogEntry, error) {
 
 // Write .
 func (lf *LogFile) Write(e *LogEntry) error {
-	buf := encodeEntry(e)
+	buf, size := encodeEntry(e)
 	n, err := lf.IoSelector.Write(buf, lf.WriteAt)
 	if err != nil {
 		return err
 	}
-	lf.WriteAt += int64(n)
+	if n != size {
+		return ErrWriteSizeNotEqual
+	}
+	lf.WriteAt += int64(size)
 	return nil
 }
 
