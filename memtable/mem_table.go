@@ -20,19 +20,21 @@ type (
 		Get(key []byte) *logfile.LogEntry
 		Exist(key []byte) bool
 		Remove(key []byte) *logfile.LogEntry
+		MemSize() int64
 	}
 
 	Memtable struct {
-		mem IMemtable
-		wal *wal.Wal
+		mem     IMemtable
+		wal     *wal.Wal
+		memSize int64
 	}
 )
 
-func OpenMemTable(path string, fid uint32, tableType TableType, ioType logfile.IOType) (*Memtable, error) {
+func OpenMemTable(path string, fid uint32, fsize int64, tableType TableType, ioType logfile.IOType) (*Memtable, error) {
 	mem := getIMemtable(tableType)
 	table := &Memtable{mem: mem}
 
-	openedWal, err := wal.OpenWal(path, fid, 0, ioType)
+	openedWal, err := wal.OpenWal(path, fid, fsize, ioType)
 	if err != nil {
 		return nil, err
 	}
@@ -86,11 +88,15 @@ func (mt *Memtable) Get(key []byte) []byte {
 }
 
 func (mt *Memtable) IsFull() bool {
+	if mt.mem.MemSize() >= mt.memSize {
+		return true
+	}
+
 	if mt.wal == nil {
 		return false
 	}
 
-	return mt.wal.CurrentSize >= mt.wal.FileMaxSize
+	return mt.wal.WriteAt >= mt.memSize
 }
 
 func getIMemtable(tType TableType) IMemtable {

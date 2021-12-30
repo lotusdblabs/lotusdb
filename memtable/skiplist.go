@@ -8,6 +8,7 @@ import (
 	"github.com/flowercorp/lotusdb/logfile"
 	"math"
 	"math/rand"
+	"sync/atomic"
 	"time"
 )
 
@@ -55,6 +56,10 @@ func (e *Element) Next() *Element {
 	return e.next[0]
 }
 
+func (e *Element) Size() int {
+	return len(e.key) + len(e.value)
+}
+
 type SkipList struct {
 	Node
 	maxLevel       int
@@ -63,6 +68,7 @@ type SkipList struct {
 	probability    float64
 	probTable      []float64
 	prevNodesCache []*Node
+	n              int64
 }
 
 // NewSkipList create a new skip list.
@@ -111,6 +117,7 @@ func (t *SkipList) Put(key []byte, value []byte) *logfile.LogEntry {
 	}
 
 	t.Len++
+	t.incrSize(int64(element.Size()))
 	return getEntryByElement(element)
 }
 
@@ -150,9 +157,14 @@ func (t *SkipList) Remove(key []byte) *logfile.LogEntry {
 		}
 
 		t.Len--
+		t.decrSize(int64(element.Size()))
 		return getEntryByElement(element)
 	}
 	return nil
+}
+
+func (t *SkipList) MemSize() int64 {
+	return atomic.LoadInt64(&t.n)
 }
 
 // Foreach iterate all elements in the skip list.
@@ -215,6 +227,14 @@ func (t *SkipList) randomLevel() (level int) {
 		level++
 	}
 	return
+}
+
+func (t *SkipList) incrSize(size int64) {
+	atomic.AddInt64(&t.n, size)
+}
+
+func (t *SkipList) decrSize(size int64) {
+	atomic.AddInt64(&t.n, -size)
 }
 
 func probabilityTable(probability float64, maxLevel int) (table []float64) {

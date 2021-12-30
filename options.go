@@ -34,6 +34,8 @@ type ColumnFamilyOptions struct {
 	// DirPath
 	DirPath string
 
+	FileSize int64
+
 	// MemtableSize
 	MemtableSize uint64
 

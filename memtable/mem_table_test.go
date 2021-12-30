@@ -7,23 +7,13 @@ import (
 )
 
 func TestOpenMenTable(t *testing.T) {
-	var opt = &options{
-		fsize:     10 * 1204,
-		tableType: SkipListRep,
-		ioType:    logfile.MMap,
-	}
-	mem, err := openMemTable("/tmp", 0, opt)
+	mem, err := OpenMemTable("/tmp", 0, 1024, SkipListRep, logfile.MMap)
 	require.NoError(t, err)
 	require.NotNil(t, mem)
 }
 
 func TestMemtable_Get(t *testing.T) {
-	var opt = &options{
-		fsize:     10 * 1204,
-		tableType: SkipListRep,
-		ioType:    logfile.MMap,
-	}
-	mem, err := openMemTable("/tmp", 0, opt)
+	mem, err := OpenMemTable("/tmp", 0, 1024, SkipListRep, logfile.MMap)
 	require.NoError(t, err)
 	require.NotNil(t, mem)
 
@@ -36,12 +26,7 @@ func TestMemtable_Get(t *testing.T) {
 }
 
 func TestMemtable_Put(t *testing.T) {
-	var opt = &options{
-		fsize:     10 * 1204,
-		tableType: SkipListRep,
-		ioType:    logfile.MMap,
-	}
-	mem, err := openMemTable("/tmp", 1, opt)
+	mem, err := OpenMemTable("/tmp", 0, 1024, SkipListRep, logfile.MMap)
 	require.NoError(t, err)
 	require.NotNil(t, mem)
 
@@ -56,16 +41,4 @@ func TestMemtable_Put(t *testing.T) {
 
 	err = mem.Put([]byte("test4"), []byte("4"))
 	require.NoError(t, err)
-}
-
-func TestOpenMenTables(t *testing.T) {
-	mem, immuMems, err := OpenMenTables("/tmp")
-	require.NoError(t, err)
-	require.NotNil(t, mem)
-	require.NotNil(t, immuMems)
-
-	require.Equal(t, []byte("1"), mem.Get([]byte("test1")))
-
-	require.Equal(t, []byte("123"), immuMems[0].Get([]byte("lotusdb")))
-
 }

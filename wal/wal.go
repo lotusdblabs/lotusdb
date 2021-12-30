@@ -17,11 +17,9 @@ type Config struct {
 }
 
 type Wal struct {
-	logFile     *logfile.LogFile
-	CurrentSize uint64
-	index       Index
-	Path        string
-	FileMaxSize uint64
+	*logfile.LogFile
+	index Index
+	Path  string
 }
 
 type Index struct {
@@ -80,28 +78,29 @@ func OpenWal(path string, fid uint32, fsize int64, ioType logfile.IOType) (*Wal,
 	}
 
 	wal := &Wal{
-		logFile: logFile,
+		LogFile: logFile,
+		Path:    path,
 	}
 	return wal, nil
 }
 
 func (wal *Wal) Write(entry *logfile.LogEntry) error {
-	hash32 := getKeyHash(entry.Key)
-	wal.setKeyOffset(hash32, wal.CurrentSize)
-	wal.CurrentSize += uint64(entry.Size())
+	//hash32 := getKeyHash(entry.Key)
+	//wal.setKeyOffset(hash32, wal.CurrentSize)
+	//wal.CurrentSize += uint64(entry.Size())
 
-	return wal.logFile.Write(entry)
+	return wal.LogFile.Write(entry)
 }
 
-func (wal *Wal) Get(key []byte) (*logfile.LogEntry, error) {
-	keyId := getKeyHash(key)
-	offset := wal.getOffsetByKeyId(keyId)
-
-	return wal.logFile.Read(int64(offset))
-}
+//func (wal *Wal) Get(key []byte) (*logfile.LogEntry, error) {
+//	keyId := getKeyHash(key)
+//	offset := wal.getOffsetByKeyId(keyId)
+//
+//	return wal.logFile.Read(int64(offset))
+//}
 
 func (wal *Wal) Read(offset int64) (*logfile.LogEntry, error) {
-	return wal.logFile.Read(offset)
+	return wal.LogFile.Read(offset)
 }
 
 func (wal *Wal) Delete() bool {
@@ -111,11 +110,11 @@ func (wal *Wal) Delete() bool {
 }
 
 func (wal *Wal) Sync() error {
-	return wal.logFile.Sync()
+	return wal.LogFile.Sync()
 }
 
 func (wal *Wal) SetOffset(offset int64) {
-	wal.logFile.WriteAt = offset
+	wal.LogFile.WriteAt = offset
 }
 
 func getKeyHash(key []byte) uint32 {

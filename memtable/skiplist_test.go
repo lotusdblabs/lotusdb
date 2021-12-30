@@ -67,3 +67,12 @@ func TestSkipList_Remove(t *testing.T) {
 	skl.Remove([]byte("lotusdb"))
 	assert.Nil(t, skl.Get([]byte("lotusdb")))
 }
+
+func TestSkipList_MemSize(t *testing.T) {
+	hashlist := NewHashSkipList()
+
+	hashlist.Put([]byte("lotusdb"), []byte("lotusdb"))
+	hashlist.Put([]byte("test"), []byte("test"))
+
+	require.Equal(t, int64(22), hashlist.MemSize())
+}

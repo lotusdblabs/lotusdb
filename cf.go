@@ -115,7 +115,7 @@ func (cf *ColumnFamily) openMemtables() error {
 		fids = append(fids, 0)
 	}
 	for i, fid := range fids {
-		table, err := memtable.OpenMemTable(cf.opts.WalDir, fid, tableType, ioType)
+		table, err := memtable.OpenMemTable(cf.opts.WalDir, fid, cf.opts.FileSize, tableType, ioType)
 		if err != nil {
 			return err
 		}
