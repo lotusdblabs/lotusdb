@@ -87,8 +87,8 @@ func (mt *Memtable) Get(key []byte) []byte {
 	return entry.Value
 }
 
-func (mt *Memtable) IsFull() bool {
-	if mt.mem.MemSize() >= mt.memSize {
+func (mt *Memtable) IsFull(size int64) bool {
+	if mt.mem.MemSize()+size >= mt.memSize {
 		return true
 	}
 
@@ -96,7 +96,7 @@ func (mt *Memtable) IsFull() bool {
 		return false
 	}
 
-	return mt.wal.WriteAt >= mt.memSize
+	return mt.wal.WriteAt+size >= mt.memSize
 }
 
 func getIMemtable(tType TableType) IMemtable {
