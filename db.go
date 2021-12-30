@@ -1,14 +1,21 @@
 package lotusdb
 
 import (
+	"errors"
 	"github.com/flowercorp/lotusdb/util"
 	"os"
+	"sync"
+)
+
+var (
+	ErrDefaultCfNil = errors.New("default comumn family is nil")
 )
 
 type LotusDB struct {
-	lockMgr *LockMgr                 // global lock manager that guarantees consistency of read and write.
 	cfs     map[string]*ColumnFamily // all column families.
+	lockMgr *LockMgr                 // global lock manager that guarantees consistency of read and write.
 	opts    Options
+	mu      sync.Mutex
 }
 
 // Open a new LotusDB instance.
@@ -38,15 +45,33 @@ func (db *LotusDB) Close() error {
 
 // Put put to default column family.
 func (db *LotusDB) Put(key, value []byte) error {
-	return nil
+	columnFamily := db.getColumnFamily(defaultColumnFamilyName)
+	if columnFamily == nil {
+		return ErrDefaultCfNil
+	}
+	return columnFamily.Put(key, value)
 }
 
 // Get get from default column family.
-func (db *LotusDB) Get(key []byte) error {
-	return nil
+func (db *LotusDB) Get(key []byte) ([]byte, error) {
+	columnFamily := db.getColumnFamily(defaultColumnFamilyName)
+	if columnFamily == nil {
+		return nil, ErrDefaultCfNil
+	}
+	return columnFamily.Get(key)
 }
 
 // Delete delete from default column family.
 func (db *LotusDB) Delete(key []byte) error {
-	return nil
+	columnFamily := db.getColumnFamily(defaultColumnFamilyName)
+	if columnFamily == nil {
+		return ErrDefaultCfNil
+	}
+	return columnFamily.Delete(key)
+}
+
+func (db *LotusDB) getColumnFamily(cfName string) *ColumnFamily {
+	db.mu.Lock()
+	defer db.mu.Unlock()
+	return db.cfs[cfName]
 }

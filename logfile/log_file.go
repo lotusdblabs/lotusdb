@@ -22,6 +22,8 @@ const (
 
 	// VLogSuffixName log file suffix name of value log.
 	VLogSuffixName = ".vlog"
+
+	InitialLogFileId = 0
 )
 
 // FileType log file of wal and value log.
