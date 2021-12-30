@@ -7,9 +7,9 @@ import (
 	"github.com/flowercorp/lotusdb/index/domain"
 )
 
-func NewReadIndexComponent(rc domain.ReadIndexComponentConf) (r domain.ReadIndexComponent, err error) {
+func NewIndexComponent(rc domain.IndexComponentConf) (r domain.IndexComponent, err error) {
 	switch rc.GetType() {
-	case boltdb.ReadIndexComponentTyp:
+	case boltdb.IndexComponentTyp:
 		bboltdbConfig, ok := rc.(*boltdb.BboltdbConfig)
 		if !ok {
 			return nil, errors.New("config type error")
