@@ -75,23 +75,24 @@ func OpenLogFile(path string, fid uint32, fsize int64, ftype FileType, ioType IO
 }
 
 // Read .
-func (lf *LogFile) Read(offset int64) (*LogEntry, error) {
+func (lf *LogFile) Read(offset int64) (*LogEntry, int64, error) {
 	// read entry header.
 	headerBuf, err := lf.readBytes(offset, maxHeaderSize)
 	if err != nil {
-		return nil, err
+		return nil, 0, err
 	}
 	header, size := decodeHeader(headerBuf)
 
 	kSize, vSize := int64(header.kSize), int64(header.vSize)
 	if kSize == 0 && vSize == 0 {
-		return nil, io.EOF
+		return nil, 0, io.EOF
 	}
 
+	var entrySize = size + kSize + vSize
 	// read entry key and value.
 	kvBuf, err := lf.readBytes(offset+size, kSize+vSize)
 	if err != nil {
-		return nil, err
+		return nil, 0, err
 	}
 
 	e := &LogEntry{
@@ -101,22 +102,21 @@ func (lf *LogFile) Read(offset int64) (*LogEntry, error) {
 	}
 	// crc32 check.
 	if crc := getEntryCrc(e, headerBuf); crc != header.crc32 {
-		return nil, ErrInvalidCrc
+		return nil, 0, ErrInvalidCrc
 	}
-	return e, nil
+	return e, entrySize, nil
 }
 
 // Write .
-func (lf *LogFile) Write(e *LogEntry) error {
-	buf, size := encodeEntry(e)
+func (lf *LogFile) Write(buf []byte) error {
 	n, err := lf.IoSelector.Write(buf, lf.WriteAt)
 	if err != nil {
 		return err
 	}
-	if n != size {
+	if n != len(buf) {
 		return ErrWriteSizeNotEqual
 	}
-	lf.WriteAt += int64(size)
+	lf.WriteAt += int64(n)
 	return nil
 }
 

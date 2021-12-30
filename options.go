@@ -35,7 +35,7 @@ type ColumnFamilyOptions struct {
 	DirPath string
 
 	// MemtableSize
-	MemtableSize uint64
+	MemtableSize int64
 
 	// the number of memtable
 	MemtableNum int
