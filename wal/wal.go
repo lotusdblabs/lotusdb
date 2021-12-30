@@ -65,15 +65,6 @@ func (idx *Index) getOffsetByValueId(vId uint32) uint64 {
 	return idx.ValueOffsetMap[vId]
 }
 
-func NewWal(path string) *Wal {
-	return &Wal{
-		Path:        path,
-		CurrentSize: 0,
-		FileMaxSize: FILE_MAX_SIZE,
-		index:       NewIndex(),
-	}
-}
-
 func (wal *Wal) getOffsetByKeyId(kId uint32) uint64 {
 	return wal.index.getOffsetByValueId(kId)
 }
@@ -82,14 +73,16 @@ func (wal *Wal) setKeyOffset(keyId uint32, offset uint64) {
 	wal.index.setValueOffset(keyId, offset)
 }
 
-func (wal *Wal) Open(path string, fid uint32, fsize int64, ioType logfile.IOType) error {
+func OpenWal(path string, fid uint32, fsize int64, ioType logfile.IOType) (*Wal, error) {
 	logFile, err := logfile.OpenLogFile(path, fid, fsize, logfile.WAL, ioType)
 	if err != nil {
-		return err
+		return nil, err
 	}
 
-	wal.logFile = logFile
-	return nil
+	wal := &Wal{
+		logFile: logFile,
+	}
+	return wal, nil
 }
 
 func (wal *Wal) Write(entry *logfile.LogEntry) error {

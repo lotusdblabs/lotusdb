@@ -11,6 +11,7 @@ type LotusDB struct {
 	opts    Options
 }
 
+// Open a new LotusDB instance.
 func Open(opt Options) (*LotusDB, error) {
 	// add dir lock? todo
 	if !util.PathExist(opt.DBPath) {

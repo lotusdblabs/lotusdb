@@ -15,6 +15,13 @@ const (
 	DefaultVLogBlockSize = 256 * 1024 * 1024 // 256MB
 )
 
+type MemTableType int8
+
+const (
+	SkipList MemTableType = iota
+	HashSkipList
+)
+
 // Options for db.
 type Options struct {
 	DBPath string
@@ -33,7 +40,7 @@ type ColumnFamilyOptions struct {
 	// the number of memtable
 	MemtableNum int
 
-	MemtableAlgo int
+	MemtableType MemTableType
 
 	WalDir string
 
