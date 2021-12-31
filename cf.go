@@ -80,6 +80,10 @@ func (cf *ColumnFamily) Put(key, value []byte) error {
 // Get get from current column family.
 func (cf *ColumnFamily) Get(key []byte) ([]byte, error) {
 	// get from memtables.
+	var value []byte
+	if value = cf.activeMem.Get(key); len(value) != 0 {
+		return value, nil
+	}
 
 	// get from bptree.
 
@@ -118,6 +122,9 @@ func (cf *ColumnFamily) openMemtables() error {
 	sort.Slice(fids, func(i, j int) bool {
 		return fids[i] > fids[j]
 	})
+	if len(fids) == 0 {
+		fids = append(fids, logfile.InitialLogFileId)
+	}
 
 	tableType := cf.getMemtableType()
 	var ioType = logfile.FileIO
@@ -125,9 +132,6 @@ func (cf *ColumnFamily) openMemtables() error {
 		ioType = logfile.MMap
 	}
 
-	if len(fids) == 0 {
-		fids = append(fids, logfile.InitialLogFileId)
-	}
 	for i, fid := range fids {
 		table, err := memtable.OpenMemTable(cf.opts.WalDir, fid, cf.opts.MemtableSize, tableType, ioType)
 		if err != nil {

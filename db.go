@@ -11,6 +11,7 @@ var (
 	ErrDefaultCfNil = errors.New("default comumn family is nil")
 )
 
+// LotusDB .
 type LotusDB struct {
 	cfs     map[string]*ColumnFamily // all column families.
 	lockMgr *LockMgr                 // global lock manager that guarantees consistency of read and write.
@@ -30,7 +31,7 @@ func Open(opt Options) (*LotusDB, error) {
 	db := &LotusDB{opts: opt, cfs: make(map[string]*ColumnFamily)}
 	// load default column family.
 	if opt.CfOpts.CfName == "" {
-		opt.CfOpts.CfName = defaultColumnFamilyName
+		opt.CfOpts.CfName = DefaultColumnFamilyName
 	}
 	if _, err := db.OpenColumnFamily(opt.CfOpts); err != nil {
 		return nil, err
@@ -45,7 +46,7 @@ func (db *LotusDB) Close() error {
 
 // Put put to default column family.
 func (db *LotusDB) Put(key, value []byte) error {
-	columnFamily := db.getColumnFamily(defaultColumnFamilyName)
+	columnFamily := db.getColumnFamily(DefaultColumnFamilyName)
 	if columnFamily == nil {
 		return ErrDefaultCfNil
 	}
@@ -54,7 +55,7 @@ func (db *LotusDB) Put(key, value []byte) error {
 
 // Get get from default column family.
 func (db *LotusDB) Get(key []byte) ([]byte, error) {
-	columnFamily := db.getColumnFamily(defaultColumnFamilyName)
+	columnFamily := db.getColumnFamily(DefaultColumnFamilyName)
 	if columnFamily == nil {
 		return nil, ErrDefaultCfNil
 	}
@@ -63,7 +64,7 @@ func (db *LotusDB) Get(key []byte) ([]byte, error) {
 
 // Delete delete from default column family.
 func (db *LotusDB) Delete(key []byte) error {
-	columnFamily := db.getColumnFamily(defaultColumnFamilyName)
+	columnFamily := db.getColumnFamily(DefaultColumnFamilyName)
 	if columnFamily == nil {
 		return ErrDefaultCfNil
 	}

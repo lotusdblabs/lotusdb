@@ -54,7 +54,7 @@ func OpenValueLog(path string, blockSize int64, ioType logfile.IOType) (*ValueLo
 
 	var fids []uint32
 	for _, file := range fileInfos {
-		if strings.Contains(file.Name(), logfile.VLogSuffixName) {
+		if strings.HasSuffix(file.Name(), logfile.VLogSuffixName) {
 			splitNames := strings.Split(file.Name(), ".")
 			fid, err := strconv.Atoi(splitNames[0])
 			if err != nil {
@@ -66,8 +66,11 @@ func OpenValueLog(path string, blockSize int64, ioType logfile.IOType) (*ValueLo
 
 	// load in order.
 	sort.Slice(fids, func(i, j int) bool {
-		return fids[i] < fids[j]
+		return fids[i] > fids[j]
 	})
+	if len(fids) == 0 {
+		fids = append(fids, logfile.InitialLogFileId)
+	}
 
 	// open active log file only.
 	logFile, err := logfile.OpenLogFile(path, fids[len(fids)-1], opt.blockSize, logfile.ValueLog, opt.ioType)
