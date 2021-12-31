@@ -2,9 +2,9 @@ package memtable
 
 import (
 	"fmt"
-	"github.com/flowercorp/lotusdb/logfile"
-	"github.com/flowercorp/lotusdb/wal"
 	"io"
+
+	"github.com/flowercorp/lotusdb/logfile"
 )
 
 type TableType int8
@@ -24,25 +24,25 @@ type (
 
 	Memtable struct {
 		mem IMemtable
-		wal *wal.Wal
+		wal *logfile.LogFile
 	}
 )
 
-func OpenMemTable(path string, fid uint32, tableType TableType, ioType logfile.IOType) (*Memtable, error) {
+func OpenMemTable(path string, fid uint32, size int64, tableType TableType, ioType logfile.IOType) (*Memtable, error) {
 	mem := getIMemtable(tableType)
 	table := &Memtable{mem: mem}
 
-	openedWal, err := wal.OpenWal(path, fid, 0, ioType)
+	wal, err := logfile.OpenLogFile(path, fid, size*2, logfile.WAL, ioType)
 	if err != nil {
 		return nil, err
 	}
 
 	// load entries.
 	var offset int64 = 0
-	if openedWal != nil {
+	if wal != nil {
 		for {
-			if entry, err := openedWal.Read(offset); err == nil {
-				offset += int64(entry.Size())
+			if entry, size, err := wal.Read(offset); err == nil {
+				offset += size
 				mem.Put(entry.Key, entry.Value)
 			} else {
 				if err == io.EOF {
@@ -51,7 +51,7 @@ func OpenMemTable(path string, fid uint32, tableType TableType, ioType logfile.I
 				return nil, err
 			}
 		}
-		table.wal = openedWal
+		table.wal = wal
 	}
 	return table, nil
 }
@@ -63,7 +63,8 @@ func (mt *Memtable) Put(key []byte, value []byte) error {
 	}
 
 	if mt.wal != nil {
-		if err := mt.wal.Write(entry); err != nil {
+		buf, _ := logfile.EncodeEntry(entry)
+		if err := mt.wal.Write(buf); err != nil {
 			return err
 		}
 	}
@@ -86,11 +87,7 @@ func (mt *Memtable) Get(key []byte) []byte {
 }
 
 func (mt *Memtable) IsFull() bool {
-	if mt.wal == nil {
-		return false
-	}
-
-	return mt.wal.CurrentSize >= mt.wal.FileMaxSize
+	return false
 }
 
 func getIMemtable(tType TableType) IMemtable {

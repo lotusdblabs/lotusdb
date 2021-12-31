@@ -114,13 +114,13 @@ func (vlog *ValueLog) ReadValue(pos *ValuePos) ([]byte, error) {
 		return nil, fmt.Errorf(ErrLogFileNil.Error(), pos.fid)
 	}
 
-	logEntry, err := logFile.Read(pos.offset)
+	logEntry, _, err := logFile.Read(pos.offset)
 	if err != nil {
 		return nil, err
 	}
 
 	// check whether value is expired.
-	if logEntry.ExpiredAt <= uint64(time.Now().Unix()) {
+	if logEntry.ExpiredAt <= (time.Now().Unix()) {
 		// delete expired value.todo
 		return nil, nil
 	}
@@ -128,9 +128,9 @@ func (vlog *ValueLog) ReadValue(pos *ValuePos) ([]byte, error) {
 }
 
 func (vlog *ValueLog) Write(e *logfile.LogEntry) (*ValuePos, error) {
-	eSize := int64(e.Size())
+	buf, eSize := logfile.EncodeEntry(e)
 	// if active is reach to thereshold, close it and open a new one.
-	if vlog.activeLogFile.WriteAt+eSize >= vlog.opt.blockSize {
+	if vlog.activeLogFile.WriteAt+int64(eSize) >= vlog.opt.blockSize {
 		if err := vlog.activeLogFile.Close(); err != nil {
 			return nil, err
 		}
@@ -145,14 +145,14 @@ func (vlog *ValueLog) Write(e *logfile.LogEntry) (*ValuePos, error) {
 		vlog.activeLogFile = logFile
 		vlog.Unlock()
 	}
-	err := vlog.activeLogFile.Write(e)
+	err := vlog.activeLogFile.Write(buf)
 	if err != nil {
 		return nil, err
 	}
 
 	return &ValuePos{
 		fid:    vlog.activeLogFile.Fid,
-		offset: vlog.activeLogFile.WriteAt - eSize,
+		offset: vlog.activeLogFile.WriteAt - int64(eSize),
 		size:   uint32(eSize),
 	}, nil
 }
