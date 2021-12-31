@@ -5,10 +5,11 @@ import (
 )
 
 var (
-	ErrDBNameNil     = errors.New("DB name is nil")
-	ErrBucketNameNil = errors.New("bucket name is nil")
-	ErrFilePathNil   = errors.New("file path is nil")
-	ErrBucketNotInit = errors.New("bucket not init")
+	ErrColumnFamilyNameNil = errors.New("column family name is nil")
+	ErrBucketNameNil       = errors.New("bucket name is nil")
+	ErrDirPathNil          = errors.New("bptree dir path is nil")
+	ErrBucketNotInit       = errors.New("bucket not init")
+	ErrOptionsTypeNotMatch = errors.New("indexer options not match")
 )
 
 type IndexerKvnode struct {
@@ -16,14 +17,20 @@ type IndexerKvnode struct {
 	Value []byte
 }
 
-type IndexerOptions interface {
-	SetType(typ string)
-	SetDbName(dbname string)
-	SetFilePath(filePath string)
+type IndexerType int8
 
-	GetType() (typ string)
-	GetDbName() (dbname string)
-	GetFilePath() (filePath string)
+const (
+	BptreeBoltDB IndexerType = iota
+)
+
+type IndexerOptions interface {
+	SetType(typ IndexerType)
+	SetColumnFamilyName(cfName string)
+	SetDirPath(dirPath string)
+
+	GetType() IndexerType
+	GetColumnFamilyName() string
+	GetDirPath() string
 }
 
 type IndexerTx interface{}
@@ -67,14 +74,14 @@ type Indexer interface {
 	Iter() (iter IndexerIter, err error)
 }
 
-func NewIndexer(opts IndexerOptions) (r Indexer, err error) {
+func NewIndexer(opts IndexerOptions) (Indexer, error) {
 	switch opts.GetType() {
-	case IndexComponentTyp:
-		bboltdbConfig, ok := opts.(*BboltdbConfig)
+	case BptreeBoltDB:
+		boltOpts, ok := opts.(*BoltOptions)
 		if !ok {
-			return nil, errors.New("options type error")
+			return nil, ErrOptionsTypeNotMatch
 		}
-		return NewBboltdb(bboltdbConfig)
+		return BptreeBolt(boltOpts)
 	default:
 		panic("unknown indexer type")
 	}

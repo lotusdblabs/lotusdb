@@ -6,112 +6,105 @@ import (
 	"time"
 )
 
-type BboltdbConfig struct {
-	IndexComponentType string
-	BatchSize          int
-	DBName             string
-	BucketName         []byte
-	FilePath           string
+type BoltOptions struct {
+	indexType        IndexerType
+	BatchSize        int
+	ColumnFamilyName string
+	BucketName       []byte
+	DirPath          string
 
 	// todo
 	MaxDataSize int64
 }
 
-type bboltdb struct {
+type bolt struct {
 	db   *bbolt.DB
-	conf *BboltdbConfig
+	conf *BoltOptions
 
 	// todo
 	metedatadb *bbolt.DB
 }
 
 type boltManager struct {
-	boltdbMap map[string]*bboltdb
+	boltdbMap map[string]*bolt
 	sync.RWMutex
 }
 
 const (
 	defaultBatchLoopNum = 1
 	defaultBatchSize    = 10000
-	IndexComponentTyp   = "boltdb"
 )
 
 var manager *boltManager
 
 func init() {
-	manager = &boltManager{boltdbMap: make(map[string]*bboltdb)}
+	manager = &boltManager{boltdbMap: make(map[string]*bolt)}
 }
 
-func (bc *BboltdbConfig) SetType(typ string) {
-	bc.IndexComponentType = typ
+func (bc *BoltOptions) SetType(typ IndexerType) {
+	bc.indexType = typ
 }
 
-func (bc *BboltdbConfig) SetDbName(dbname string) {
-	bc.DBName = dbname
+func (bc *BoltOptions) SetColumnFamilyName(cfName string) {
+	bc.ColumnFamilyName = cfName
 }
 
-func (bc *BboltdbConfig) SetFilePath(filePath string) {
-	bc.FilePath = filePath
+func (bc *BoltOptions) SetDirPath(dirPath string) {
+	bc.DirPath = dirPath
 }
 
-func (bc *BboltdbConfig) GetType() (typ string) {
-	return bc.IndexComponentType
+func (bc *BoltOptions) GetType() IndexerType {
+	return bc.indexType
 }
 
-func (bc *BboltdbConfig) GetDbName() (dbname string) {
-	return bc.DBName
+func (bc *BoltOptions) GetColumnFamilyName() string {
+	return bc.ColumnFamilyName
 }
 
-func (bc *BboltdbConfig) GetFilePath() (filePath string) {
-	return bc.FilePath
+func (bc *BoltOptions) GetDirPath() string {
+	return bc.DirPath
 }
 
-func checkBboltdbConf(conf *BboltdbConfig) error {
-	if conf.DBName == "" {
-		return ErrDBNameNil
+func checkBoltOptions(opt *BoltOptions) error {
+	if opt.ColumnFamilyName == "" {
+		return ErrColumnFamilyNameNil
 	}
 
-	if conf.FilePath == "" {
-		return ErrFilePathNil
+	if opt.DirPath == "" {
+		return ErrDirPathNil
 	}
 
-	if conf.BucketName == nil || len(conf.BucketName) == 0 {
+	if opt.BucketName == nil || len(opt.BucketName) == 0 {
 		return ErrBucketNameNil
 	}
 
-	if conf.BatchSize < defaultBatchSize {
-		conf.BatchSize = defaultBatchSize
+	if opt.BatchSize < defaultBatchSize {
+		opt.BatchSize = defaultBatchSize
 	}
 	return nil
 }
 
-// NewBboltdb create a boltdb instance.
+// BptreeBolt create a boltdb instance.
 // A file can only be opened once. if not, file lock competition will occur.
-func NewBboltdb(conf *BboltdbConfig) (*bboltdb, error) {
-	if err := checkBboltdbConf(conf); err != nil {
+func BptreeBolt(opt *BoltOptions) (*bolt, error) {
+	if err := checkBoltOptions(opt); err != nil {
 		return nil, err
 	}
 
-	// check lock check -- clc
-	// check
-	manager.RLock()
-	if db, ok := manager.boltdbMap[conf.GetDbName()]; ok {
+	manager.Lock()
+	defer manager.Unlock()
+	if db, ok := manager.boltdbMap[opt.GetColumnFamilyName()]; ok {
 		manager.RUnlock()
 		return db, nil
 	}
 
-	// lock
-	manager.RUnlock()
-	manager.Lock()
-	defer manager.Unlock()
-
 	// check
-	if db, ok := manager.boltdbMap[conf.GetDbName()]; ok {
+	if db, ok := manager.boltdbMap[opt.GetColumnFamilyName()]; ok {
 		return db, nil
 	}
 
 	// open metadatadb and db
-	metaDatadb, err := bbolt.Open(conf.DBName, 0600, &bbolt.Options{
+	metaDatadb, err := bbolt.Open(opt.GetColumnFamilyName(), 0600, &bbolt.Options{
 		Timeout:         1 * time.Second,
 		NoSync:          true,
 		InitialMmapSize: 1024,
@@ -120,7 +113,7 @@ func NewBboltdb(conf *BboltdbConfig) (*bboltdb, error) {
 		return nil, err
 	}
 
-	db, err := bbolt.Open(conf.FilePath, 0600, &bbolt.Options{
+	db, err := bbolt.Open(opt.DirPath, 0600, &bbolt.Options{
 		Timeout:         1 * time.Second,
 		NoSync:          true,
 		InitialMmapSize: 1024,
@@ -145,7 +138,7 @@ func NewBboltdb(conf *BboltdbConfig) (*bboltdb, error) {
 		return nil, err
 	}
 
-	if _, err := tx.CreateBucketIfNotExists(conf.BucketName); err != nil {
+	if _, err := tx.CreateBucketIfNotExists(opt.BucketName); err != nil {
 		return nil, err
 	}
 
@@ -158,20 +151,20 @@ func NewBboltdb(conf *BboltdbConfig) (*bboltdb, error) {
 		return nil, err
 	}
 
-	b := &bboltdb{
+	b := &bolt{
 		metedatadb: metaDatadb,
 		db:         db,
-		conf:       conf,
+		conf:       opt,
 	}
 
-	manager.boltdbMap[conf.GetDbName()] = b
+	manager.boltdbMap[opt.GetColumnFamilyName()] = b
 	return b, nil
 }
 
 // Put The put method starts a transaction.
 // This method writes kv according to the bucket,
 // and creates it if the bucket name does not exist.
-func (b *bboltdb) Put(k, v []byte) (err error) {
+func (b *bolt) Put(k, v []byte) (err error) {
 	var tx *bbolt.Tx
 	tx, err = b.db.Begin(true)
 	if err != nil {
@@ -192,7 +185,7 @@ func (b *bboltdb) Put(k, v []byte) (err error) {
 // The offset marks the transaction write position of the current batch.
 // If this function fails during execution, we can write again from the offset position.
 // If offset == len(kv) - 1 , all writes are successful.
-func (b *bboltdb) PutBatch(kv []IndexerKvnode) (offset int, err error) {
+func (b *bolt) PutBatch(kv []IndexerKvnode) (offset int, err error) {
 	var batchLoopNum = defaultBatchLoopNum
 	if len(kv) > b.conf.BatchSize {
 		batchLoopNum = len(kv) / b.conf.BatchSize
@@ -229,7 +222,7 @@ func (b *bboltdb) PutBatch(kv []IndexerKvnode) (offset int, err error) {
 	return len(kv) - 1, nil
 }
 
-func (b *bboltdb) Delete(key []byte) error {
+func (b *bolt) Delete(key []byte) error {
 	tx, err := b.db.Begin(false)
 	if err != nil {
 		return err
@@ -241,17 +234,17 @@ func (b *bboltdb) Delete(key []byte) error {
 
 // Get The put method starts a transaction.
 // This method reads the value from the bucket with key,
-func (b *bboltdb) Get(k []byte) (value []byte, err error) {
+func (b *bolt) Get(key []byte) (value []byte, err error) {
 	tx, err := b.db.Begin(false)
 	if err != nil {
 		return nil, err
 	}
 	defer tx.Rollback()
 
-	return tx.Bucket(b.conf.BucketName).Get(k), nil
+	return tx.Bucket(b.conf.BucketName).Get(key), nil
 }
 
-func (b *bboltdb) Close() (err error) {
+func (b *bolt) Close() (err error) {
 	if err := b.db.Close(); err != nil {
 		return err
 	}
@@ -262,12 +255,12 @@ func (b *bboltdb) Close() (err error) {
 }
 
 type boltIter struct {
-	b        *bboltdb
+	b        *bolt
 	dbBucket *bbolt.Bucket
 	tx       *bbolt.Tx
 }
 
-func (b *bboltdb) Iter() (IndexerIter, error) {
+func (b *bolt) Iter() (IndexerIter, error) {
 	tx, err := b.db.Begin(false)
 	if err != nil {
 		return nil, err
