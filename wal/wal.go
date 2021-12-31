@@ -1,10 +1,11 @@
 package wal
 
 import (
-	"github.com/flowercorp/lotusdb/logfile"
 	"hash/crc32"
 	"os"
 	"sync"
+
+	"github.com/flowercorp/lotusdb/logfile"
 )
 
 const (
