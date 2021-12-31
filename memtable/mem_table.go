@@ -2,8 +2,9 @@ package memtable
 
 import (
 	"fmt"
-	"github.com/flowercorp/lotusdb/logfile"
 	"io"
+
+	"github.com/flowercorp/lotusdb/logfile"
 )
 
 type TableType int8

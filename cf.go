@@ -3,15 +3,16 @@ package lotusdb
 import (
 	"errors"
 	"fmt"
-	"github.com/flowercorp/lotusdb/logfile"
-	"github.com/flowercorp/lotusdb/memtable"
-	"github.com/flowercorp/lotusdb/util"
-	"github.com/flowercorp/lotusdb/vlog"
 	"io/ioutil"
 	"os"
 	"sort"
 	"strconv"
 	"strings"
+
+	"github.com/flowercorp/lotusdb/logfile"
+	"github.com/flowercorp/lotusdb/memtable"
+	"github.com/flowercorp/lotusdb/util"
+	"github.com/flowercorp/lotusdb/vlog"
 )
 
 var (
