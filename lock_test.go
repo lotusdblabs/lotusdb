@@ -1,10 +1,11 @@
 package lotusdb
 
 import (
-	"github.com/flowercorp/lotusdb/util"
-	"github.com/stretchr/testify/assert"
 	"testing"
 	"time"
+
+	"github.com/flowercorp/lotusdb/util"
+	"github.com/stretchr/testify/assert"
 )
 
 func TestNewLockManager(t *testing.T) {

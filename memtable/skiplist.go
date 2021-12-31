@@ -5,10 +5,11 @@ package memtable
 // For a specific explanation of the skip list,  you can refer to Wikipedia: https://en.wikipedia.org/wiki/Skip_list.
 import (
 	"bytes"
-	"github.com/flowercorp/lotusdb/logfile"
 	"math"
 	"math/rand"
 	"time"
+
+	"github.com/flowercorp/lotusdb/logfile"
 )
 
 const (

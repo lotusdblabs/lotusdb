@@ -2,9 +2,10 @@ package lotusdb
 
 import (
 	"errors"
-	"github.com/flowercorp/lotusdb/util"
 	"os"
 	"sync"
+
+	"github.com/flowercorp/lotusdb/util"
 )
 
 var (

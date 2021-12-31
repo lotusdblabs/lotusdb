@@ -1,4 +1,5 @@
 package logfile
+
 //
 //import (
 //	"github.com/stretchr/testify/assert"

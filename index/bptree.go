@@ -1,9 +1,10 @@
 package index
 
 import (
-	"go.etcd.io/bbolt"
 	"sync"
 	"time"
+
+	"go.etcd.io/bbolt"
 )
 
 type BoltOptions struct {
@@ -91,12 +92,17 @@ func BptreeBolt(opt *BoltOptions) (*bolt, error) {
 		return nil, err
 	}
 
-	manager.Lock()
-	defer manager.Unlock()
+	// check
+	manager.RLock()
 	if db, ok := manager.boltdbMap[opt.GetColumnFamilyName()]; ok {
 		manager.RUnlock()
 		return db, nil
 	}
+
+	// lock
+	manager.RUnlock()
+	manager.Lock()
+	defer manager.Unlock()
 
 	// check
 	if db, ok := manager.boltdbMap[opt.GetColumnFamilyName()]; ok {

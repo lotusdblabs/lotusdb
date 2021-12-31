@@ -1,10 +1,11 @@
 package memtable
 
 import (
+	"testing"
+
 	"github.com/flowercorp/lotusdb/logfile"
 	"github.com/stretchr/testify/assert"
 	"github.com/stretchr/testify/require"
-	"testing"
 )
 
 func TestSkipList_Put(t *testing.T) {

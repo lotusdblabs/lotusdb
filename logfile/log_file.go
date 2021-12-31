@@ -3,11 +3,12 @@ package logfile
 import (
 	"errors"
 	"fmt"
-	"github.com/flowercorp/lotusdb/ioselector"
 	"hash/crc32"
 	"io"
 	"os"
 	"sync"
+
+	"github.com/flowercorp/lotusdb/ioselector"
 )
 
 var (
