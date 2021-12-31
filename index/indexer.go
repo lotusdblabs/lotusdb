@@ -1,11 +1,22 @@
-package domain
+package index
 
-type IndexComKvnode struct {
+import (
+	"errors"
+)
+
+var (
+	ErrDBNameNil     = errors.New("DB name is nil")
+	ErrBucketNameNil = errors.New("bucket name is nil")
+	ErrFilePathNil   = errors.New("file path is nil")
+	ErrBucketNotInit = errors.New("bucket not init")
+)
+
+type IndexerKvnode struct {
 	Key   []byte
 	Value []byte
 }
 
-type IndexComponentConf interface {
+type IndexerOptions interface {
 	SetType(typ string)
 	SetDbName(dbname string)
 	SetFilePath(filePath string)
@@ -15,10 +26,9 @@ type IndexComponentConf interface {
 	GetFilePath() (filePath string)
 }
 
-// todo
-type IndexTx interface{}
+type IndexerTx interface{}
 
-type IndexIter interface {
+type IndexerIter interface {
 	// First moves the cursor to the first item in the bucket and returns its key and value.
 	// If the bucket is empty then a nil key and value are returned.
 	First() (key, value []byte)
@@ -39,14 +49,14 @@ type IndexIter interface {
 	// If the cursor is at the beginning of the bucket then a nil key and value are returned.
 	Prev() (key, value []byte)
 
-	// The close method must be called after the iterative behavior is over！
+	// Close The close method must be called after the iterative behavior is over！
 	Close() error
 }
 
-type IndexComponent interface {
+type Indexer interface {
 	Put(key []byte, value []byte) (err error)
 
-	PutBatch(kv []IndexComKvnode) (offset int, err error)
+	PutBatch(kv []IndexerKvnode) (offset int, err error)
 
 	Get(k []byte) (value []byte, err error)
 
@@ -54,11 +64,18 @@ type IndexComponent interface {
 
 	Close() (err error)
 
-	Iter() (iter IndexIter, err error)
+	Iter() (iter IndexerIter, err error)
+}
 
-	// Update encapsulates a series of read and write operations.
-	//Update(fn func(tx IndexTx) error) (err error)
-
-	// View encapsulates a series of read operations.
-	//View(fn func(tx IndexTx) error) (err error)
+func NewIndexer(opts IndexerOptions) (r Indexer, err error) {
+	switch opts.GetType() {
+	case IndexComponentTyp:
+		bboltdbConfig, ok := opts.(*BboltdbConfig)
+		if !ok {
+			return nil, errors.New("options type error")
+		}
+		return NewBboltdb(bboltdbConfig)
+	default:
+		panic("unknown indexer type")
+	}
 }

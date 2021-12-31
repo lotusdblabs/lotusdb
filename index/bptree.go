@@ -1,11 +1,9 @@
-package boltdb
+package index
 
 import (
+	"go.etcd.io/bbolt"
 	"sync"
 	"time"
-
-	"github.com/flowercorp/lotusdb/index/domain"
-	"go.etcd.io/bbolt"
 )
 
 type BboltdbConfig struct {
@@ -35,8 +33,7 @@ type boltManager struct {
 const (
 	defaultBatchLoopNum = 1
 	defaultBatchSize    = 10000
-
-	IndexComponentTyp = "boltdb"
+	IndexComponentTyp   = "boltdb"
 )
 
 var manager *boltManager
@@ -88,7 +85,7 @@ func checkBboltdbConf(conf *BboltdbConfig) error {
 	return nil
 }
 
-// NewBboltdb() create a boltdb instance.
+// NewBboltdb create a boltdb instance.
 // A file can only be opened once. if not, file lock competition will occur.
 func NewBboltdb(conf *BboltdbConfig) (*bboltdb, error) {
 	if err := checkBboltdbConf(conf); err != nil {
@@ -171,7 +168,7 @@ func NewBboltdb(conf *BboltdbConfig) (*bboltdb, error) {
 	return b, nil
 }
 
-// The put method starts a transaction.
+// Put The put method starts a transaction.
 // This method writes kv according to the bucket,
 // and creates it if the bucket name does not exist.
 func (b *bboltdb) Put(k, v []byte) (err error) {
@@ -195,7 +192,7 @@ func (b *bboltdb) Put(k, v []byte) (err error) {
 // The offset marks the transaction write position of the current batch.
 // If this function fails during execution, we can write again from the offset position.
 // If offset == len(kv) - 1 , all writes are successful.
-func (b *bboltdb) PutBatch(kv []domain.IndexComKvnode) (offset int, err error) {
+func (b *bboltdb) PutBatch(kv []IndexerKvnode) (offset int, err error) {
 	var batchLoopNum = defaultBatchLoopNum
 	if len(kv) > b.conf.BatchSize {
 		batchLoopNum = len(kv) / b.conf.BatchSize
@@ -242,7 +239,7 @@ func (b *bboltdb) Delete(key []byte) error {
 	return tx.Bucket(b.conf.BucketName).Delete(key)
 }
 
-// The put method starts a transaction.
+// Get The put method starts a transaction.
 // This method reads the value from the bucket with key,
 func (b *bboltdb) Get(k []byte) (value []byte, err error) {
 	tx, err := b.db.Begin(false)
@@ -254,65 +251,6 @@ func (b *bboltdb) Get(k []byte) (value []byte, err error) {
 	return tx.Bucket(b.conf.BucketName).Get(k), nil
 }
 
-// Update executes a function within the context of a read-write managed transaction.
-// func (b *bboltdb) Update(fn func(tx domain.ReadIndexTx) error) (err error) {
-// 	tx, err := b.db.Begin(true)
-// 	if err != nil {
-// 		return
-// 	}
-
-// 	defer func() {
-// 		if r := recover(); r != nil {
-// 			tx.Rollback()
-// 			switch x := r.(type) {
-// 			case string:
-// 				err = errors.New(x)
-// 			case error:
-// 				err = x
-// 			default:
-// 				err = errors.New("unknow panic")
-// 			}
-// 			return
-// 		}
-// 	}()
-
-// 	if err := fn(tx); err != nil {
-// 		tx.Rollback()
-// 		return err
-// 	}
-
-// 	return tx.Commit()
-// }
-
-// func (b *bboltdb) View(fn func(tx domain.ReadIndexTx) error) (err error) {
-// 	tx, err := b.db.Begin(false)
-// 	if err != nil {
-// 		return
-// 	}
-
-// 	defer func() {
-// 		if r := recover(); r != nil {
-// 			tx.Rollback()
-// 			switch x := r.(type) {
-// 			case string:
-// 				err = errors.New(x)
-// 			case error:
-// 				err = x
-// 			default:
-// 				err = errors.New("unknow panic")
-// 			}
-// 			return
-// 		}
-// 	}()
-
-// 	if err = fn(tx); err != nil {
-// 		tx.Rollback()
-// 		return err
-// 	}
-
-// 	return tx.Rollback()
-// }
-
 func (b *bboltdb) Close() (err error) {
 	if err := b.db.Close(); err != nil {
 		return err
@@ -321,4 +259,52 @@ func (b *bboltdb) Close() (err error) {
 		return err
 	}
 	return nil
+}
+
+type boltIter struct {
+	b        *bboltdb
+	dbBucket *bbolt.Bucket
+	tx       *bbolt.Tx
+}
+
+func (b *bboltdb) Iter() (IndexerIter, error) {
+	tx, err := b.db.Begin(false)
+	if err != nil {
+		return nil, err
+	}
+
+	bucket := tx.Bucket(b.conf.BucketName)
+	if bucket == nil {
+		return nil, ErrBucketNotInit
+	}
+
+	return &boltIter{
+		b:        b,
+		dbBucket: bucket,
+		tx:       tx,
+	}, nil
+}
+
+func (b *boltIter) First() (key, value []byte) {
+	return b.dbBucket.Cursor().First()
+}
+
+func (b *boltIter) Last() (key, value []byte) {
+	return b.dbBucket.Cursor().Last()
+}
+
+func (b *boltIter) Seek(seek []byte) (key, value []byte) {
+	return b.dbBucket.Cursor().Seek(seek)
+}
+
+func (b *boltIter) Next() (key, value []byte) {
+	return b.dbBucket.Cursor().Next()
+}
+
+func (b *boltIter) Prev() (key, value []byte) {
+	return b.dbBucket.Cursor().Prev()
+}
+
+func (b *boltIter) Close() (err error) {
+	return b.tx.Rollback()
 }
