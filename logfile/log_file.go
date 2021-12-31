@@ -4,6 +4,7 @@ import (
 	"errors"
 	"fmt"
 	"github.com/flowercorp/lotusdb/ioselector"
+	"hash/crc32"
 	"io"
 	"os"
 	"sync"
@@ -101,7 +102,7 @@ func (lf *LogFile) Read(offset int64) (*LogEntry, int64, error) {
 		ExpiredAt: header.expiredAt,
 	}
 	// crc32 check.
-	if crc := getEntryCrc(e, headerBuf); crc != header.crc32 {
+	if crc := getEntryCrc(e, headerBuf[crc32.Size:size]); crc != header.crc32 {
 		return nil, 0, ErrInvalidCrc
 	}
 	return e, entrySize, nil

@@ -72,7 +72,7 @@ func decodeHeader(buf []byte) (*entryHeader, int64) {
 }
 
 func getEntryCrc(e *LogEntry, h []byte) uint32 {
-	crc := crc32.ChecksumIEEE(h[4:])
+	crc := crc32.ChecksumIEEE(h[:])
 	crc = crc32.Update(crc, crc32.IEEETable, e.Key)
 	crc = crc32.Update(crc, crc32.IEEETable, e.Value)
 	return crc
