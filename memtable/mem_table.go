@@ -2,9 +2,8 @@ package memtable
 
 import (
 	"fmt"
-	"io"
-
 	"github.com/flowercorp/lotusdb/logfile"
+	"io"
 )
 
 type TableType int8
@@ -25,47 +24,77 @@ type (
 	Memtable struct {
 		mem IMemtable
 		wal *logfile.LogFile
+		opt Options
+	}
+
+	Options struct {
+		// options for opening a memtable.
+		Path     string
+		Fid      uint32
+		Fsize    int64
+		TableTyp TableType
+		IoType   logfile.IOType
+
+		// options for writing.
+		Sync       bool
+		DisableWal bool
+		ExpiredAt  int64
 	}
 )
 
-func OpenMemTable(path string, fid uint32, size int64, tableType TableType, ioType logfile.IOType) (*Memtable, error) {
-	mem := getIMemtable(tableType)
-	table := &Memtable{mem: mem}
+func OpenMemTable(opts Options) (*Memtable, error) {
+	mem := getIMemtable(opts.TableTyp)
+	table := &Memtable{mem: mem, opt: opts}
 
-	wal, err := logfile.OpenLogFile(path, fid, size*2, logfile.WAL, ioType)
+	// open wal log file.
+	wal, err := logfile.OpenLogFile(opts.Path, opts.Fid, opts.Fsize*2, logfile.WAL, opts.IoType)
 	if err != nil {
 		return nil, err
 	}
+	table.wal = wal
+
+	var count = 0
 
 	// load entries.
 	var offset int64 = 0
-	if wal != nil {
-		for {
-			if entry, size, err := wal.Read(offset); err == nil {
-				offset += size
-				mem.Put(entry.Key, entry.Value)
-			} else {
-				if err == io.EOF {
-					break
-				}
-				return nil, err
+	for {
+		if entry, size, err := wal.Read(offset); err == nil {
+			offset += size
+			mem.Put(entry.Key, entry.Value)
+			count++
+		} else {
+			if err == io.EOF {
+				break
 			}
+			return nil, err
 		}
-		table.wal = wal
 	}
+
+	fmt.Println("写入到 MemTable 的数据量 : ", count)
+
 	return table, nil
 }
 
-func (mt *Memtable) Put(key []byte, value []byte) error {
+func (mt *Memtable) Put(key []byte, value []byte, opts Options) error {
 	entry := &logfile.LogEntry{
 		Key:   key,
 		Value: value,
 	}
+	if opts.ExpiredAt > 0 {
+		entry.ExpiredAt = opts.ExpiredAt
+	}
 
-	if mt.wal != nil {
+	if !opts.DisableWal && mt.wal != nil {
 		buf, _ := logfile.EncodeEntry(entry)
 		if err := mt.wal.Write(buf); err != nil {
+			fmt.Println(err)
 			return err
+		}
+
+		if opts.Sync {
+			if err := mt.wal.Sync(); err != nil {
+				return err
+			}
 		}
 	}
 
@@ -73,8 +102,26 @@ func (mt *Memtable) Put(key []byte, value []byte) error {
 	return nil
 }
 
-func (mt *Memtable) SyncWAL() error {
-	return mt.wal.Sync()
+func (mt *Memtable) Delete(key []byte, opts Options) error {
+	entry := &logfile.LogEntry{
+		Key:  key,
+		Type: logfile.TypeDelete,
+	}
+
+	if !opts.DisableWal && mt.wal != nil {
+		buf, _ := logfile.EncodeEntry(entry)
+		if err := mt.wal.Write(buf); err != nil {
+			return err
+		}
+
+		if opts.Sync {
+			if err := mt.wal.Sync(); err != nil {
+				return err
+			}
+		}
+	}
+	mt.mem.Remove(key)
+	return nil
 }
 
 func (mt *Memtable) Get(key []byte) []byte {
@@ -84,6 +131,10 @@ func (mt *Memtable) Get(key []byte) []byte {
 	}
 
 	return entry.Value
+}
+
+func (mt *Memtable) SyncWAL() error {
+	return mt.wal.Sync()
 }
 
 func (mt *Memtable) IsFull() bool {

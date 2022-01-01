@@ -26,11 +26,22 @@ func DefaultOptions(path string) Options {
 			MemtableType:      SkipList,
 			WalDir:            cfPath,
 			WalMMap:           false,
-			DisableWal:        false,
 			ValueLogDir:       cfPath,
 			ValueLogBlockSize: 1024 << 20,
 			ValueLogMmap:      false,
 		},
+	}
+}
+
+func DefaultColumnFamilyOptions(name string) ColumnFamilyOptions {
+	return ColumnFamilyOptions{
+		CfName:            name,
+		MemtableSize:      64 << 20,
+		MemtableNums:      5,
+		MemtableType:      SkipList,
+		WalMMap:           false,
+		ValueLogBlockSize: 1024 << 20,
+		ValueLogMmap:      false,
 	}
 }
 
@@ -61,11 +72,21 @@ type ColumnFamilyOptions struct {
 
 	WalMMap bool
 
-	DisableWal bool
-
 	ValueLogDir string
 
 	ValueLogBlockSize int64
 
 	ValueLogMmap bool
+}
+
+// WriteOptions options for writing key and value.
+type WriteOptions struct {
+	// Sync .
+	Sync bool
+
+	// DisableWal .
+	DisableWal bool
+
+	// ExpiredAt time to live for the key. time.Unix
+	ExpiredAt int64
 }

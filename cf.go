@@ -16,9 +16,11 @@ import (
 )
 
 var (
+	// ErrColoumnFamilyNil .
 	ErrColoumnFamilyNil = errors.New("column family name is nil")
 )
 
+// ColumnFamily is a namespace of keys and values.
 type ColumnFamily struct {
 	activeMem *memtable.Memtable   // Active memtable for writing.
 	immuMems  []*memtable.Memtable // Immutable memtables, waiting to be flushed to disk.
@@ -31,7 +33,7 @@ func (db *LotusDB) OpenColumnFamily(opts ColumnFamilyOptions) (*ColumnFamily, er
 	if opts.CfName == "" {
 		return nil, ErrColoumnFamilyNil
 	}
-	// use db path.
+	// use db path as default column family path.
 	if opts.DirPath == "" {
 		opts.DirPath = db.opts.DBPath
 	}
@@ -72,7 +74,21 @@ func (cf *ColumnFamily) Close() error {
 
 // Put put to current column family.
 func (cf *ColumnFamily) Put(key, value []byte) error {
-	if err := cf.activeMem.Put(key, value); err != nil {
+	return cf.PutWithOptions(key, value, nil)
+}
+
+// PutWithOptions put to current column family with options.
+func (cf *ColumnFamily) PutWithOptions(key, value []byte, opt *WriteOptions) error {
+	// waiting for enough memtable sapce to write.
+	// todo
+
+	var memOpts memtable.Options
+	if opt != nil {
+		memOpts.Sync = opt.Sync
+		memOpts.DisableWal = opt.DisableWal
+		memOpts.ExpiredAt = opt.ExpiredAt
+	}
+	if err := cf.activeMem.Put(key, value, memOpts); err != nil {
 		return err
 	}
 	return nil
@@ -80,10 +96,18 @@ func (cf *ColumnFamily) Put(key, value []byte) error {
 
 // Get get from current column family.
 func (cf *ColumnFamily) Get(key []byte) ([]byte, error) {
-	// get from memtables.
+	// get from active memtable.
 	var value []byte
 	if value = cf.activeMem.Get(key); len(value) != 0 {
 		return value, nil
+	}
+
+	// get from immutable memtables.
+	for _, mem := range cf.immuMems {
+		value := mem.Get(key)
+		if value != nil {
+			return value, nil
+		}
 	}
 
 	// get from bptree.
@@ -95,6 +119,20 @@ func (cf *ColumnFamily) Get(key []byte) ([]byte, error) {
 
 // Delete delete from current column family.
 func (cf *ColumnFamily) Delete(key []byte) error {
+	return cf.DeleteWithOptions(key, nil)
+}
+
+// DeleteWithOptions delete from current column family with options.
+func (cf *ColumnFamily) DeleteWithOptions(key []byte, opt *WriteOptions) error {
+	var memOpts memtable.Options
+	if opt != nil {
+		memOpts.Sync = opt.Sync
+		memOpts.DisableWal = opt.DisableWal
+		memOpts.ExpiredAt = opt.ExpiredAt
+	}
+	if err := cf.activeMem.Delete(key, memOpts); err != nil {
+		return err
+	}
 	return nil
 }
 
@@ -133,8 +171,15 @@ func (cf *ColumnFamily) openMemtables() error {
 		ioType = logfile.MMap
 	}
 
+	memOpts := memtable.Options{
+		Path:     cf.opts.WalDir,
+		Fsize:    cf.opts.MemtableSize,
+		TableTyp: tableType,
+		IoType:   ioType,
+	}
 	for i, fid := range fids {
-		table, err := memtable.OpenMemTable(cf.opts.WalDir, fid, cf.opts.MemtableSize, tableType, ioType)
+		memOpts.Fid = fid
+		table, err := memtable.OpenMemTable(memOpts)
 		if err != nil {
 			return err
 		}

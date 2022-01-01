@@ -9,6 +9,7 @@ import (
 )
 
 var (
+	// ErrDefaultCfNil .
 	ErrDefaultCfNil = errors.New("default comumn family is nil")
 )
 
@@ -47,11 +48,16 @@ func (db *LotusDB) Close() error {
 
 // Put put to default column family.
 func (db *LotusDB) Put(key, value []byte) error {
+	return db.PutWithOptions(key, value, nil)
+}
+
+// PutWithOptions put to default column family with options.
+func (db *LotusDB) PutWithOptions(key, value []byte, opt *WriteOptions) error {
 	columnFamily := db.getColumnFamily(DefaultColumnFamilyName)
 	if columnFamily == nil {
 		return ErrDefaultCfNil
 	}
-	return columnFamily.Put(key, value)
+	return columnFamily.PutWithOptions(key, value, opt)
 }
 
 // Get get from default column family.
@@ -65,11 +71,16 @@ func (db *LotusDB) Get(key []byte) ([]byte, error) {
 
 // Delete delete from default column family.
 func (db *LotusDB) Delete(key []byte) error {
+	return db.DeleteWithOptions(key, nil)
+}
+
+// DeleteWithOptions delete from default column family with options.
+func (db *LotusDB) DeleteWithOptions(key []byte, opt *WriteOptions) error {
 	columnFamily := db.getColumnFamily(DefaultColumnFamilyName)
 	if columnFamily == nil {
 		return ErrDefaultCfNil
 	}
-	return columnFamily.Delete(key)
+	return columnFamily.DeleteWithOptions(key, opt)
 }
 
 func (db *LotusDB) getColumnFamily(cfName string) *ColumnFamily {

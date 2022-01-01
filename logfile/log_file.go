@@ -106,6 +106,7 @@ func (lf *LogFile) Read(offset int64) (*LogEntry, int64, error) {
 	if crc := getEntryCrc(e, headerBuf[crc32.Size:size]); crc != header.crc32 {
 		return nil, 0, ErrInvalidCrc
 	}
+	lf.WriteAt += entrySize
 	return e, entrySize, nil
 }
 
