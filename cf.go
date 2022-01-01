@@ -8,6 +8,7 @@ import (
 	"sort"
 	"strconv"
 	"strings"
+	"sync"
 
 	"github.com/flowercorp/lotusdb/logfile"
 	"github.com/flowercorp/lotusdb/memtable"
@@ -25,7 +26,9 @@ type ColumnFamily struct {
 	activeMem *memtable.Memtable   // Active memtable for writing.
 	immuMems  []*memtable.Memtable // Immutable memtables, waiting to be flushed to disk.
 	vlog      *vlog.ValueLog       // Value Log.
+	flushChn  chan *memtable.Memtable
 	opts      ColumnFamilyOptions
+	mu        sync.Mutex
 }
 
 // OpenColumnFamily open a new or existed column family.
@@ -65,6 +68,7 @@ func (db *LotusDB) OpenColumnFamily(opts ColumnFamilyOptions) (*ColumnFamily, er
 	db.mu.Lock()
 	db.cfs[opts.CfName] = cf
 	db.mu.Unlock()
+	go cf.listenAndFlush()
 	return cf, nil
 }
 
@@ -91,21 +95,18 @@ func (cf *ColumnFamily) PutWithOptions(key, value []byte, opt *WriteOptions) err
 	if err := cf.activeMem.Put(key, value, memOpts); err != nil {
 		return err
 	}
+	if cf.activeMem.IsFull() {
+		go cf.sendFlushTask()
+	}
 	return nil
 }
 
 // Get get from current column family.
 func (cf *ColumnFamily) Get(key []byte) ([]byte, error) {
-	// get from active memtable.
-	var value []byte
-	if value = cf.activeMem.Get(key); len(value) != 0 {
-		return value, nil
-	}
-
-	// get from immutable memtables.
-	for _, mem := range cf.immuMems {
-		value := mem.Get(key)
-		if value != nil {
+	tables := cf.getMemtables()
+	// get from active and  immutable memtables.
+	for _, mem := range tables {
+		if value := mem.Get(key); value != nil {
 			return value, nil
 		}
 	}
@@ -133,6 +134,11 @@ func (cf *ColumnFamily) DeleteWithOptions(key []byte, opt *WriteOptions) error {
 	if err := cf.activeMem.Delete(key, memOpts); err != nil {
 		return err
 	}
+	return nil
+}
+
+// Stat returns some statistics info of current column family.
+func (cf *ColumnFamily) Stat() error {
 	return nil
 }
 
@@ -201,4 +207,15 @@ func (cf *ColumnFamily) getMemtableType() memtable.TableType {
 	default:
 		panic(fmt.Sprintf("unsupported memtable type: %d", cf.opts.MemtableType))
 	}
+}
+
+func (cf *ColumnFamily) getMemtables() []*memtable.Memtable {
+	cf.mu.Lock()
+	defer cf.mu.Unlock()
+
+	var tables = []*memtable.Memtable{cf.activeMem}
+	for _, tb := range cf.immuMems {
+		tables = append(tables, tb)
+	}
+	return tables
 }

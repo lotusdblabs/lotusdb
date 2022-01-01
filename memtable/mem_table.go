@@ -25,6 +25,9 @@ type (
 		mem IMemtable
 		wal *logfile.LogFile
 		opt Options
+		// memCost represents how much memory is used.
+		// This is an inaccurate field to do so, we will use a efficient way(like Arena) to replace it in near future.
+		memCost int64
 	}
 
 	Options struct {
@@ -53,15 +56,12 @@ func OpenMemTable(opts Options) (*Memtable, error) {
 	}
 	table.wal = wal
 
-	var count = 0
-
 	// load entries.
 	var offset int64 = 0
 	for {
 		if entry, size, err := wal.Read(offset); err == nil {
 			offset += size
 			mem.Put(entry.Key, entry.Value)
-			count++
 		} else {
 			if err == io.EOF {
 				break
@@ -69,9 +69,6 @@ func OpenMemTable(opts Options) (*Memtable, error) {
 			return nil, err
 		}
 	}
-
-	fmt.Println("写入到 MemTable 的数据量 : ", count)
-
 	return table, nil
 }
 
@@ -84,13 +81,11 @@ func (mt *Memtable) Put(key []byte, value []byte, opts Options) error {
 		entry.ExpiredAt = opts.ExpiredAt
 	}
 
+	buf, eSize := logfile.EncodeEntry(entry)
 	if !opts.DisableWal && mt.wal != nil {
-		buf, _ := logfile.EncodeEntry(entry)
 		if err := mt.wal.Write(buf); err != nil {
-			fmt.Println(err)
 			return err
 		}
-
 		if opts.Sync {
 			if err := mt.wal.Sync(); err != nil {
 				return err
@@ -99,6 +94,7 @@ func (mt *Memtable) Put(key []byte, value []byte, opts Options) error {
 	}
 
 	mt.mem.Put(key, value)
+	mt.memCost += int64(eSize)
 	return nil
 }
 
@@ -108,8 +104,8 @@ func (mt *Memtable) Delete(key []byte, opts Options) error {
 		Type: logfile.TypeDelete,
 	}
 
+	buf, eSize := logfile.EncodeEntry(entry)
 	if !opts.DisableWal && mt.wal != nil {
-		buf, _ := logfile.EncodeEntry(entry)
 		if err := mt.wal.Write(buf); err != nil {
 			return err
 		}
@@ -120,7 +116,11 @@ func (mt *Memtable) Delete(key []byte, opts Options) error {
 			}
 		}
 	}
-	mt.mem.Remove(key)
+	removed := mt.mem.Remove(key)
+	if removed != nil {
+		eSize += len(removed.Value)
+	}
+	mt.memCost -= int64(eSize)
 	return nil
 }
 
@@ -138,7 +138,10 @@ func (mt *Memtable) SyncWAL() error {
 }
 
 func (mt *Memtable) IsFull() bool {
-	return false
+	if mt.memCost >= mt.opt.Fsize {
+		return true
+	}
+	return mt.wal.WriteAt >= mt.opt.Fsize
 }
 
 func getIMemtable(tType TableType) IMemtable {
