@@ -10,6 +10,7 @@ import (
 	"strings"
 	"sync"
 
+	"github.com/flowercorp/lotusdb/index"
 	"github.com/flowercorp/lotusdb/logfile"
 	"github.com/flowercorp/lotusdb/memtable"
 	"github.com/flowercorp/lotusdb/util"
@@ -29,6 +30,7 @@ type ColumnFamily struct {
 	activeMem *memtable.Memtable   // Active memtable for writing.
 	immuMems  []*memtable.Memtable // Immutable memtables, waiting to be flushed to disk.
 	vlog      *vlog.ValueLog       // Value Log.
+	indexer   index.Indexer
 	flushChn  chan *memtable.Memtable
 	opts      ColumnFamilyOptions
 	mu        sync.Mutex
@@ -59,6 +61,19 @@ func (db *LotusDB) OpenColumnFamily(opts ColumnFamilyOptions) (*ColumnFamily, er
 	if err := cf.openMemtables(); err != nil {
 		return nil, err
 	}
+
+	// create bptree indexer.
+	bptreeOpt := &index.BPTreeOptions{
+		IndexType:        index.BptreeBoltDB,
+		ColumnFamilyName: opts.CfName,
+		BucketName:       []byte(opts.CfName),
+		DirPath:          opts.DirPath,
+	}
+	indexer, err := index.NewIndexer(bptreeOpt)
+	if err != nil {
+		return nil, err
+	}
+	cf.indexer = indexer
 
 	// open value log.
 	var ioType = logfile.FileIO
@@ -117,6 +132,7 @@ func (cf *ColumnFamily) Get(key []byte) ([]byte, error) {
 	}
 
 	// get from bptree.
+	// cf.indexer.Get()
 
 	// get value from value log.
 
