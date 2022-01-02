@@ -19,6 +19,9 @@ import (
 var (
 	// ErrColoumnFamilyNil .
 	ErrColoumnFamilyNil = errors.New("column family name is nil")
+
+	// ErrWaitMemSpaceTimeout .
+	ErrWaitMemSpaceTimeout = errors.New("wait enough memtable space for writing timeout")
 )
 
 // ColumnFamily is a namespace of keys and values.
@@ -48,7 +51,10 @@ func (db *LotusDB) OpenColumnFamily(opts ColumnFamilyOptions) (*ColumnFamily, er
 		}
 	}
 
-	cf := &ColumnFamily{opts: opts}
+	cf := &ColumnFamily{
+		opts:     opts,
+		flushChn: make(chan *memtable.Memtable, opts.MemtableNums-1),
+	}
 	// open active and immutable memtables.
 	if err := cf.openMemtables(); err != nil {
 		return nil, err
@@ -84,7 +90,9 @@ func (cf *ColumnFamily) Put(key, value []byte) error {
 // PutWithOptions put to current column family with options.
 func (cf *ColumnFamily) PutWithOptions(key, value []byte, opt *WriteOptions) error {
 	// waiting for enough memtable sapce to write.
-	// todo
+	if err := cf.waitMemSpace(); err != nil {
+		return err
+	}
 
 	var memOpts memtable.Options
 	if opt != nil {
@@ -94,9 +102,6 @@ func (cf *ColumnFamily) PutWithOptions(key, value []byte, opt *WriteOptions) err
 	}
 	if err := cf.activeMem.Put(key, value, memOpts); err != nil {
 		return err
-	}
-	if cf.activeMem.IsFull() {
-		go cf.sendFlushTask()
 	}
 	return nil
 }

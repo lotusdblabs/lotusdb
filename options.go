@@ -1,6 +1,9 @@
 package lotusdb
 
-import "os"
+import (
+	"os"
+	"time"
+)
 
 const (
 	DefaultColumnFamilyName = "cf_default"
@@ -67,6 +70,8 @@ type ColumnFamilyOptions struct {
 	MemtableNums int
 
 	MemtableType MemTableType
+
+	MemSpaceWaitTimeout time.Duration
 
 	WalDir string
 
