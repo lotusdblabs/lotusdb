@@ -17,8 +17,18 @@ type (
 	IMemtable interface {
 		Put(key []byte, value []byte) *logfile.LogEntry
 		Get(key []byte) *logfile.LogEntry
-		Exist(key []byte) bool
 		Remove(key []byte) *logfile.LogEntry
+		Iterator(reversed bool) MemIterator
+	}
+
+	MemIterator interface {
+		Next()
+		Prev()
+		Rewind()
+		Seek([]byte)
+		Key() []byte
+		Value() []byte
+		Valid() bool
 	}
 
 	Memtable struct {
@@ -142,6 +152,11 @@ func (mt *Memtable) IsFull() bool {
 		return true
 	}
 	return mt.wal.WriteAt >= mt.opt.Fsize
+}
+
+// NewIterator .
+func (mt *Memtable) NewIterator(reversed bool) MemIterator {
+	return mt.mem.Iterator(reversed)
 }
 
 func getIMemtable(tType TableType) IMemtable {

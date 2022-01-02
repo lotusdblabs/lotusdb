@@ -1,6 +1,7 @@
 package memtable
 
 import (
+	"strconv"
 	"testing"
 
 	"github.com/flowercorp/lotusdb/logfile"
@@ -34,24 +35,6 @@ func TestSkipList_Get(t *testing.T) {
 	require.Equal(t, entry, actEntry)
 }
 
-func TestSkipList_Exist(t *testing.T) {
-	var entry = &logfile.LogEntry{
-		Key:   []byte("lotusdb"),
-		Value: []byte("lotusdb"),
-	}
-
-	skl := NewSkipList()
-
-	skl.Put([]byte("lotusdb"), []byte("lotusdb"))
-
-	actEntry := skl.Get([]byte("lotusdb"))
-	require.Equal(t, entry, actEntry)
-	assert.True(t, skl.Exist([]byte("lotusdb")))
-
-	skl.Remove([]byte("lotusdb"))
-	assert.False(t, skl.Exist([]byte("lotusdb")))
-}
-
 func TestSkipList_Remove(t *testing.T) {
 	var entry = &logfile.LogEntry{
 		Key:   []byte("lotusdb"),
@@ -67,4 +50,17 @@ func TestSkipList_Remove(t *testing.T) {
 
 	skl.Remove([]byte("lotusdb"))
 	assert.Nil(t, skl.Get([]byte("lotusdb")))
+}
+
+func TestSkipList_NewSklIterator(t *testing.T) {
+	skl := NewSkipList()
+	for i := 0; i < 100; i++ {
+		v := strconv.Itoa(i)
+		skl.Put([]byte(v), []byte("skl-val"))
+	}
+
+	iter := skl.NewSklIterator(false)
+	for iter.Seek([]byte("5")); iter.Valid(); iter.Next() {
+		t.Log(string(iter.Key()))
+	}
 }

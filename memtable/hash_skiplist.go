@@ -50,14 +50,12 @@ func (h *HashSkipList) Get(key []byte) *logfile.LogEntry {
 	return skl.Get(key)
 }
 
-func (h *HashSkipList) Exist(key []byte) bool {
-	skl := h.getSkipList(getHash(key))
-
-	return skl.Exist(key)
-}
-
 func (h *HashSkipList) Remove(key []byte) *logfile.LogEntry {
 	skl := h.getSkipList(getHash(key))
 
 	return skl.Remove(key)
+}
+
+func (h *HashSkipList) Iterator(reversed bool) MemIterator {
+	return nil
 }

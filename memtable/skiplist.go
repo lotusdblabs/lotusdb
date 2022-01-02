@@ -122,7 +122,6 @@ func (t *SkipList) Get(key []byte) *logfile.LogEntry {
 
 	for i := t.maxLevel - 1; i >= 0; i-- {
 		next = prev.next[i]
-
 		for next != nil && bytes.Compare(key, next.key) > 0 {
 			prev = &next.Node
 			next = next.next[i]
@@ -134,11 +133,6 @@ func (t *SkipList) Get(key []byte) *logfile.LogEntry {
 	}
 
 	return nil
-}
-
-// Exist check if exists the key in skl.
-func (t *SkipList) Exist(key []byte) bool {
-	return t.Get(key) != nil
 }
 
 // Remove element by the key.
@@ -172,7 +166,6 @@ func (t *SkipList) FindPrefix(prefix []byte) *Element {
 
 	for i := t.maxLevel - 1; i >= 0; i-- {
 		next = prev.next[i]
-
 		for next != nil && bytes.Compare(prefix, next.key) > 0 {
 			prev = &next.Node
 			next = next.next[i]
@@ -182,7 +175,6 @@ func (t *SkipList) FindPrefix(prefix []byte) *Element {
 	if next == nil {
 		next = t.Front()
 	}
-
 	return next
 }
 
@@ -192,18 +184,14 @@ func (t *SkipList) backNodes(key []byte) []*Node {
 	var next *Element
 
 	prevs := t.prevNodesCache
-
 	for i := t.maxLevel - 1; i >= 0; i-- {
 		next = prev.next[i]
-
 		for next != nil && bytes.Compare(key, next.key) > 0 {
 			prev = &next.Node
 			next = next.next[i]
 		}
-
 		prevs[i] = prev
 	}
-
 	return prevs
 }
 
@@ -232,3 +220,46 @@ func getEntryByElement(ele *Element) *logfile.LogEntry {
 		Value: ele.value,
 	}
 }
+
+type SklIterator struct {
+	skl      *SkipList
+	ele      *Element
+	reversed bool
+}
+
+func (t *SkipList) Iterator(reversed bool) MemIterator {
+	return &SklIterator{
+		skl:      t,
+		reversed: reversed,
+	}
+}
+
+func (si *SklIterator) Next() {
+	si.ele = si.ele.Next()
+}
+
+func (si *SklIterator) Prev() {
+	//todo
+}
+
+func (si *SklIterator) Rewind() {
+	if si.reversed {
+		// todo
+	} else {
+		si.ele = si.skl.Front()
+	}
+}
+
+func (si *SklIterator) Seek(key []byte) {
+	if si.reversed {
+		// todo
+	} else {
+		si.ele = si.skl.FindPrefix(key)
+	}
+}
+
+func (si *SklIterator) Key() []byte { return si.ele.Key() }
+
+func (si *SklIterator) Value() []byte { return si.ele.Value() }
+
+func (si *SklIterator) Valid() bool { return si.ele != nil }

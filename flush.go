@@ -47,15 +47,15 @@ func (cf *ColumnFamily) listenAndFlush() {
 		select {
 		case table := <-cf.flushChn:
 			// iterate and write data to bptree.
+			iter := table.NewIterator(false)
+			for iter.Rewind(); iter.Valid(); iter.Next() {
 
+			}
 			// close wal log.
-			table.SyncWAL()
 
 			// remove wal log.
 
 			// modify cf immuMems.
-
-			// add a new active mem.(if necessary)
 		case <-sig:
 			return
 		// db closed or cf closed
