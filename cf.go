@@ -21,6 +21,9 @@ var (
 	// ErrColoumnFamilyNil .
 	ErrColoumnFamilyNil = errors.New("column family name is nil")
 
+	// ErrColoumnFamilyExists .
+	ErrColoumnFamilyExists = errors.New("column family is already exist")
+
 	// ErrWaitMemSpaceTimeout .
 	ErrWaitMemSpaceTimeout = errors.New("wait enough memtable space for writing timeout")
 )
@@ -46,6 +49,11 @@ func (db *LotusDB) OpenColumnFamily(opts ColumnFamilyOptions) (*ColumnFamily, er
 		opts.DirPath = db.opts.DBPath
 	}
 
+	db.mu.Lock()
+	defer db.mu.Unlock()
+	if _, ok := db.cfs[opts.CfName]; ok {
+		return nil, ErrColoumnFamilyExists
+	}
 	// create columm family path.
 	if !util.PathExist(opts.DirPath) {
 		if err := os.MkdirAll(opts.DirPath, os.ModePerm); err != nil {
@@ -86,9 +94,7 @@ func (db *LotusDB) OpenColumnFamily(opts ColumnFamilyOptions) (*ColumnFamily, er
 	}
 	cf.vlog = valueLog
 
-	db.mu.Lock()
 	db.cfs[opts.CfName] = cf
-	db.mu.Unlock()
 	go cf.listenAndFlush()
 	return cf, nil
 }
