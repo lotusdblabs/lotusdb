@@ -43,6 +43,11 @@ func Open(opt Options) (*LotusDB, error) {
 
 // Close close database.
 func (db *LotusDB) Close() error {
+	for _, cf := range db.cfs {
+		if err := cf.Close(); err != nil {
+			return err
+		}
+	}
 	return nil
 }
 

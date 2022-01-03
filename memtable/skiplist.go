@@ -89,13 +89,13 @@ func (t *SkipList) Front() *Element {
 }
 
 // Put an element into skip list, replace the value if key already exists.
-func (t *SkipList) Put(key []byte, value []byte) *logfile.LogEntry {
+func (t *SkipList) Put(key []byte, value []byte) {
 	var element *Element
 	prev := t.backNodes(key)
 
 	if element = prev[0].next[0]; element != nil && bytes.Compare(element.key, key) <= 0 {
 		element.value = value
-		return getEntryByElement(element)
+		return
 	}
 
 	element = &Element{
@@ -112,7 +112,6 @@ func (t *SkipList) Put(key []byte, value []byte) *logfile.LogEntry {
 	}
 
 	t.Len++
-	return getEntryByElement(element)
 }
 
 // Get find value by the key, returns nil if not found.

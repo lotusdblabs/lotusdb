@@ -15,7 +15,7 @@ const (
 
 type (
 	IMemtable interface {
-		Put(key []byte, value []byte) *logfile.LogEntry
+		Put(key []byte, value []byte)
 		Get(key []byte) *logfile.LogEntry
 		Remove(key []byte) *logfile.LogEntry
 		Iterator(reversed bool) MemIterator
