@@ -30,7 +30,7 @@ type entryHeader struct {
 	expiredAt int64 // time.Unix
 }
 
-func encodeEntry(e *LogEntry) ([]byte, int) {
+func EncodeEntry(e *LogEntry) ([]byte, int) {
 	header := make([]byte, maxHeaderSize)
 	// encode header.
 	header[4] = byte(e.Type)
@@ -39,7 +39,8 @@ func encodeEntry(e *LogEntry) ([]byte, int) {
 	index += binary.PutVarint(header[index:], int64(len(e.Value)))
 	index += binary.PutVarint(header[index:], e.ExpiredAt)
 
-	buf := make([]byte, index+len(e.Key)+len(e.Value))
+	var size = index + len(e.Key) + len(e.Value)
+	buf := make([]byte, size)
 	copy(buf[:index], header[:])
 	// key and value.
 	copy(buf[index:], e.Key)
@@ -48,7 +49,7 @@ func encodeEntry(e *LogEntry) ([]byte, int) {
 	// crc32.
 	crc := crc32.ChecksumIEEE(buf[4:])
 	binary.LittleEndian.PutUint32(buf[:4], crc)
-	return buf, 0
+	return buf, size
 }
 
 func decodeHeader(buf []byte) (*entryHeader, int64) {
@@ -71,7 +72,7 @@ func decodeHeader(buf []byte) (*entryHeader, int64) {
 }
 
 func getEntryCrc(e *LogEntry, h []byte) uint32 {
-	crc := crc32.ChecksumIEEE(h[4:])
+	crc := crc32.ChecksumIEEE(h[:])
 	crc = crc32.Update(crc, crc32.IEEETable, e.Key)
 	crc = crc32.Update(crc, crc32.IEEETable, e.Value)
 	return crc

@@ -54,7 +54,7 @@ func OpenValueLog(path string, blockSize int64, ioType logfile.IOType) (*ValueLo
 
 	var fids []uint32
 	for _, file := range fileInfos {
-		if strings.Contains(file.Name(), logfile.VLogSuffixName) {
+		if strings.HasSuffix(file.Name(), logfile.VLogSuffixName) {
 			splitNames := strings.Split(file.Name(), ".")
 			fid, err := strconv.Atoi(splitNames[0])
 			if err != nil {
@@ -66,8 +66,11 @@ func OpenValueLog(path string, blockSize int64, ioType logfile.IOType) (*ValueLo
 
 	// load in order.
 	sort.Slice(fids, func(i, j int) bool {
-		return fids[i] < fids[j]
+		return fids[i] > fids[j]
 	})
+	if len(fids) == 0 {
+		fids = append(fids, logfile.InitialLogFileId)
+	}
 
 	// open active log file only.
 	logFile, err := logfile.OpenLogFile(path, fids[len(fids)-1], opt.blockSize, logfile.ValueLog, opt.ioType)
@@ -114,13 +117,13 @@ func (vlog *ValueLog) ReadValue(pos *ValuePos) ([]byte, error) {
 		return nil, fmt.Errorf(ErrLogFileNil.Error(), pos.fid)
 	}
 
-	logEntry, err := logFile.Read(pos.offset)
+	logEntry, _, err := logFile.Read(pos.offset)
 	if err != nil {
 		return nil, err
 	}
 
 	// check whether value is expired.
-	if logEntry.ExpiredAt <= uint64(time.Now().Unix()) {
+	if logEntry.ExpiredAt <= (time.Now().Unix()) {
 		// delete expired value.todo
 		return nil, nil
 	}
@@ -128,9 +131,9 @@ func (vlog *ValueLog) ReadValue(pos *ValuePos) ([]byte, error) {
 }
 
 func (vlog *ValueLog) Write(e *logfile.LogEntry) (*ValuePos, error) {
-	eSize := int64(e.Size())
+	buf, eSize := logfile.EncodeEntry(e)
 	// if active is reach to thereshold, close it and open a new one.
-	if vlog.activeLogFile.WriteAt+eSize >= vlog.opt.blockSize {
+	if vlog.activeLogFile.WriteAt+int64(eSize) >= vlog.opt.blockSize {
 		if err := vlog.activeLogFile.Close(); err != nil {
 			return nil, err
 		}
@@ -145,14 +148,14 @@ func (vlog *ValueLog) Write(e *logfile.LogEntry) (*ValuePos, error) {
 		vlog.activeLogFile = logFile
 		vlog.Unlock()
 	}
-	err := vlog.activeLogFile.Write(e)
+	err := vlog.activeLogFile.Write(buf)
 	if err != nil {
 		return nil, err
 	}
 
 	return &ValuePos{
 		fid:    vlog.activeLogFile.Fid,
-		offset: vlog.activeLogFile.WriteAt - eSize,
+		offset: vlog.activeLogFile.WriteAt - int64(eSize),
 		size:   uint32(eSize),
 	}, nil
 }

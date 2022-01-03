@@ -2,15 +2,18 @@ package lotusdb
 
 import (
 	"errors"
-	"github.com/flowercorp/lotusdb/util"
 	"os"
 	"sync"
+
+	"github.com/flowercorp/lotusdb/util"
 )
 
 var (
+	// ErrDefaultCfNil .
 	ErrDefaultCfNil = errors.New("default comumn family is nil")
 )
 
+// LotusDB .
 type LotusDB struct {
 	cfs     map[string]*ColumnFamily // all column families.
 	lockMgr *LockMgr                 // global lock manager that guarantees consistency of read and write.
@@ -30,7 +33,7 @@ func Open(opt Options) (*LotusDB, error) {
 	db := &LotusDB{opts: opt, cfs: make(map[string]*ColumnFamily)}
 	// load default column family.
 	if opt.CfOpts.CfName == "" {
-		opt.CfOpts.CfName = defaultColumnFamilyName
+		opt.CfOpts.CfName = DefaultColumnFamilyName
 	}
 	if _, err := db.OpenColumnFamily(opt.CfOpts); err != nil {
 		return nil, err
@@ -45,16 +48,21 @@ func (db *LotusDB) Close() error {
 
 // Put put to default column family.
 func (db *LotusDB) Put(key, value []byte) error {
-	columnFamily := db.getColumnFamily(defaultColumnFamilyName)
+	return db.PutWithOptions(key, value, nil)
+}
+
+// PutWithOptions put to default column family with options.
+func (db *LotusDB) PutWithOptions(key, value []byte, opt *WriteOptions) error {
+	columnFamily := db.getColumnFamily(DefaultColumnFamilyName)
 	if columnFamily == nil {
 		return ErrDefaultCfNil
 	}
-	return columnFamily.Put(key, value)
+	return columnFamily.PutWithOptions(key, value, opt)
 }
 
 // Get get from default column family.
 func (db *LotusDB) Get(key []byte) ([]byte, error) {
-	columnFamily := db.getColumnFamily(defaultColumnFamilyName)
+	columnFamily := db.getColumnFamily(DefaultColumnFamilyName)
 	if columnFamily == nil {
 		return nil, ErrDefaultCfNil
 	}
@@ -63,11 +71,16 @@ func (db *LotusDB) Get(key []byte) ([]byte, error) {
 
 // Delete delete from default column family.
 func (db *LotusDB) Delete(key []byte) error {
-	columnFamily := db.getColumnFamily(defaultColumnFamilyName)
+	return db.DeleteWithOptions(key, nil)
+}
+
+// DeleteWithOptions delete from default column family with options.
+func (db *LotusDB) DeleteWithOptions(key []byte, opt *WriteOptions) error {
+	columnFamily := db.getColumnFamily(DefaultColumnFamilyName)
 	if columnFamily == nil {
 		return ErrDefaultCfNil
 	}
-	return columnFamily.Delete(key)
+	return columnFamily.DeleteWithOptions(key, opt)
 }
 
 func (db *LotusDB) getColumnFamily(cfName string) *ColumnFamily {

@@ -3,16 +3,8 @@ package lotusdb
 import "os"
 
 const (
-	defaultColumnFamilyName = "cf_default"
-	pathSeparator           = string(os.PathSeparator)
-)
-
-const (
-	DefaultDBPath = "/tmp/lotusdb"
-)
-
-const (
-	DefaultVLogBlockSize = 256 * 1024 * 1024 // 256MB
+	DefaultColumnFamilyName = "cf_default"
+	separator               = string(os.PathSeparator)
 )
 
 type MemTableType int8
@@ -22,6 +14,37 @@ const (
 	HashSkipList
 )
 
+func DefaultOptions(path string) Options {
+	cfPath := path + separator + DefaultColumnFamilyName
+	return Options{
+		DBPath: path,
+		CfOpts: ColumnFamilyOptions{
+			CfName:            DefaultColumnFamilyName,
+			DirPath:           cfPath,
+			MemtableSize:      64 << 20,
+			MemtableNums:      5,
+			MemtableType:      SkipList,
+			WalDir:            cfPath,
+			WalMMap:           false,
+			ValueLogDir:       cfPath,
+			ValueLogBlockSize: 1024 << 20,
+			ValueLogMmap:      false,
+		},
+	}
+}
+
+func DefaultColumnFamilyOptions(name string) ColumnFamilyOptions {
+	return ColumnFamilyOptions{
+		CfName:            name,
+		MemtableSize:      64 << 20,
+		MemtableNums:      5,
+		MemtableType:      SkipList,
+		WalMMap:           false,
+		ValueLogBlockSize: 1024 << 20,
+		ValueLogMmap:      false,
+	}
+}
+
 // Options for db.
 type Options struct {
 	DBPath string
@@ -30,15 +53,18 @@ type Options struct {
 
 // ColumnFamilyOptions for column family.
 type ColumnFamilyOptions struct {
+
+	// CfName
 	CfName string
+
 	// DirPath
 	DirPath string
 
 	// MemtableSize
 	MemtableSize int64
 
-	// the number of memtable
-	MemtableNum int
+	// MemtableNums max numbers of memtable
+	MemtableNums int
 
 	MemtableType MemTableType
 
@@ -46,11 +72,21 @@ type ColumnFamilyOptions struct {
 
 	WalMMap bool
 
-	DisableWal bool
-
 	ValueLogDir string
 
 	ValueLogBlockSize int64
 
 	ValueLogMmap bool
+}
+
+// WriteOptions options for writing key and value.
+type WriteOptions struct {
+	// Sync .
+	Sync bool
+
+	// DisableWal .
+	DisableWal bool
+
+	// ExpiredAt time to live for the key. time.Unix
+	ExpiredAt int64
 }

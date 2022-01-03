@@ -1,9 +1,10 @@
 package ioselector
 
 import (
-	"github.com/flowercorp/lotusdb/mmap"
 	"io"
 	"os"
+
+	"github.com/flowercorp/lotusdb/mmap"
 )
 
 type MMapSelector struct {

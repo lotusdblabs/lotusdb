@@ -1,13 +1,20 @@
 package logfile
 
-import (
-	"encoding/binary"
-	"math"
-	"testing"
-)
+import "testing"
 
-func TestLogFile_Close2(t *testing.T) {
-	m := math.MaxInt64
-	b := make([]byte, 10)
-	binary.PutVarint(b[0:], int64(m))
+func TestEncodeEntry(t *testing.T) {
+	e := &LogEntry{
+		Key:   []byte("rose"),
+		Value: []byte("duan"),
+	}
+
+	buf, n := EncodeEntry(e)
+	t.Log(buf)
+	t.Log(n)
+
+	headerBuf, i := decodeHeader(buf)
+	t.Log(headerBuf.crc32)
+	t.Log(i)
+
+	t.Log(getEntryCrc(e, buf[:8]))
 }
