@@ -128,9 +128,9 @@ func (cf *ColumnFamily) PutWithOptions(key, value []byte, opt *WriteOptions) err
 }
 
 // Get get from current column family.
-func (cf *ColumnFamily) Get(key []byte) ([]byte, error) {
+func (cf *ColumnFamily) Get(key []byte) (v []byte, err error) {
 	tables := cf.getMemtables()
-	// get from active and  immutable memtables.
+	// get from active and immutable memtables.
 	for _, mem := range tables {
 		if value := mem.Get(key); value != nil {
 			return value, nil
@@ -138,11 +138,21 @@ func (cf *ColumnFamily) Get(key []byte) ([]byte, error) {
 	}
 
 	// get from bptree.
-	// cf.indexer.Get()
+	var indexMeta *index.IndexerMeta
+	if indexMeta, err = cf.indexer.Get(key); err != nil {
+		return nil, err
+	} else if len(indexMeta.Value) != 0 {
+		return indexMeta.Value, nil
+	}
 
 	// get value from value log.
-
-	return nil, nil
+	if indexMeta.Fid != 0 {
+		v, err = cf.vlog.ReadValue(indexMeta.Fid, indexMeta.Size, indexMeta.Offset)
+		if err != nil {
+			return
+		}
+	}
+	return
 }
 
 // Delete delete from current column family.

@@ -240,14 +240,15 @@ func (b *BPTree) Delete(key []byte) error {
 
 // Get The put method starts a transaction.
 // This method reads the value from the bucket with key,
-func (b *BPTree) Get(key []byte) (value []byte, err error) {
+func (b *BPTree) Get(key []byte) (*IndexerMeta, error) {
 	tx, err := b.db.Begin(false)
 	if err != nil {
 		return nil, err
 	}
 	defer tx.Rollback()
 
-	return tx.Bucket(b.opts.BucketName).Get(key), nil
+	buf := tx.Bucket(b.opts.BucketName).Get(key)
+	return DecodeMeta(buf), nil
 }
 
 func (b *BPTree) Close() (err error) {
