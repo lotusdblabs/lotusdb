@@ -53,7 +53,7 @@ type IndexerMeta struct {
 type Indexer interface {
 	Put(key []byte, value []byte) (err error)
 
-	PutBatch(kv []IndexerNode) (offset int, err error)
+	PutBatch(kv []*IndexerNode) (offset int, err error)
 
 	Get(k []byte) (meta *IndexerMeta, err error)
 

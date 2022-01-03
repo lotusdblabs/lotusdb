@@ -133,7 +133,7 @@ func (lf *LogFile) Close() error {
 	return lf.IoSelector.Close()
 }
 
-func (lf *LogFile)Delete()error {
+func (lf *LogFile) Delete() error {
 	return lf.IoSelector.Delete()
 }
 

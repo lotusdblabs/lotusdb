@@ -28,9 +28,9 @@ type (
 
 	// ValuePos value position.
 	ValuePos struct {
-		fid    uint32
-		offset int64
-		size   uint32
+		Fid    uint32
+		Size   uint32
+		Offset int64
 	}
 
 	options struct {
@@ -150,9 +150,9 @@ func (vlog *ValueLog) Write(ve *logfile.VlogEntry) (*ValuePos, error) {
 	}
 
 	return &ValuePos{
-		fid:    vlog.activeLogFile.Fid,
-		offset: vlog.activeLogFile.WriteAt - int64(eSize),
-		size:   uint32(eSize),
+		Fid:    vlog.activeLogFile.Fid,
+		Size:   uint32(eSize),
+		Offset: vlog.activeLogFile.WriteAt - int64(eSize),
 	}, nil
 }
 

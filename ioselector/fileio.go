@@ -32,7 +32,7 @@ func (fio *FileIOSelector) Close() error {
 	return fio.fd.Close()
 }
 
-func (fio *FileIOSelector)Delete()error{
-	name := fio.fd.Name()
-	return os.Remove(name) // ignore_security_alert
+func (fio *FileIOSelector) Delete() error {
+	_ = fio.fd.Close()
+	return os.Remove(fio.fd.Name())
 }

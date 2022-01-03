@@ -191,7 +191,7 @@ func (b *BPTree) Put(k, v []byte) (err error) {
 // The offset marks the transaction write position of the current batch.
 // If this function fails during execution, we can write again from the offset position.
 // If offset == len(kv) - 1 , all writes are successful.
-func (b *BPTree) PutBatch(nodes []IndexerNode) (offset int, err error) {
+func (b *BPTree) PutBatch(nodes []*IndexerNode) (offset int, err error) {
 	var batchLoopNum = defaultBatchLoopNum
 	if len(nodes) > b.opts.BatchSize {
 		batchLoopNum = len(nodes) / b.opts.BatchSize
