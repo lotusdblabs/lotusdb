@@ -154,6 +154,13 @@ func (mt *Memtable) IsFull() bool {
 	return mt.wal.WriteAt >= mt.opt.Fsize
 }
 
+// Close close wal and other before delete
+func (mt *Memtable)Close()bool {
+	return mt.wal.Close() == nil
+}
+func(mt *Memtable)DeleteWal()bool {
+	return mt.wal.Delete() == nil
+}
 // NewIterator .
 func (mt *Memtable) NewIterator(reversed bool) MemIterator {
 	return mt.mem.Iterator(reversed)
