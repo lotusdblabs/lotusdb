@@ -133,6 +133,11 @@ func (lf *LogFile) Close() error {
 	return lf.IoSelector.Close()
 }
 
+func (lf *LogFile)Delete()error {
+	return lf.IoSelector.Delete()
+}
+
+
 func (lf *LogFile) readBytes(offset, n int64) (buf []byte, err error) {
 	buf = make([]byte, n)
 	_, err = lf.IoSelector.Read(buf, offset)

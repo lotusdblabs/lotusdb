@@ -49,17 +49,20 @@ func (cf *ColumnFamily) listenAndFlush() {
 			// iterate and write data to bptree.
 			iter := table.NewIterator(false)
 			for iter.Rewind(); iter.Valid(); iter.Next() {
-
+				// TODO batch put
+				_ = cf.indexer.Put(iter.Key(), iter.Value())
 			}
-			// close wal log.
-
-			// remove wal log.
-
-			// modify cf immuMems.
+			table.Close()
+			table.DeleteWal()
+			if len(cf.immuMems) > 1 {
+				cf.immuMems = cf.immuMems[1:]
+			}else {
+				cf.immuMems = nil
+			}
 		case <-sig:
 			return
-		// db closed or cf closed
-		//case <-closed:
+			// db closed or cf closed
+			//case <-closed:
 		}
 	}
 }
