@@ -1,6 +1,7 @@
 package index
 
 import (
+	"encoding/binary"
 	"errors"
 	"os"
 )
@@ -22,9 +23,11 @@ var (
 	ErrOptionsTypeNotMatch = errors.New("indexer options not match")
 )
 
-type IndexerKvnode struct {
-	Key   []byte
-	Value []byte
+type IndexerTx interface{}
+
+type IndexerNode struct {
+	Key  []byte
+	Meta *IndexerMeta
 }
 
 type IndexerType int8
@@ -37,19 +40,51 @@ const (
 	indexFileSuffixName = ".index"
 	metaFileSuffixName  = ".meta"
 	separator           = string(os.PathSeparator)
+	metaHeaderSize      = 5 + 5 + 9
 )
+
+type IndexerMeta struct {
+	Value  []byte
+	Fid    uint32
+	Size   uint32
+	Offset int64
+}
+
+type Indexer interface {
+	Put(key []byte, value []byte) (err error)
+
+	PutBatch(kv []*IndexerNode) (offset int, err error)
+
+	Get(k []byte) (meta *IndexerMeta, err error)
+
+	Delete(key []byte) error
+
+	Close() (err error)
+
+	Iter() (iter IndexerIter, err error)
+}
+
+func NewIndexer(opts IndexerOptions) (Indexer, error) {
+	switch opts.GetType() {
+	case BptreeBoltDB:
+		boltOpts, ok := opts.(*BPTreeOptions)
+		if !ok {
+			return nil, ErrOptionsTypeNotMatch
+		}
+		return BptreeBolt(boltOpts)
+	default:
+		panic("unknown indexer type")
+	}
+}
 
 type IndexerOptions interface {
 	SetType(typ IndexerType)
 	SetColumnFamilyName(cfName string)
 	SetDirPath(dirPath string)
-
 	GetType() IndexerType
 	GetColumnFamilyName() string
 	GetDirPath() string
 }
-
-type IndexerTx interface{}
 
 type IndexerIter interface {
 	// First moves the cursor to the first item in the bucket and returns its key and value.
@@ -76,29 +111,39 @@ type IndexerIter interface {
 	Close() error
 }
 
-type Indexer interface {
-	Put(key []byte, value []byte) (err error)
+// EncodeMeta .
+func EncodeMeta(m *IndexerMeta) []byte {
+	header := make([]byte, metaHeaderSize)
+	var index int
+	index += binary.PutVarint(header[index:], int64(m.Fid))
+	index += binary.PutVarint(header[index:], int64(m.Size))
+	index += binary.PutVarint(header[index:], m.Offset)
 
-	PutBatch(kv []IndexerKvnode) (offset int, err error)
-
-	Get(k []byte) (meta *IndexerMeta, err error)
-
-	Delete(key []byte) error
-
-	Close() (err error)
-
-	Iter() (iter IndexerIter, err error)
+	if m.Value != nil {
+		buf := make([]byte, index+len(m.Value))
+		copy(buf[:index], header[:])
+		copy(buf[index:], m.Value)
+		return buf
+	} else {
+		return header[:index]
+	}
 }
 
-func NewIndexer(opts IndexerOptions) (Indexer, error) {
-	switch opts.GetType() {
-	case BptreeBoltDB:
-		boltOpts, ok := opts.(*BPTreeOptions)
-		if !ok {
-			return nil, ErrOptionsTypeNotMatch
-		}
-		return BptreeBolt(boltOpts)
-	default:
-		panic("unknown indexer type")
-	}
+func DecodeMeta(buf []byte) *IndexerMeta {
+	m := &IndexerMeta{}
+	var index int
+	fid, n := binary.Varint(buf[index:])
+	m.Fid = uint32(fid)
+	index += n
+
+	size, n := binary.Varint(buf[index:])
+	m.Size = uint32(size)
+	index += n
+
+	offset, n := binary.Varint(buf[index:])
+	m.Offset = offset
+	index += n
+
+	m.Value = buf[index:]
+	return m
 }

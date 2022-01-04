@@ -3,7 +3,6 @@ package logfile
 import (
 	"github.com/stretchr/testify/assert"
 	"testing"
-	"time"
 )
 
 const (
@@ -57,10 +56,10 @@ func TestLogFile_Read(t *testing.T) {
 		err = lf.Write(getLogEntryBuf())
 		assert.Nil(t, err)
 
-		entry, _, err := lf.Read(0)
+		entry, _, err := lf.ReadLogEntry(0)
 		assert.Nil(t, err)
 
-		assert.Equal(t, getLogEntryBuf(), entry)
+		assert.Equal(t, getLogEntry(), entry)
 	})
 
 	t.Run("ftype:wal iotype:mmap", func(t *testing.T) {
@@ -69,10 +68,10 @@ func TestLogFile_Read(t *testing.T) {
 		err = lf.Write(getLogEntryBuf())
 		assert.Nil(t, err)
 
-		entry, _, err := lf.Read(0)
+		entry, _, err := lf.ReadLogEntry(0)
 		assert.Nil(t, err)
 
-		assert.Equal(t, getLogEntryBuf(), entry)
+		assert.Equal(t, getLogEntry(), entry)
 	})
 
 	t.Run("ftype:valuelog iotype:file", func(t *testing.T) {
@@ -81,10 +80,10 @@ func TestLogFile_Read(t *testing.T) {
 		err = lf.Write(getLogEntryBuf())
 		assert.Nil(t, err)
 
-		entry, _, err := lf.Read(0)
+		entry, _, err := lf.ReadLogEntry(0)
 		assert.Nil(t, err)
 
-		assert.Equal(t, getLogEntryBuf(), entry)
+		assert.Equal(t, getLogEntry(), entry)
 	})
 
 	t.Run("ftype:valuelog iotype:mmap", func(t *testing.T) {
@@ -93,10 +92,10 @@ func TestLogFile_Read(t *testing.T) {
 		err = lf.Write(getLogEntryBuf())
 		assert.Nil(t, err)
 
-		entry, _, err := lf.Read(0)
+		entry, _, err := lf.ReadLogEntry(0)
 		assert.Nil(t, err)
 
-		assert.Equal(t, getLogEntryBuf(), entry)
+		assert.Equal(t, getLogEntry(), entry)
 	})
 }
 
@@ -211,9 +210,21 @@ func getLogEntryBuf() []byte {
 	entry := &LogEntry{
 		Key:       []byte("lotusdb"),
 		Value:     []byte("lotusdb"),
-		ExpiredAt: time.Now().Add(time.Hour).Unix(),
+		ExpiredAt: 0,
+		Type:      TypeDelete,
 	}
 
 	buf, _ := EncodeEntry(entry)
 	return buf
+}
+
+func getLogEntry() *LogEntry {
+	entry := &LogEntry{
+		Key:       []byte("lotusdb"),
+		Value:     []byte("lotusdb"),
+		ExpiredAt: 0,
+		Type:      TypeDelete,
+	}
+
+	return entry
 }

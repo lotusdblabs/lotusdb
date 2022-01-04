@@ -23,6 +23,9 @@ type IOSelector interface {
 	// Close closes the File, rendering it unusable for I/O.
 	// It will return an error if it has already been called.
 	Close() error
+
+	// Delete delete the file
+	Delete() error
 }
 
 // open file and truncate it if necessary.

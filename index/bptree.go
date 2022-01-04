@@ -191,11 +191,11 @@ func (b *BPTree) Put(k, v []byte) (err error) {
 // The offset marks the transaction write position of the current batch.
 // If this function fails during execution, we can write again from the offset position.
 // If offset == len(kv) - 1 , all writes are successful.
-func (b *BPTree) PutBatch(kv []IndexerKvnode) (offset int, err error) {
+func (b *BPTree) PutBatch(nodes []*IndexerNode) (offset int, err error) {
 	var batchLoopNum = defaultBatchLoopNum
-	if len(kv) > b.opts.BatchSize {
-		batchLoopNum = len(kv) / b.opts.BatchSize
-		if len(kv)%b.opts.BatchSize > 0 {
+	if len(nodes) > b.opts.BatchSize {
+		batchLoopNum = len(nodes) / b.opts.BatchSize
+		if len(nodes)%b.opts.BatchSize > 0 {
 			batchLoopNum++
 		}
 	}
@@ -212,20 +212,20 @@ func (b *BPTree) PutBatch(kv []IndexerKvnode) (offset int, err error) {
 
 	itemLoop:
 		for itemIdx := offset; itemIdx < (offset + b.opts.BatchSize - 1); itemIdx++ {
-			if itemIdx > len(kv) {
+			if itemIdx >= len(nodes) {
 				break itemLoop
 			}
-			if err := bucket.Put(kv[itemIdx].Key, kv[itemIdx].Value); err != nil {
+			meta := EncodeMeta(nodes[itemIdx].Meta)
+			if err := bucket.Put(nodes[itemIdx].Key, meta); err != nil {
 				tx.Rollback()
 				return offset, err
 			}
 		}
-
 		if err := tx.Commit(); err != nil {
 			return offset, err
 		}
 	}
-	return len(kv) - 1, nil
+	return len(nodes) - 1, nil
 }
 
 func (b *BPTree) Delete(key []byte) error {

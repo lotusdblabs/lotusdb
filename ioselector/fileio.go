@@ -31,3 +31,8 @@ func (fio *FileIOSelector) Sync() error {
 func (fio *FileIOSelector) Close() error {
 	return fio.fd.Close()
 }
+
+func (fio *FileIOSelector) Delete() error {
+	_ = fio.fd.Close()
+	return os.Remove(fio.fd.Name())
+}

@@ -56,3 +56,8 @@ func (lm *MMapSelector) Close() error {
 	}
 	return lm.fd.Close()
 }
+
+func (lm *MMapSelector) Delete() error {
+	_ = lm.Close()
+	return os.Remove(lm.fd.Name())
+}

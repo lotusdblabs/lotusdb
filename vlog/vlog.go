@@ -9,7 +9,6 @@ import (
 	"strconv"
 	"strings"
 	"sync"
-	"time"
 )
 
 var (
@@ -28,9 +27,9 @@ type (
 
 	// ValuePos value position.
 	ValuePos struct {
-		fid    uint32
-		offset int64
-		size   uint32
+		Fid    uint32
+		Size   uint32
+		Offset int64
 	}
 
 	options struct {
@@ -90,7 +89,7 @@ func OpenValueLog(path string, blockSize int64, ioType logfile.IOType) (*ValueLo
 	return vlog, nil
 }
 
-func (vlog *ValueLog) ReadValue(fid, size uint32, offset int64) ([]byte, error) {
+func (vlog *ValueLog) Read(fid, size uint32, offset int64) (*logfile.VlogEntry, error) {
 	var logFile *logfile.LogFile
 	if fid == vlog.activeLogFile.Fid {
 		logFile = vlog.activeLogFile
@@ -113,17 +112,11 @@ func (vlog *ValueLog) ReadValue(fid, size uint32, offset int64) ([]byte, error) 
 		return nil, fmt.Errorf(ErrLogFileNil.Error(), fid)
 	}
 
-	logEntry, _, err := logFile.Read(offset)
+	b, err := logFile.Read(offset, size)
 	if err != nil {
 		return nil, err
 	}
-
-	// check whether value is expired.
-	if logEntry.ExpiredAt <= (time.Now().Unix()) {
-		// delete expired value.todo
-		return nil, nil
-	}
-	return logEntry.Value, nil
+	return logfile.DecodeVlogEntry(b), nil
 }
 
 func (vlog *ValueLog) Write(ve *logfile.VlogEntry) (*ValuePos, error) {
@@ -150,9 +143,9 @@ func (vlog *ValueLog) Write(ve *logfile.VlogEntry) (*ValuePos, error) {
 	}
 
 	return &ValuePos{
-		fid:    vlog.activeLogFile.Fid,
-		offset: vlog.activeLogFile.WriteAt - int64(eSize),
-		size:   uint32(eSize),
+		Fid:    vlog.activeLogFile.Fid,
+		Size:   uint32(eSize),
+		Offset: vlog.activeLogFile.WriteAt - int64(eSize),
 	}, nil
 }
 

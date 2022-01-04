@@ -76,8 +76,8 @@ func OpenLogFile(path string, fid uint32, fsize int64, ftype FileType, ioType IO
 	return
 }
 
-// Read .
-func (lf *LogFile) Read(offset int64) (*LogEntry, int64, error) {
+// ReadLogEntry .
+func (lf *LogFile) ReadLogEntry(offset int64) (*LogEntry, int64, error) {
 	// read entry header.
 	headerBuf, err := lf.readBytes(offset, maxHeaderSize)
 	if err != nil {
@@ -110,6 +110,15 @@ func (lf *LogFile) Read(offset int64) (*LogEntry, int64, error) {
 	return e, entrySize, nil
 }
 
+// Read .
+func (lf *LogFile) Read(offset int64, size uint32) ([]byte, error) {
+	buf := make([]byte, size)
+	if _, err := lf.IoSelector.Read(buf, offset); err != nil {
+		return nil, err
+	}
+	return buf, nil
+}
+
 // Write .
 func (lf *LogFile) Write(buf []byte) error {
 	n, err := lf.IoSelector.Write(buf, lf.WriteAt)
@@ -131,6 +140,10 @@ func (lf *LogFile) Sync() error {
 // Close .
 func (lf *LogFile) Close() error {
 	return lf.IoSelector.Close()
+}
+
+func (lf *LogFile) Delete() error {
+	return lf.IoSelector.Delete()
 }
 
 func (lf *LogFile) readBytes(offset, n int64) (buf []byte, err error) {

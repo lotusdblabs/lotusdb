@@ -70,7 +70,7 @@ func OpenMemTable(opts Options) (*Memtable, error) {
 	// load entries.
 	var offset int64 = 0
 	for {
-		if entry, size, err := wal.Read(offset); err == nil {
+		if entry, size, err := wal.ReadLogEntry(offset); err == nil {
 			offset += size
 			mem.Put(entry.Key, entry.Value)
 		} else {
@@ -158,6 +158,15 @@ func (mt *Memtable) IsFull() bool {
 	}
 
 	return mt.wal.WriteAt >= mt.memSize
+}
+
+// DeleteWal delete wal.
+func (mt *Memtable) DeleteWal() error {
+	return mt.wal.Delete()
+}
+
+func (mt *Memtable) LogFileId() uint32 {
+	return mt.wal.Fid
 }
 
 // NewIterator .
