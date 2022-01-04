@@ -27,6 +27,7 @@ func (cf *ColumnFamily) waitMemSpace() error {
 		}
 		memOpts := memtable.Options{
 			Path:     cf.opts.WalDir,
+			Fid:      cf.activeMem.LogFileId() + 1,
 			Fsize:    cf.opts.MemtableSize,
 			TableTyp: cf.getMemtableType(),
 			IoType:   ioType,

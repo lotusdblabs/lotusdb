@@ -146,13 +146,13 @@ func (cf *ColumnFamily) Get(key []byte) ([]byte, error) {
 	}
 
 	// get value from value log.
-	if indexMeta.Fid != 0 {
-		value, err := cf.vlog.ReadValue(indexMeta.Fid, indexMeta.Size, indexMeta.Offset)
+	if indexMeta.Size != 0 {
+		ve, err := cf.vlog.Read(indexMeta.Fid, indexMeta.Size, indexMeta.Offset)
 		if err != nil {
 			return nil, err
 		}
-		if len(value) != 0 {
-			return value, nil
+		if len(ve.Value) != 0 {
+			return ve.Value, nil
 		}
 	}
 	return nil, nil
