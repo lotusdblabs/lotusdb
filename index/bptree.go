@@ -7,27 +7,26 @@ import (
 	"go.etcd.io/bbolt"
 )
 
-type BoltOptions struct {
-	indexType        IndexerType
-	BatchSize        int
+type BPTreeOptions struct {
+	IndexType        IndexerType
 	ColumnFamilyName string
 	BucketName       []byte
 	DirPath          string
 
-	// todo
+	BatchSize   int
 	MaxDataSize int64
 }
 
-type bolt struct {
+type BPTree struct {
 	db   *bbolt.DB
-	conf *BoltOptions
+	opts *BPTreeOptions
 
 	// todo
 	metedatadb *bbolt.DB
 }
 
-type boltManager struct {
-	boltdbMap map[string]*bolt
+type BPTreeManager struct {
+	treeMap map[string]*BPTree
 	sync.RWMutex
 }
 
@@ -36,37 +35,37 @@ const (
 	defaultBatchSize    = 10000
 )
 
-var manager *boltManager
+var manager *BPTreeManager
 
 func init() {
-	manager = &boltManager{boltdbMap: make(map[string]*bolt)}
+	manager = &BPTreeManager{treeMap: make(map[string]*BPTree)}
 }
 
-func (bc *BoltOptions) SetType(typ IndexerType) {
-	bc.indexType = typ
+func (bc *BPTreeOptions) SetType(typ IndexerType) {
+	bc.IndexType = typ
 }
 
-func (bc *BoltOptions) SetColumnFamilyName(cfName string) {
+func (bc *BPTreeOptions) SetColumnFamilyName(cfName string) {
 	bc.ColumnFamilyName = cfName
 }
 
-func (bc *BoltOptions) SetDirPath(dirPath string) {
+func (bc *BPTreeOptions) SetDirPath(dirPath string) {
 	bc.DirPath = dirPath
 }
 
-func (bc *BoltOptions) GetType() IndexerType {
-	return bc.indexType
+func (bc *BPTreeOptions) GetType() IndexerType {
+	return bc.IndexType
 }
 
-func (bc *BoltOptions) GetColumnFamilyName() string {
+func (bc *BPTreeOptions) GetColumnFamilyName() string {
 	return bc.ColumnFamilyName
 }
 
-func (bc *BoltOptions) GetDirPath() string {
+func (bc *BPTreeOptions) GetDirPath() string {
 	return bc.DirPath
 }
 
-func checkBoltOptions(opt *BoltOptions) error {
+func checkBPTreeOptions(opt *BPTreeOptions) error {
 	if opt.ColumnFamilyName == "" {
 		return ErrColumnFamilyNameNil
 	}
@@ -87,14 +86,14 @@ func checkBoltOptions(opt *BoltOptions) error {
 
 // BptreeBolt create a boltdb instance.
 // A file can only be opened once. if not, file lock competition will occur.
-func BptreeBolt(opt *BoltOptions) (*bolt, error) {
-	if err := checkBoltOptions(opt); err != nil {
+func BptreeBolt(opt *BPTreeOptions) (*BPTree, error) {
+	if err := checkBPTreeOptions(opt); err != nil {
 		return nil, err
 	}
 
 	// check
 	manager.RLock()
-	if db, ok := manager.boltdbMap[opt.GetColumnFamilyName()]; ok {
+	if db, ok := manager.treeMap[opt.GetColumnFamilyName()]; ok {
 		manager.RUnlock()
 		return db, nil
 	}
@@ -105,12 +104,13 @@ func BptreeBolt(opt *BoltOptions) (*bolt, error) {
 	defer manager.Unlock()
 
 	// check
-	if db, ok := manager.boltdbMap[opt.GetColumnFamilyName()]; ok {
+	if db, ok := manager.treeMap[opt.GetColumnFamilyName()]; ok {
 		return db, nil
 	}
 
 	// open metadatadb and db
-	metaDatadb, err := bbolt.Open(opt.GetColumnFamilyName(), 0600, &bbolt.Options{
+	path := opt.DirPath + separator + opt.GetColumnFamilyName()
+	metaDatadb, err := bbolt.Open(path+metaFileSuffixName, 0600, &bbolt.Options{
 		Timeout:         1 * time.Second,
 		NoSync:          true,
 		InitialMmapSize: 1024,
@@ -119,7 +119,7 @@ func BptreeBolt(opt *BoltOptions) (*bolt, error) {
 		return nil, err
 	}
 
-	db, err := bbolt.Open(opt.DirPath, 0600, &bbolt.Options{
+	db, err := bbolt.Open(path+indexFileSuffixName, 0600, &bbolt.Options{
 		Timeout:         1 * time.Second,
 		NoSync:          true,
 		InitialMmapSize: 1024,
@@ -157,27 +157,27 @@ func BptreeBolt(opt *BoltOptions) (*bolt, error) {
 		return nil, err
 	}
 
-	b := &bolt{
+	b := &BPTree{
 		metedatadb: metaDatadb,
 		db:         db,
-		conf:       opt,
+		opts:       opt,
 	}
 
-	manager.boltdbMap[opt.GetColumnFamilyName()] = b
+	manager.treeMap[opt.GetColumnFamilyName()] = b
 	return b, nil
 }
 
 // Put The put method starts a transaction.
 // This method writes kv according to the bucket,
 // and creates it if the bucket name does not exist.
-func (b *bolt) Put(k, v []byte) (err error) {
+func (b *BPTree) Put(k, v []byte) (err error) {
 	var tx *bbolt.Tx
 	tx, err = b.db.Begin(true)
 	if err != nil {
 		return
 	}
 
-	bucket := tx.Bucket(b.conf.BucketName)
+	bucket := tx.Bucket(b.opts.BucketName)
 
 	err = bucket.Put(k, v)
 	if err != nil {
@@ -191,16 +191,16 @@ func (b *bolt) Put(k, v []byte) (err error) {
 // The offset marks the transaction write position of the current batch.
 // If this function fails during execution, we can write again from the offset position.
 // If offset == len(kv) - 1 , all writes are successful.
-func (b *bolt) PutBatch(kv []IndexerKvnode) (offset int, err error) {
+func (b *BPTree) PutBatch(kv []IndexerKvnode) (offset int, err error) {
 	var batchLoopNum = defaultBatchLoopNum
-	if len(kv) > b.conf.BatchSize {
-		batchLoopNum = len(kv) / b.conf.BatchSize
-		if len(kv)%b.conf.BatchSize > 0 {
+	if len(kv) > b.opts.BatchSize {
+		batchLoopNum = len(kv) / b.opts.BatchSize
+		if len(kv)%b.opts.BatchSize > 0 {
 			batchLoopNum++
 		}
 	}
 
-	batchlimit := b.conf.BatchSize
+	batchlimit := b.opts.BatchSize
 	for batchIdx := 0; batchIdx < batchLoopNum; batchIdx++ {
 		offset = batchIdx * batchlimit
 		tx, err := b.db.Begin(true)
@@ -208,10 +208,10 @@ func (b *bolt) PutBatch(kv []IndexerKvnode) (offset int, err error) {
 			return offset, err
 		}
 
-		bucket := tx.Bucket(b.conf.BucketName)
+		bucket := tx.Bucket(b.opts.BucketName)
 
 	itemLoop:
-		for itemIdx := offset; itemIdx < (offset + b.conf.BatchSize - 1); itemIdx++ {
+		for itemIdx := offset; itemIdx < (offset + b.opts.BatchSize - 1); itemIdx++ {
 			if itemIdx > len(kv) {
 				break itemLoop
 			}
@@ -228,29 +228,30 @@ func (b *bolt) PutBatch(kv []IndexerKvnode) (offset int, err error) {
 	return len(kv) - 1, nil
 }
 
-func (b *bolt) Delete(key []byte) error {
+func (b *BPTree) Delete(key []byte) error {
 	tx, err := b.db.Begin(false)
 	if err != nil {
 		return err
 	}
 	defer tx.Commit()
 
-	return tx.Bucket(b.conf.BucketName).Delete(key)
+	return tx.Bucket(b.opts.BucketName).Delete(key)
 }
 
 // Get The put method starts a transaction.
 // This method reads the value from the bucket with key,
-func (b *bolt) Get(key []byte) (value []byte, err error) {
+func (b *BPTree) Get(key []byte) (*IndexerMeta, error) {
 	tx, err := b.db.Begin(false)
 	if err != nil {
 		return nil, err
 	}
 	defer tx.Rollback()
 
-	return tx.Bucket(b.conf.BucketName).Get(key), nil
+	buf := tx.Bucket(b.opts.BucketName).Get(key)
+	return DecodeMeta(buf), nil
 }
 
-func (b *bolt) Close() (err error) {
+func (b *BPTree) Close() (err error) {
 	if err := b.db.Close(); err != nil {
 		return err
 	}
@@ -261,18 +262,18 @@ func (b *bolt) Close() (err error) {
 }
 
 type boltIter struct {
-	b        *bolt
+	b        *BPTree
 	dbBucket *bbolt.Bucket
 	tx       *bbolt.Tx
 }
 
-func (b *bolt) Iter() (IndexerIter, error) {
+func (b *BPTree) Iter() (IndexerIter, error) {
 	tx, err := b.db.Begin(false)
 	if err != nil {
 		return nil, err
 	}
 
-	bucket := tx.Bucket(b.conf.BucketName)
+	bucket := tx.Bucket(b.opts.BucketName)
 	if bucket == nil {
 		return nil, ErrBucketNotInit
 	}

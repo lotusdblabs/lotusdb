@@ -9,7 +9,7 @@ const (
 	MaxSize = 10
 )
 
-// HashSkipList
+// HashSkipList .
 type HashSkipList struct {
 	skls map[int64]*SkipList
 }
@@ -38,22 +38,15 @@ func (h *HashSkipList) getSkipList(index int64) *SkipList {
 	return h.skls[index]
 }
 
-func (h *HashSkipList) Put(key []byte, value []byte) *logfile.LogEntry {
+func (h *HashSkipList) Put(key []byte, value []byte) {
 	skl := h.getSkipList(getHash(key))
-
-	return skl.Put(key, value)
+	skl.Put(key, value)
 }
 
 func (h *HashSkipList) Get(key []byte) *logfile.LogEntry {
 	skl := h.getSkipList(getHash(key))
 
 	return skl.Get(key)
-}
-
-func (h *HashSkipList) Exist(key []byte) bool {
-	skl := h.getSkipList(getHash(key))
-
-	return skl.Exist(key)
 }
 
 func (h *HashSkipList) Remove(key []byte) *logfile.LogEntry {
@@ -70,4 +63,8 @@ func (h *HashSkipList) MemSize() int64 {
 	}
 
 	return size
+}
+
+func (h *HashSkipList) Iterator(reversed bool) MemIterator {
+	return nil
 }

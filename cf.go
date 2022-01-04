@@ -8,7 +8,9 @@ import (
 	"sort"
 	"strconv"
 	"strings"
+	"sync"
 
+	"github.com/flowercorp/lotusdb/index"
 	"github.com/flowercorp/lotusdb/logfile"
 	"github.com/flowercorp/lotusdb/memtable"
 	"github.com/flowercorp/lotusdb/util"
@@ -18,6 +20,12 @@ import (
 var (
 	// ErrColoumnFamilyNil .
 	ErrColoumnFamilyNil = errors.New("column family name is nil")
+
+	// ErrColoumnFamilyExists .
+	ErrColoumnFamilyExists = errors.New("column family is already exist")
+
+	// ErrWaitMemSpaceTimeout .
+	ErrWaitMemSpaceTimeout = errors.New("wait enough memtable space for writing timeout")
 )
 
 // ColumnFamily is a namespace of keys and values.
@@ -25,7 +33,11 @@ type ColumnFamily struct {
 	activeMem *memtable.Memtable   // Active memtable for writing.
 	immuMems  []*memtable.Memtable // Immutable memtables, waiting to be flushed to disk.
 	vlog      *vlog.ValueLog       // Value Log.
+	indexer   index.Indexer
+	flushChn  chan *memtable.Memtable
 	opts      ColumnFamilyOptions
+	nextFid   uint32
+	mu        sync.Mutex
 }
 
 // OpenColumnFamily open a new or existed column family.
@@ -38,6 +50,11 @@ func (db *LotusDB) OpenColumnFamily(opts ColumnFamilyOptions) (*ColumnFamily, er
 		opts.DirPath = db.opts.DBPath
 	}
 
+	db.mu.Lock()
+	defer db.mu.Unlock()
+	if _, ok := db.cfs[opts.CfName]; ok {
+		return nil, ErrColoumnFamilyExists
+	}
 	// create columm family path.
 	if !util.PathExist(opts.DirPath) {
 		if err := os.MkdirAll(opts.DirPath, os.ModePerm); err != nil {
@@ -45,11 +62,27 @@ func (db *LotusDB) OpenColumnFamily(opts ColumnFamilyOptions) (*ColumnFamily, er
 		}
 	}
 
-	cf := &ColumnFamily{opts: opts}
+	cf := &ColumnFamily{
+		opts:     opts,
+		flushChn: make(chan *memtable.Memtable, opts.MemtableNums-1),
+	}
 	// open active and immutable memtables.
 	if err := cf.openMemtables(); err != nil {
 		return nil, err
 	}
+
+	// create bptree indexer.
+	bptreeOpt := &index.BPTreeOptions{
+		IndexType:        index.BptreeBoltDB,
+		ColumnFamilyName: opts.CfName,
+		BucketName:       []byte(opts.CfName),
+		DirPath:          opts.DirPath,
+	}
+	indexer, err := index.NewIndexer(bptreeOpt)
+	if err != nil {
+		return nil, err
+	}
+	cf.indexer = indexer
 
 	// open value log.
 	var ioType = logfile.FileIO
@@ -62,9 +95,8 @@ func (db *LotusDB) OpenColumnFamily(opts ColumnFamilyOptions) (*ColumnFamily, er
 	}
 	cf.vlog = valueLog
 
-	db.mu.Lock()
 	db.cfs[opts.CfName] = cf
-	db.mu.Unlock()
+	go cf.listenAndFlush()
 	return cf, nil
 }
 
@@ -80,7 +112,9 @@ func (cf *ColumnFamily) Put(key, value []byte) error {
 // PutWithOptions put to current column family with options.
 func (cf *ColumnFamily) PutWithOptions(key, value []byte, opt *WriteOptions) error {
 	// waiting for enough memtable sapce to write.
-	// todo
+	if err := cf.waitMemSpace(); err != nil {
+		return err
+	}
 
 	var memOpts memtable.Options
 	if opt != nil {
@@ -96,24 +130,32 @@ func (cf *ColumnFamily) PutWithOptions(key, value []byte, opt *WriteOptions) err
 
 // Get get from current column family.
 func (cf *ColumnFamily) Get(key []byte) ([]byte, error) {
-	// get from active memtable.
-	var value []byte
-	if value = cf.activeMem.Get(key); len(value) != 0 {
-		return value, nil
-	}
-
-	// get from immutable memtables.
-	for _, mem := range cf.immuMems {
-		value := mem.Get(key)
-		if value != nil {
+	tables := cf.getMemtables()
+	// get from active and immutable memtables.
+	for _, mem := range tables {
+		if value := mem.Get(key); value != nil {
 			return value, nil
 		}
 	}
 
 	// get from bptree.
+	indexMeta, err := cf.indexer.Get(key)
+	if err != nil {
+		return nil, err
+	} else if len(indexMeta.Value) != 0 {
+		return indexMeta.Value, nil
+	}
 
 	// get value from value log.
-
+	if indexMeta.Fid != 0 {
+		value, err := cf.vlog.ReadValue(indexMeta.Fid, indexMeta.Size, indexMeta.Offset)
+		if err != nil {
+			return nil, err
+		}
+		if len(value) != 0 {
+			return value, nil
+		}
+	}
 	return nil, nil
 }
 
@@ -133,6 +175,11 @@ func (cf *ColumnFamily) DeleteWithOptions(key []byte, opt *WriteOptions) error {
 	if err := cf.activeMem.Delete(key, memOpts); err != nil {
 		return err
 	}
+	return nil
+}
+
+// Stat returns some statistics info of current column family.
+func (cf *ColumnFamily) Stat() error {
 	return nil
 }
 
@@ -189,6 +236,9 @@ func (cf *ColumnFamily) openMemtables() error {
 			cf.immuMems = append(cf.immuMems, table)
 		}
 	}
+
+	cf.nextFid = fids[0] + 1
+
 	return nil
 }
 
@@ -201,4 +251,15 @@ func (cf *ColumnFamily) getMemtableType() memtable.TableType {
 	default:
 		panic(fmt.Sprintf("unsupported memtable type: %d", cf.opts.MemtableType))
 	}
+}
+
+func (cf *ColumnFamily) getMemtables() []*memtable.Memtable {
+	cf.mu.Lock()
+	defer cf.mu.Unlock()
+
+	var tables = []*memtable.Memtable{cf.activeMem}
+	for _, tb := range cf.immuMems {
+		tables = append(tables, tb)
+	}
+	return tables
 }

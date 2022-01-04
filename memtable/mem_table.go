@@ -15,18 +15,30 @@ const (
 
 type (
 	IMemtable interface {
-		Put(key []byte, value []byte) *logfile.LogEntry
+		Put(key []byte, value []byte)
 		Get(key []byte) *logfile.LogEntry
-		Exist(key []byte) bool
 		Remove(key []byte) *logfile.LogEntry
+		Iterator(reversed bool) MemIterator
 		MemSize() int64
 	}
 
+	MemIterator interface {
+		Next()
+		Prev()
+		Rewind()
+		Seek([]byte)
+		Key() []byte
+		Value() []byte
+		Valid() bool
+	}
+
 	Memtable struct {
-		mem     IMemtable
-		wal     *logfile.LogFile
+		mem IMemtable
+		wal *logfile.LogFile
+		opt Options
+		// memSize represents how much memory is used.
+		// This is an inaccurate field to do so, we will use a efficient way(like Arena) to replace it in near future.
 		memSize int64
-		opt     Options
 	}
 
 	Options struct {
@@ -55,15 +67,12 @@ func OpenMemTable(opts Options) (*Memtable, error) {
 	}
 	table.wal = wal
 
-	var count = 0
-
 	// load entries.
 	var offset int64 = 0
 	for {
 		if entry, size, err := wal.Read(offset); err == nil {
 			offset += size
 			mem.Put(entry.Key, entry.Value)
-			count++
 		} else {
 			if err == io.EOF {
 				break
@@ -71,9 +80,6 @@ func OpenMemTable(opts Options) (*Memtable, error) {
 			return nil, err
 		}
 	}
-
-	fmt.Println("写入到 MemTable 的数据量 : ", count)
-
 	return table, nil
 }
 
@@ -86,13 +92,11 @@ func (mt *Memtable) Put(key []byte, value []byte, opts Options) error {
 		entry.ExpiredAt = opts.ExpiredAt
 	}
 
+	buf, _ := logfile.EncodeEntry(entry)
 	if !opts.DisableWal && mt.wal != nil {
-		buf, _ := logfile.EncodeEntry(entry)
 		if err := mt.wal.Write(buf); err != nil {
-			fmt.Println(err)
 			return err
 		}
-
 		if opts.Sync {
 			if err := mt.wal.Sync(); err != nil {
 				return err
@@ -101,6 +105,7 @@ func (mt *Memtable) Put(key []byte, value []byte, opts Options) error {
 	}
 
 	mt.mem.Put(key, value)
+
 	return nil
 }
 
@@ -110,8 +115,8 @@ func (mt *Memtable) Delete(key []byte, opts Options) error {
 		Type: logfile.TypeDelete,
 	}
 
+	buf, eSize := logfile.EncodeEntry(entry)
 	if !opts.DisableWal && mt.wal != nil {
-		buf, _ := logfile.EncodeEntry(entry)
 		if err := mt.wal.Write(buf); err != nil {
 			return err
 		}
@@ -122,7 +127,11 @@ func (mt *Memtable) Delete(key []byte, opts Options) error {
 			}
 		}
 	}
-	mt.mem.Remove(key)
+	removed := mt.mem.Remove(key)
+	if removed != nil {
+		eSize += len(removed.Value)
+	}
+
 	return nil
 }
 
@@ -135,8 +144,12 @@ func (mt *Memtable) Get(key []byte) []byte {
 	return entry.Value
 }
 
-func (mt *Memtable) IsFull(size int64) bool {
-	if mt.mem.MemSize()+size >= mt.memSize {
+func (mt *Memtable) SyncWAL() error {
+	return mt.wal.Sync()
+}
+
+func (mt *Memtable) IsFull() bool {
+	if mt.mem.MemSize() >= mt.memSize {
 		return true
 	}
 
@@ -144,11 +157,12 @@ func (mt *Memtable) IsFull(size int64) bool {
 		return false
 	}
 
-	return mt.wal.WriteAt+size >= mt.memSize
+	return mt.wal.WriteAt >= mt.memSize
 }
 
-func (mt *Memtable) SyncWAL() error {
-	return mt.wal.Sync()
+// NewIterator .
+func (mt *Memtable) NewIterator(reversed bool) MemIterator {
+	return mt.mem.Iterator(reversed)
 }
 
 func getIMemtable(tType TableType) IMemtable {

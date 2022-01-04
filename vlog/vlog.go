@@ -90,34 +90,30 @@ func OpenValueLog(path string, blockSize int64, ioType logfile.IOType) (*ValueLo
 	return vlog, nil
 }
 
-func (vlog *ValueLog) ReadValue(pos *ValuePos) ([]byte, error) {
-	if pos == nil {
-		return nil, nil
-	}
-
+func (vlog *ValueLog) ReadValue(fid, size uint32, offset int64) ([]byte, error) {
 	var logFile *logfile.LogFile
-	if pos.fid == vlog.activeLogFile.Fid {
+	if fid == vlog.activeLogFile.Fid {
 		logFile = vlog.activeLogFile
 	} else {
 		vlog.RLock()
-		logFile = vlog.logFiles[pos.fid]
+		logFile = vlog.logFiles[fid]
 		if logFile != nil && logFile.IoSelector == nil {
 			opt := vlog.opt
-			lf, err := logfile.OpenLogFile(opt.path, pos.fid, opt.blockSize, logfile.ValueLog, opt.ioType)
+			lf, err := logfile.OpenLogFile(opt.path, fid, opt.blockSize, logfile.ValueLog, opt.ioType)
 			if err != nil {
 				vlog.RUnlock()
 				return nil, err
 			}
-			vlog.logFiles[pos.fid] = lf
+			vlog.logFiles[fid] = lf
 			logFile = lf
 		}
 		vlog.RUnlock()
 	}
 	if logFile == nil {
-		return nil, fmt.Errorf(ErrLogFileNil.Error(), pos.fid)
+		return nil, fmt.Errorf(ErrLogFileNil.Error(), fid)
 	}
 
-	logEntry, _, err := logFile.Read(pos.offset)
+	logEntry, _, err := logFile.Read(offset)
 	if err != nil {
 		return nil, err
 	}
@@ -130,8 +126,8 @@ func (vlog *ValueLog) ReadValue(pos *ValuePos) ([]byte, error) {
 	return logEntry.Value, nil
 }
 
-func (vlog *ValueLog) Write(e *logfile.LogEntry) (*ValuePos, error) {
-	buf, eSize := logfile.EncodeEntry(e)
+func (vlog *ValueLog) Write(ve *logfile.VlogEntry) (*ValuePos, error) {
+	buf, eSize := logfile.EncodeVlogEntry(ve)
 	// if active is reach to thereshold, close it and open a new one.
 	if vlog.activeLogFile.WriteAt+int64(eSize) >= vlog.opt.blockSize {
 		if err := vlog.activeLogFile.Close(); err != nil {

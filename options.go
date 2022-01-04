@@ -1,6 +1,9 @@
 package lotusdb
 
-import "os"
+import (
+	"os"
+	"time"
+)
 
 const (
 	DefaultColumnFamilyName = "cf_default"
@@ -29,6 +32,7 @@ func DefaultOptions(path string) Options {
 			ValueLogDir:       cfPath,
 			ValueLogBlockSize: 1024 << 20,
 			ValueLogMmap:      false,
+			ValueThreshold:    1 << 12,
 		},
 	}
 }
@@ -36,12 +40,13 @@ func DefaultOptions(path string) Options {
 func DefaultColumnFamilyOptions(name string) ColumnFamilyOptions {
 	return ColumnFamilyOptions{
 		CfName:            name,
-		MemtableSize:      64 << 20,
+		MemtableSize:      64 << 20, // 64MB
 		MemtableNums:      5,
 		MemtableType:      SkipList,
 		WalMMap:           false,
-		ValueLogBlockSize: 1024 << 20,
+		ValueLogBlockSize: 1024 << 20, // 1GB
 		ValueLogMmap:      false,
+		ValueThreshold:    1 << 12, // 4KB
 	}
 }
 
@@ -68,6 +73,8 @@ type ColumnFamilyOptions struct {
 
 	MemtableType MemTableType
 
+	MemSpaceWaitTimeout time.Duration
+
 	WalDir string
 
 	WalMMap bool
@@ -77,6 +84,8 @@ type ColumnFamilyOptions struct {
 	ValueLogBlockSize int64
 
 	ValueLogMmap bool
+
+	ValueThreshold int
 }
 
 // WriteOptions options for writing key and value.

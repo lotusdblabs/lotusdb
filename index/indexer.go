@@ -2,13 +2,23 @@ package index
 
 import (
 	"errors"
+	"os"
 )
 
 var (
+	// ErrColumnFamilyNameNil .
 	ErrColumnFamilyNameNil = errors.New("column family name is nil")
-	ErrBucketNameNil       = errors.New("bucket name is nil")
-	ErrDirPathNil          = errors.New("bptree dir path is nil")
-	ErrBucketNotInit       = errors.New("bucket not init")
+
+	// ErrBucketNameNil .
+	ErrBucketNameNil = errors.New("bucket name is nil")
+
+	// ErrDirPathNil .
+	ErrDirPathNil = errors.New("bptree dir path is nil")
+
+	// ErrBucketNotInit .
+	ErrBucketNotInit = errors.New("bucket not init")
+
+	// ErrOptionsTypeNotMatch .
 	ErrOptionsTypeNotMatch = errors.New("indexer options not match")
 )
 
@@ -21,6 +31,12 @@ type IndexerType int8
 
 const (
 	BptreeBoltDB IndexerType = iota
+)
+
+const (
+	indexFileSuffixName = ".index"
+	metaFileSuffixName  = ".meta"
+	separator           = string(os.PathSeparator)
 )
 
 type IndexerOptions interface {
@@ -65,7 +81,7 @@ type Indexer interface {
 
 	PutBatch(kv []IndexerKvnode) (offset int, err error)
 
-	Get(k []byte) (value []byte, err error)
+	Get(k []byte) (meta *IndexerMeta, err error)
 
 	Delete(key []byte) error
 
@@ -77,7 +93,7 @@ type Indexer interface {
 func NewIndexer(opts IndexerOptions) (Indexer, error) {
 	switch opts.GetType() {
 	case BptreeBoltDB:
-		boltOpts, ok := opts.(*BoltOptions)
+		boltOpts, ok := opts.(*BPTreeOptions)
 		if !ok {
 			return nil, ErrOptionsTypeNotMatch
 		}
