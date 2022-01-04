@@ -103,7 +103,6 @@ func (mt *Memtable) Put(key []byte, value []byte, opts Options) error {
 	}
 
 	mt.mem.Put(key, value)
-
 	return nil
 }
 

@@ -22,31 +22,33 @@ func DefaultOptions(path string) Options {
 	return Options{
 		DBPath: path,
 		CfOpts: ColumnFamilyOptions{
-			CfName:            DefaultColumnFamilyName,
-			DirPath:           cfPath,
-			MemtableSize:      64 << 20,
-			MemtableNums:      5,
-			MemtableType:      SkipList,
-			WalDir:            cfPath,
-			WalMMap:           false,
-			ValueLogDir:       cfPath,
-			ValueLogBlockSize: 1024 << 20,
-			ValueLogMmap:      false,
-			ValueThreshold:    0,
+			CfName:              DefaultColumnFamilyName,
+			DirPath:             cfPath,
+			MemtableSize:        64 << 20,
+			MemtableNums:        5,
+			MemtableType:        SkipList,
+			MemSpaceWaitTimeout: time.Millisecond * 100,
+			WalDir:              cfPath,
+			WalMMap:             false,
+			ValueLogDir:         cfPath,
+			ValueLogBlockSize:   1024 << 20,
+			ValueLogMmap:        false,
+			ValueThreshold:      0,
 		},
 	}
 }
 
 func DefaultColumnFamilyOptions(name string) ColumnFamilyOptions {
 	return ColumnFamilyOptions{
-		CfName:            name,
-		MemtableSize:      64 << 20, // 64MB
-		MemtableNums:      5,
-		MemtableType:      SkipList,
-		WalMMap:           false,
-		ValueLogBlockSize: 1024 << 20, // 1GB
-		ValueLogMmap:      false,
-		ValueThreshold:    0,
+		CfName:              name,
+		MemtableSize:        64 << 20, // 64MB
+		MemtableNums:        5,
+		MemtableType:        SkipList,
+		MemSpaceWaitTimeout: time.Millisecond * 100,
+		WalMMap:             false,
+		ValueLogBlockSize:   1024 << 20, // 1GB
+		ValueLogMmap:        false,
+		ValueThreshold:      0,
 	}
 }
 
