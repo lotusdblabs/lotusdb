@@ -123,9 +123,6 @@ func (vlog *ValueLog) Write(ve *logfile.VlogEntry) (*ValuePos, error) {
 	buf, eSize := logfile.EncodeVlogEntry(ve)
 	// if active is reach to thereshold, close it and open a new one.
 	if vlog.activeLogFile.WriteAt+int64(eSize) >= vlog.opt.blockSize {
-		if err := vlog.activeLogFile.Close(); err != nil {
-			return nil, err
-		}
 		vlog.Lock()
 		vlog.logFiles[vlog.activeLogFile.Fid] = vlog.activeLogFile
 
