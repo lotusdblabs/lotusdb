@@ -235,6 +235,7 @@ func (cf *ColumnFamily) openMemtables() error {
 			cf.immuMems = append(cf.immuMems, table)
 		}
 	}
+
 	return nil
 }
 

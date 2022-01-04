@@ -55,6 +55,16 @@ func (h *HashSkipList) Remove(key []byte) *logfile.LogEntry {
 	return skl.Remove(key)
 }
 
+func (h *HashSkipList) MemSize() int64 {
+	var size int64
+
+	for _, skl := range h.skls {
+		size += skl.MemSize()
+	}
+
+	return size
+}
+
 func (h *HashSkipList) Iterator(reversed bool) MemIterator {
 	return nil
 }
