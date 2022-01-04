@@ -19,6 +19,7 @@ type (
 		Get(key []byte) *logfile.LogEntry
 		Remove(key []byte) *logfile.LogEntry
 		Iterator(reversed bool) MemIterator
+		MemSize() int64
 	}
 
 	MemIterator interface {
@@ -35,9 +36,6 @@ type (
 		mem IMemtable
 		wal *logfile.LogFile
 		opt Options
-		// memCost represents how much memory is used.
-		// This is an inaccurate field to do so, we will use a efficient way(like Arena) to replace it in near future.
-		memCost int64
 	}
 
 	Options struct {
@@ -47,6 +45,7 @@ type (
 		Fsize    int64
 		TableTyp TableType
 		IoType   logfile.IOType
+		MemSize  int64
 
 		// options for writing.
 		Sync       bool
@@ -69,7 +68,7 @@ func OpenMemTable(opts Options) (*Memtable, error) {
 	// load entries.
 	var offset int64 = 0
 	for {
-		if entry, size, err := wal.Read(offset); err == nil {
+		if entry, size, err := wal.ReadLogEntry(offset); err == nil {
 			offset += size
 			mem.Put(entry.Key, entry.Value)
 		} else {
@@ -91,7 +90,7 @@ func (mt *Memtable) Put(key []byte, value []byte, opts Options) error {
 		entry.ExpiredAt = opts.ExpiredAt
 	}
 
-	buf, eSize := logfile.EncodeEntry(entry)
+	buf, _ := logfile.EncodeEntry(entry)
 	if !opts.DisableWal && mt.wal != nil {
 		if err := mt.wal.Write(buf); err != nil {
 			return err
@@ -104,7 +103,7 @@ func (mt *Memtable) Put(key []byte, value []byte, opts Options) error {
 	}
 
 	mt.mem.Put(key, value)
-	mt.memCost += int64(eSize)
+
 	return nil
 }
 
@@ -130,7 +129,7 @@ func (mt *Memtable) Delete(key []byte, opts Options) error {
 	if removed != nil {
 		eSize += len(removed.Value)
 	}
-	mt.memCost -= int64(eSize)
+
 	return nil
 }
 
@@ -148,15 +147,24 @@ func (mt *Memtable) SyncWAL() error {
 }
 
 func (mt *Memtable) IsFull() bool {
-	if mt.memCost >= mt.opt.Fsize {
+	if mt.mem.MemSize() >= mt.opt.MemSize {
 		return true
 	}
-	return mt.wal.WriteAt >= mt.opt.Fsize
+
+	if mt.wal == nil {
+		return false
+	}
+
+	return mt.wal.WriteAt >= mt.opt.MemSize
 }
 
 // DeleteWal delete wal.
 func (mt *Memtable) DeleteWal() error {
 	return mt.wal.Delete()
+}
+
+func (mt *Memtable) LogFileId() uint32 {
+	return mt.wal.Fid
 }
 
 // NewIterator .

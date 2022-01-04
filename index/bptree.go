@@ -212,7 +212,7 @@ func (b *BPTree) PutBatch(nodes []*IndexerNode) (offset int, err error) {
 
 	itemLoop:
 		for itemIdx := offset; itemIdx < (offset + b.opts.BatchSize - 1); itemIdx++ {
-			if itemIdx > len(nodes) {
+			if itemIdx >= len(nodes) {
 				break itemLoop
 			}
 			meta := EncodeMeta(nodes[itemIdx].Meta)
