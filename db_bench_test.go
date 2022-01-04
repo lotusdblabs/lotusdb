@@ -9,7 +9,6 @@ import (
 
 func BenchmarkLotusDB_Put(b *testing.B) {
 	options := DefaultOptions("/tmp/lotusdb")
-	//options.CfOpts.ValueThreshold = 100
 	db, err := Open(options)
 	assert.Nil(b, err)
 

@@ -31,6 +31,7 @@ func (cf *ColumnFamily) waitMemSpace() error {
 			Fsize:    cf.opts.MemtableSize,
 			TableTyp: cf.getMemtableType(),
 			IoType:   ioType,
+			MemSize:  cf.opts.MemtableSize,
 		}
 		if table, err := memtable.OpenMemTable(memOpts); err != nil {
 			return err

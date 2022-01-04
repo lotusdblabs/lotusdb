@@ -32,7 +32,7 @@ func DefaultOptions(path string) Options {
 			ValueLogDir:       cfPath,
 			ValueLogBlockSize: 1024 << 20,
 			ValueLogMmap:      false,
-			ValueThreshold:    1 << 12,
+			ValueThreshold:    0,
 		},
 	}
 }
@@ -46,7 +46,7 @@ func DefaultColumnFamilyOptions(name string) ColumnFamilyOptions {
 		WalMMap:           false,
 		ValueLogBlockSize: 1024 << 20, // 1GB
 		ValueLogMmap:      false,
-		ValueThreshold:    1 << 12, // 4KB
+		ValueThreshold:    0,
 	}
 }
 

@@ -76,6 +76,7 @@ func (db *LotusDB) OpenColumnFamily(opts ColumnFamilyOptions) (*ColumnFamily, er
 		ColumnFamilyName: opts.CfName,
 		BucketName:       []byte(opts.CfName),
 		DirPath:          opts.DirPath,
+		BatchSize:        100000,
 	}
 	indexer, err := index.NewIndexer(bptreeOpt)
 	if err != nil {
@@ -222,6 +223,7 @@ func (cf *ColumnFamily) openMemtables() error {
 		Fsize:    cf.opts.MemtableSize,
 		TableTyp: tableType,
 		IoType:   ioType,
+		MemSize:  cf.opts.MemtableSize,
 	}
 	for i, fid := range fids {
 		memOpts.Fid = fid

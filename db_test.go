@@ -4,7 +4,6 @@ import (
 	"bytes"
 	"fmt"
 	"math/rand"
-	"strconv"
 	"testing"
 	"time"
 
@@ -13,8 +12,6 @@ import (
 
 func TestOpen(t *testing.T) {
 	options := DefaultOptions("/tmp/lotusdb")
-	//options.CfOpts.WalMMap = true
-	options.CfOpts.ValueThreshold = 100
 	db, err := Open(options)
 	assert.Nil(t, err)
 	defer db.Close()
@@ -25,7 +22,6 @@ func TestOpen(t *testing.T) {
 		assert.Nil(t, err)
 	}
 	t.Log("writing 50w records, time spent: ", time.Since(now).Milliseconds())
-	time.Sleep(time.Minute)
 }
 
 func TestLotusDB_Get(t *testing.T) {
@@ -41,20 +37,21 @@ func TestLotusDB_Get(t *testing.T) {
 	t.Log("val = ", string(v))
 }
 
-const alphabet = "abcdefghijklmnopqrstuvwxyz"
+const alphabet = "abcdefghijklmnopqrstuvwxyz0123456789"
 
 func init() {
 	rand.Seed(time.Now().Unix())
 }
 
+// GetKey length: 32 Bytes
 func GetKey(n int) []byte {
-	return []byte("test_key_" + fmt.Sprintf("%09d", n))
+	return []byte("kvstore-bench-key------" + fmt.Sprintf("%09d", n))
 }
 
 func GetValue() []byte {
 	var str bytes.Buffer
-	for i := 0; i < 12; i++ {
-		str.WriteByte(alphabet[rand.Int()%26])
+	for i := 0; i < 128; i++ {
+		str.WriteByte(alphabet[rand.Int()%36])
 	}
-	return []byte("test_val-" + strconv.FormatInt(time.Now().UnixNano(), 10) + str.String())
+	return []byte(str.String())
 }

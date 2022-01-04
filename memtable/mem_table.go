@@ -36,9 +36,6 @@ type (
 		mem IMemtable
 		wal *logfile.LogFile
 		opt Options
-		// memSize represents how much memory is used.
-		// This is an inaccurate field to do so, we will use a efficient way(like Arena) to replace it in near future.
-		memSize int64
 	}
 
 	Options struct {
@@ -48,6 +45,7 @@ type (
 		Fsize    int64
 		TableTyp TableType
 		IoType   logfile.IOType
+		MemSize  int64
 
 		// options for writing.
 		Sync       bool
@@ -149,7 +147,7 @@ func (mt *Memtable) SyncWAL() error {
 }
 
 func (mt *Memtable) IsFull() bool {
-	if mt.mem.MemSize() >= mt.memSize {
+	if mt.mem.MemSize() >= mt.opt.MemSize {
 		return true
 	}
 
@@ -157,7 +155,7 @@ func (mt *Memtable) IsFull() bool {
 		return false
 	}
 
-	return mt.wal.WriteAt >= mt.memSize
+	return mt.wal.WriteAt >= mt.opt.MemSize
 }
 
 // DeleteWal delete wal.
