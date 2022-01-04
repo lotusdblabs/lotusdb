@@ -25,7 +25,7 @@ type IOSelector interface {
 	Close() error
 
 	// Delete delete the file
-	Delete()error
+	Delete() error
 }
 
 // open file and truncate it if necessary.

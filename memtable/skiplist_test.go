@@ -10,15 +10,8 @@ import (
 )
 
 func TestSkipList_Put(t *testing.T) {
-	var entry = &logfile.LogEntry{
-		Key:   []byte("lotusdb"),
-		Value: []byte("lotusdb"),
-	}
-
 	skl := NewSkipList()
-
-	actEntry := skl.Put([]byte("lotusdb"), []byte("lotusdb"))
-	require.Equal(t, entry, actEntry)
+	skl.Put([]byte("lotusdb"), []byte("lotusdb"))
 }
 
 func TestSkipList_Get(t *testing.T) {
@@ -59,8 +52,17 @@ func TestSkipList_NewSklIterator(t *testing.T) {
 		skl.Put([]byte(v), []byte("skl-val"))
 	}
 
-	iter := skl.NewSklIterator(false)
+	iter := skl.Iterator(false)
 	for iter.Seek([]byte("5")); iter.Valid(); iter.Next() {
 		t.Log(string(iter.Key()))
 	}
+}
+
+func TestSkipList_MemSize(t *testing.T) {
+	hashlist := NewHashSkipList()
+
+	hashlist.Put([]byte("lotusdb"), []byte("lotusdb"))
+	hashlist.Put([]byte("test"), []byte("test"))
+
+	require.Equal(t, int64(22), hashlist.MemSize())
 }
