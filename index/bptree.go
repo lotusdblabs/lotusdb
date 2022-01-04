@@ -12,6 +12,7 @@ type BPTreeOptions struct {
 	ColumnFamilyName string
 	BucketName       []byte
 	DirPath          string
+	PageSize         int // defalut os page size
 
 	BatchSize   int
 	MaxDataSize int64
@@ -123,6 +124,7 @@ func BptreeBolt(opt *BPTreeOptions) (*BPTree, error) {
 		Timeout:         1 * time.Second,
 		NoSync:          true,
 		InitialMmapSize: 1024,
+		PageSize:        opt.PageSize,
 	})
 	if err != nil {
 		return nil, err
