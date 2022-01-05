@@ -138,7 +138,7 @@ func (cf *ColumnFamily) Get(key []byte) ([]byte, error) {
 		}
 	}
 
-	// get from bptree.
+	// get index from bptree.
 	indexMeta, err := cf.indexer.Get(key)
 	if err != nil {
 		return nil, err

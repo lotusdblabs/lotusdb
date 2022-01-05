@@ -33,6 +33,8 @@ func (fio *FileIOSelector) Close() error {
 }
 
 func (fio *FileIOSelector) Delete() error {
-	_ = fio.fd.Close()
+	if err := fio.fd.Close(); err != nil {
+		return err
+	}
 	return os.Remove(fio.fd.Name())
 }

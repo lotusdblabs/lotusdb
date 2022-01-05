@@ -142,6 +142,8 @@ func (mt *Memtable) Get(key []byte) []byte {
 }
 
 func (mt *Memtable) SyncWAL() error {
+	mt.wal.RLock()
+	defer mt.wal.RUnlock()
 	return mt.wal.Sync()
 }
 
@@ -159,6 +161,8 @@ func (mt *Memtable) IsFull() bool {
 
 // DeleteWal delete wal.
 func (mt *Memtable) DeleteWal() error {
+	mt.wal.Lock()
+	defer mt.wal.Unlock()
 	return mt.wal.Delete()
 }
 
