@@ -3,6 +3,8 @@ module github.com/flowercorp/lotusdb
 go 1.16
 
 require (
+	github.com/davecgh/go-spew v1.1.1 // indirect
+	github.com/peterh/liner v1.2.1
 	github.com/spaolacci/murmur3 v1.1.0
 	github.com/stretchr/testify v1.7.0
 	go.etcd.io/bbolt v1.3.6

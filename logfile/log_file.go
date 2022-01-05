@@ -102,6 +102,7 @@ func (lf *LogFile) ReadLogEntry(offset int64) (*LogEntry, int64, error) {
 		Key:       kvBuf[:kSize],
 		Value:     kvBuf[kSize:],
 		ExpiredAt: header.expiredAt,
+		Type:      header.typ,
 	}
 	// crc32 check.
 	if crc := getEntryCrc(e, headerBuf[crc32.Size:size]); crc != header.crc32 {
