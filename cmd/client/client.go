@@ -10,7 +10,7 @@ import (
 	"time"
 )
 
-const cmdHistoryPath = "/tmp/lotus-cli"
+const cmdHistoryPath = "/tmp/lotusdb-cli"
 
 // all supported commands.
 var commandList = [][]string{
@@ -61,11 +61,9 @@ func main() {
 		}
 	}()
 
-	prompt := "lotusdb>"
-
+	prompt := "127.0.0.1:9230>"
 	for {
 		if cmd, err := line.Prompt(prompt); err == nil {
-
 			if cmd == "quit" {
 				fmt.Println("bye")
 				break
@@ -84,11 +82,9 @@ func main() {
 					fmt.Println(err)
 					continue
 				}
-
 				fmt.Println(result)
 				line.AppendHistory(cmd)
 			}
-
 		} else if err == liner.ErrPromptAborted {
 			fmt.Println("bye")
 			break
@@ -97,7 +93,6 @@ func main() {
 			break
 		}
 	}
-
 }
 
 func handleCmd(cmd string) (err error) {
@@ -106,12 +101,11 @@ func handleCmd(cmd string) (err error) {
 	if !commandSet[strings.ToLower(ars[0])] {
 		err = ErrCmdNotFound
 	}
-
 	return
 }
 
 func sendCmd(cmd string) (string, error) {
-	conn, err := net.DialTimeout("tcp", "127.0.0.1:8080", time.Second)
+	conn, err := net.DialTimeout("tcp", "127.0.0.1:9230", time.Second)
 	if err != nil {
 		return "", err
 	}

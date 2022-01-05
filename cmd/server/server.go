@@ -4,9 +4,14 @@ import (
 	"errors"
 	"fmt"
 	"github.com/flowercorp/lotusdb"
+	"github.com/flowercorp/lotusdb/logger"
+	"io/ioutil"
 	"log"
 	"net"
+	"os"
+	"os/signal"
 	"strings"
+	"syscall"
 	"time"
 )
 
@@ -34,10 +39,21 @@ func init() {
 
 func main() {
 	banner()
-	listener, err := net.Listen("tcp", "127.0.0.1:8080")
+	listener, err := net.Listen("tcp", "127.0.0.1:9230")
 	if err != nil {
 		panic(err)
 	}
+
+	logger.Info("lotusdb server is running")
+	sig := make(chan os.Signal, 1)
+	signal.Notify(sig, os.Interrupt, os.Kill, syscall.SIGHUP,
+		syscall.SIGINT, syscall.SIGTERM, syscall.SIGQUIT)
+
+	go func() {
+		<-sig
+		os.Exit(-1)
+	}()
+
 	for {
 		conn, err := listener.Accept()
 		if err != nil {
@@ -63,14 +79,17 @@ func main() {
 		} else {
 			response = []byte(fmt.Sprintf("%s (%s)", string(response), time.Since(start)))
 		}
-
 		conn.Write(response)
 	}
-
 }
 
 func banner() {
-	fmt.Println("   _       ___    _____   _   _    ___     ___     ___   \n  | |     / _ \\  |_   _| | | | |  / __|   |   \\   | _ )  \n  | |__  | (_) |   | |   | |_| |  \\__ \\   | |) |  | _ \\  \n  |____|  \\___/   _|_|_   \\___/   |___/   |___/   |___/  ")
+	b, err := ioutil.ReadFile("../../resource/banner/banner.txt")
+	if err != nil {
+		panic(err)
+	}
+	fmt.Println(string(b))
+	fmt.Println("A powerful storage engine for TiDB and TiKV")
 }
 
 func ExecuteCmds(cmds []string) (result []byte, err error) {
@@ -93,11 +112,9 @@ func ExecuteCmds(cmds []string) (result []byte, err error) {
 			return
 		}
 		err = db.Delete([]byte(cmds[1]))
-
 	default:
 		err = ErrNotSupportedCmd
 	}
-
 	return
 }
 
@@ -105,6 +122,5 @@ func check(args []string, num int) error {
 	if len(args) != num {
 		return ErrArgsNumNotMatch
 	}
-
 	return nil
 }
