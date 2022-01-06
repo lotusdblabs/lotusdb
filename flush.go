@@ -1,14 +1,15 @@
 package lotusdb
 
 import (
-	"github.com/flowercorp/lotusdb/index"
-	"github.com/flowercorp/lotusdb/logfile"
-	"github.com/flowercorp/lotusdb/logger"
-	"github.com/flowercorp/lotusdb/memtable"
 	"os"
 	"os/signal"
 	"syscall"
 	"time"
+
+	"github.com/flowercorp/lotusdb/index"
+	"github.com/flowercorp/lotusdb/logfile"
+	"github.com/flowercorp/lotusdb/logger"
+	"github.com/flowercorp/lotusdb/memtable"
 )
 
 func (cf *ColumnFamily) waitMemSpace() error {
@@ -96,7 +97,6 @@ func (cf *ColumnFamily) listenAndFlush() {
 			return
 			// db closed or cf closed
 			//case <-closed:
-		default:
 		}
 	}
 }

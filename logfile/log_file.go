@@ -7,7 +7,6 @@ import (
 	"io"
 	"os"
 	"sync"
-	"sync/atomic"
 
 	"github.com/flowercorp/lotusdb/ioselector"
 )
@@ -123,14 +122,14 @@ func (lf *LogFile) Read(offset int64, size uint32) ([]byte, error) {
 
 // Write .
 func (lf *LogFile) Write(buf []byte) error {
-	offset := atomic.AddInt64(&lf.WriteAt, int64(len(buf))) - int64(len(buf))
-	n, err := lf.IoSelector.Write(buf, offset)
+	n, err := lf.IoSelector.Write(buf, lf.WriteAt)
 	if err != nil {
 		return err
 	}
 	if n != len(buf) {
 		return ErrWriteSizeNotEqual
 	}
+	lf.WriteAt += int64(n)
 	return nil
 }
 

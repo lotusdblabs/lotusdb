@@ -3,10 +3,11 @@ package lotusdb
 import (
 	"bytes"
 	"fmt"
-	"github.com/stretchr/testify/assert"
 	"math/rand"
 	"testing"
 	"time"
+
+	"github.com/stretchr/testify/assert"
 )
 
 //func TestOpen(t *testing.T) {
