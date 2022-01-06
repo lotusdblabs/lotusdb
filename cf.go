@@ -10,11 +10,11 @@ import (
 	"strings"
 	"sync"
 
-	"github.com/flowercorp/lotusdb/index"
-	"github.com/flowercorp/lotusdb/logfile"
-	"github.com/flowercorp/lotusdb/memtable"
-	"github.com/flowercorp/lotusdb/util"
-	"github.com/flowercorp/lotusdb/vlog"
+	"github.com/flower-corp/lotusdb/index"
+	"github.com/flower-corp/lotusdb/logfile"
+	"github.com/flower-corp/lotusdb/memtable"
+	"github.com/flower-corp/lotusdb/util"
+	"github.com/flower-corp/lotusdb/vlog"
 )
 
 var (

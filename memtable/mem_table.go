@@ -2,7 +2,7 @@ package memtable
 
 import (
 	"fmt"
-	"github.com/flowercorp/lotusdb/logfile"
+	"github.com/flower-corp/lotusdb/logfile"
 	"io"
 )
 

@@ -1,4 +1,4 @@
-module github.com/flowercorp/lotusdb
+module github.com/flower-corp/lotusdb
 
 go 1.16
 
