@@ -1,10 +1,10 @@
 package lotusdb
 
 import (
-	"github.com/flowercorp/lotusdb/index"
-	"github.com/flowercorp/lotusdb/logfile"
-	"github.com/flowercorp/lotusdb/logger"
-	"github.com/flowercorp/lotusdb/memtable"
+	"github.com/flower-corp/lotusdb/index"
+	"github.com/flower-corp/lotusdb/logfile"
+	"github.com/flower-corp/lotusdb/logger"
+	"github.com/flower-corp/lotusdb/memtable"
 	"os"
 	"os/signal"
 	"syscall"

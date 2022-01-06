@@ -9,20 +9,20 @@ import (
 	"time"
 )
 
-//func TestOpen(t *testing.T) {
-//	options := DefaultOptions("/tmp/lotusdb")
-//	db, err := Open(options)
-//	assert.Nil(t, err)
-//	defer db.Close()
-//
-//	now := time.Now()
-//	for i := 0; i < 600000; i++ {
-//		err := db.Put(GetKey(i), GetValue())
-//		assert.Nil(t, err)
-//	}
-//	t.Log("writing 50w records, time spent: ", time.Since(now).Milliseconds())
-//}
-//
+func TestOpen(t *testing.T) {
+	options := DefaultOptions("/tmp/lotusdb")
+	db, err := Open(options)
+	assert.Nil(t, err)
+	defer db.Close()
+
+	now := time.Now()
+	for i := 0; i < 600000; i++ {
+		err := db.Put(GetKey(i), GetValue128())
+		assert.Nil(t, err)
+	}
+	t.Log("writing 50w records, time spent: ", time.Since(now).Milliseconds())
+}
+
 func TestLotusDB_Get(t *testing.T) {
 	options := DefaultOptions("/tmp/lotusdb")
 	db, err := Open(options)

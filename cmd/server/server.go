@@ -3,8 +3,8 @@ package main
 import (
 	"errors"
 	"fmt"
-	"github.com/flowercorp/lotusdb"
-	"github.com/flowercorp/lotusdb/logger"
+	"github.com/flower-corp/lotusdb"
+	"github.com/flower-corp/lotusdb/logger"
 	"io/ioutil"
 	"log"
 	"net"

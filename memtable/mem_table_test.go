@@ -3,7 +3,7 @@ package memtable
 import (
 	"testing"
 
-	"github.com/flowercorp/lotusdb/logfile"
+	"github.com/flower-corp/lotusdb/logfile"
 	"github.com/stretchr/testify/require"
 )
 

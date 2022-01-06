@@ -9,7 +9,7 @@ import (
 	"sync"
 	"sync/atomic"
 
-	"github.com/flowercorp/lotusdb/ioselector"
+	"github.com/flower-corp/lotusdb/ioselector"
 )
 
 var (
