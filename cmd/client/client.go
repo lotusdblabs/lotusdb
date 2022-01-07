@@ -64,11 +64,14 @@ func main() {
 	prompt := "127.0.0.1:9230>"
 	for {
 		if cmd, err := line.Prompt(prompt); err == nil {
-			if cmd == "quit" {
+			if cmd == "" {
+				continue
+			}
+			if cmd == "quit" || cmd == "exit" {
 				fmt.Println("bye")
 				break
 			} else if cmd == "help" {
-
+				// print help.todo
 			} else {
 				cmd = strings.TrimSpace(cmd)
 				if err = handleCmd(cmd); err != nil {
