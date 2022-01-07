@@ -132,8 +132,8 @@ func (cf *ColumnFamily) PutWithOptions(key, value []byte, opt *WriteOptions) err
 func (cf *ColumnFamily) Get(key []byte) ([]byte, error) {
 	tables := cf.getMemtables()
 	// get from active and immutable memtables.
-	for idx := len(tables) - 1; idx >= 0; idx-- {
-		if value := tables[idx].Get(key); len(value) != 0 {
+	for _, mem := range tables {
+		if value := mem.Get(key); len(value) != 0 {
 			return value, nil
 		}
 	}
@@ -256,8 +256,12 @@ func (cf *ColumnFamily) getMemtables() []*memtable.Memtable {
 	cf.mu.Lock()
 	defer cf.mu.Unlock()
 
-	var tables = []*memtable.Memtable{}
-	tables = append(tables, cf.immuMems...)
-	tables = append(tables, cf.activeMem)
+	var tables = make([]*memtable.Memtable, len(cf.immuMems)+1)
+	tables[0] = cf.activeMem
+	lenth := len(cf.immuMems) - 1
+	for idx := 0; idx < len(cf.immuMems); idx++ {
+		tables[idx+1] = cf.immuMems[lenth-idx]
+	}
+
 	return tables
 }
