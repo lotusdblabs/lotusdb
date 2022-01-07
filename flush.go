@@ -20,7 +20,7 @@ func (cf *ColumnFamily) waitMemSpace() error {
 	}
 	select {
 	case cf.flushChn <- cf.activeMem:
-		cf.immuMems = append([]*memtable.Memtable{cf.activeMem}, cf.immuMems...)
+		cf.immuMems = append(cf.immuMems, cf.activeMem)
 		// open a new active memtable.
 		var ioType = logfile.FileIO
 		if cf.opts.WalMMap {
@@ -47,7 +47,7 @@ func (cf *ColumnFamily) waitMemSpace() error {
 
 func (cf *ColumnFamily) listenAndFlush() {
 	sig := make(chan os.Signal, 1)
-	signal.Notify(sig, os.Interrupt, os.Kill, syscall.SIGHUP, syscall.SIGINT, syscall.SIGTERM, syscall.SIGQUIT)
+	signal.Notify(sig, os.Interrupt, syscall.SIGHUP, syscall.SIGINT, syscall.SIGTERM, syscall.SIGQUIT)
 	for {
 		select {
 		case table := <-cf.flushChn:
