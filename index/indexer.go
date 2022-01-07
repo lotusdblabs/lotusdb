@@ -40,7 +40,7 @@ const (
 	indexFileSuffixName = ".index"
 	metaFileSuffixName  = ".meta"
 	separator           = string(os.PathSeparator)
-	metaHeaderSize      = 5 + 5 + 9
+	metaHeaderSize      = 5 + 5 + 10
 )
 
 type IndexerMeta struct {

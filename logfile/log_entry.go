@@ -6,8 +6,8 @@ import (
 )
 
 // crc32	typ    kSize	vSize	expiredAt
-//  4    +   1   +   5   +   5    +    9      = 24
-const maxHeaderSize = 21
+//  4    +   1   +   5   +   5    +    10      = 25 (see binary.MaxVarintLen32 and binary.MaxVarintLen64)
+const maxHeaderSize = 25
 
 type EntryType byte
 
