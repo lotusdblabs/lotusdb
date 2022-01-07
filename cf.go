@@ -256,9 +256,12 @@ func (cf *ColumnFamily) getMemtables() []*memtable.Memtable {
 	cf.mu.Lock()
 	defer cf.mu.Unlock()
 
-	var tables = []*memtable.Memtable{cf.activeMem}
-	for _, tb := range cf.immuMems {
-		tables = append(tables, tb)
+	var tables = make([]*memtable.Memtable, len(cf.immuMems)+1)
+	tables[0] = cf.activeMem
+	lenth := len(cf.immuMems) - 1
+	for idx := 0; idx < len(cf.immuMems); idx++ {
+		tables[idx+1] = cf.immuMems[lenth-idx]
 	}
+
 	return tables
 }
