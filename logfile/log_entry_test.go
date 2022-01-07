@@ -1,6 +1,9 @@
 package logfile
 
-import "testing"
+import (
+	"hash/crc32"
+	"testing"
+)
 
 func TestEncodeEntry(t *testing.T) {
 	e := &LogEntry{
@@ -14,7 +17,6 @@ func TestEncodeEntry(t *testing.T) {
 
 	headerBuf, i := decodeHeader(buf)
 	t.Log(headerBuf.crc32)
-	t.Log(i)
 
-	t.Log(getEntryCrc(e, buf[:8]))
+	t.Log(getEntryCrc(e, buf[crc32.Size:i]))
 }

@@ -16,7 +16,7 @@ func TestOpen(t *testing.T) {
 	defer db.Close()
 
 	now := time.Now()
-	for i := 0; i < 600000; i++ {
+	for i := 0; i < 500000; i++ {
 		err := db.Put(GetKey(i), GetValue128())
 		assert.Nil(t, err)
 	}
