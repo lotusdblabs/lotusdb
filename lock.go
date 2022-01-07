@@ -125,10 +125,13 @@ func (lm *LockMgr) TryLockKey(txnId uint64, cfId int, key uint64, timeout time.D
 				stripe.unLock()
 
 				// wait until timeout.
+				t := time.NewTimer(timeout)
 				select {
-				case <-time.After(timeout):
+				case <-t.C:
+					t.Stop()
 					return ErrLockWaitTimeout
 				case <-waiter:
+					t.Stop()
 				}
 
 				// try to acquire lock again, must hold stripe`s mutex.
@@ -224,11 +227,13 @@ func (lm *LockMgr) acquireLock(stripe *LockMapStripe, txnId, key uint64, exclusi
 }
 
 func (sp *LockMapStripe) lockTimeout(timeout time.Duration) bool {
+	t := time.NewTimer(timeout)
+	defer t.Stop()
 	select {
 	case <-sp.chn:
 		// get lock success.
 		return true
-	case <-time.After(timeout):
+	case <-t.C:
 		return false
 	}
 }

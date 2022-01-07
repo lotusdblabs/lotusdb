@@ -1,14 +1,15 @@
 package lotusdb
 
 import (
-	"github.com/flower-corp/lotusdb/index"
-	"github.com/flower-corp/lotusdb/logfile"
-	"github.com/flower-corp/lotusdb/logger"
-	"github.com/flower-corp/lotusdb/memtable"
 	"os"
 	"os/signal"
 	"syscall"
 	"time"
+
+	"github.com/flower-corp/lotusdb/index"
+	"github.com/flower-corp/lotusdb/logfile"
+	"github.com/flower-corp/lotusdb/logger"
+	"github.com/flower-corp/lotusdb/memtable"
 )
 
 func (cf *ColumnFamily) waitMemSpace() error {
@@ -17,6 +18,8 @@ func (cf *ColumnFamily) waitMemSpace() error {
 	if !cf.activeMem.IsFull() {
 		return nil
 	}
+	t := time.NewTimer(cf.opts.MemSpaceWaitTimeout)
+	defer t.Stop()
 	select {
 	case cf.flushChn <- cf.activeMem:
 		cf.immuMems = append([]*memtable.Memtable{cf.activeMem}, cf.immuMems...)
@@ -38,7 +41,7 @@ func (cf *ColumnFamily) waitMemSpace() error {
 		} else {
 			cf.activeMem = table
 		}
-	case <-time.After(cf.opts.MemSpaceWaitTimeout):
+	case <-t.C:
 		return ErrWaitMemSpaceTimeout
 	}
 	return nil
