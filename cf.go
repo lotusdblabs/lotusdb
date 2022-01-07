@@ -204,9 +204,9 @@ func (cf *ColumnFamily) openMemtables() error {
 		fids = append(fids, uint32(fid))
 	}
 
-	// load in descending order.
+	// load memtables in order.
 	sort.Slice(fids, func(i, j int) bool {
-		return fids[i] > fids[j]
+		return fids[i] < fids[j]
 	})
 	if len(fids) == 0 {
 		fids = append(fids, logfile.InitialLogFileId)
@@ -256,12 +256,11 @@ func (cf *ColumnFamily) getMemtables() []*memtable.Memtable {
 	cf.mu.Lock()
 	defer cf.mu.Unlock()
 
-	var tables = make([]*memtable.Memtable, len(cf.immuMems)+1)
+	immuLen := len(cf.immuMems)
+	var tables = make([]*memtable.Memtable, immuLen+1)
 	tables[0] = cf.activeMem
-	lenth := len(cf.immuMems) - 1
-	for idx := 0; idx < len(cf.immuMems); idx++ {
-		tables[idx+1] = cf.immuMems[lenth-idx]
+	for idx := 0; idx < immuLen; idx++ {
+		tables[idx+1] = cf.immuMems[immuLen-idx-1]
 	}
-
 	return tables
 }
