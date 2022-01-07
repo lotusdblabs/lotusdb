@@ -7,6 +7,17 @@ import (
 	"go.etcd.io/bbolt"
 )
 
+const (
+	defaultBatchLoopNum = 1
+	defaultBatchSize    = 10000
+)
+
+var manager *BPTreeManager
+
+func init() {
+	manager = &BPTreeManager{treeMap: make(map[string]*BPTree)}
+}
+
 type BPTreeOptions struct {
 	IndexType        IndexerType
 	ColumnFamilyName string
@@ -30,58 +41,28 @@ type BPTreeManager struct {
 	sync.RWMutex
 }
 
-const (
-	defaultBatchLoopNum = 1
-	defaultBatchSize    = 10000
-)
-
-var manager *BPTreeManager
-
-func init() {
-	manager = &BPTreeManager{treeMap: make(map[string]*BPTree)}
+func (bo *BPTreeOptions) SetType(typ IndexerType) {
+	bo.IndexType = typ
 }
 
-func (bc *BPTreeOptions) SetType(typ IndexerType) {
-	bc.IndexType = typ
+func (bo *BPTreeOptions) SetColumnFamilyName(cfName string) {
+	bo.ColumnFamilyName = cfName
 }
 
-func (bc *BPTreeOptions) SetColumnFamilyName(cfName string) {
-	bc.ColumnFamilyName = cfName
+func (bo *BPTreeOptions) SetDirPath(dirPath string) {
+	bo.DirPath = dirPath
 }
 
-func (bc *BPTreeOptions) SetDirPath(dirPath string) {
-	bc.DirPath = dirPath
+func (bo *BPTreeOptions) GetType() IndexerType {
+	return bo.IndexType
 }
 
-func (bc *BPTreeOptions) GetType() IndexerType {
-	return bc.IndexType
+func (bo *BPTreeOptions) GetColumnFamilyName() string {
+	return bo.ColumnFamilyName
 }
 
-func (bc *BPTreeOptions) GetColumnFamilyName() string {
-	return bc.ColumnFamilyName
-}
-
-func (bc *BPTreeOptions) GetDirPath() string {
-	return bc.DirPath
-}
-
-func checkBPTreeOptions(opt *BPTreeOptions) error {
-	if opt.ColumnFamilyName == "" {
-		return ErrColumnFamilyNameNil
-	}
-
-	if opt.DirPath == "" {
-		return ErrDirPathNil
-	}
-
-	if opt.BucketName == nil || len(opt.BucketName) == 0 {
-		return ErrBucketNameNil
-	}
-
-	if opt.BatchSize < defaultBatchSize {
-		opt.BatchSize = defaultBatchSize
-	}
-	return nil
+func (bo *BPTreeOptions) GetDirPath() string {
+	return bo.DirPath
 }
 
 // BptreeBolt create a boltdb instance.
@@ -162,7 +143,6 @@ func BptreeBolt(opt *BPTreeOptions) (*BPTree, error) {
 		db:         db,
 		opts:       opt,
 	}
-
 	manager.treeMap[opt.GetColumnFamilyName()] = b
 	return b, nil
 }
@@ -261,10 +241,29 @@ func (b *BPTree) Close() (err error) {
 	return nil
 }
 
-type boltIter struct {
-	b        *BPTree
-	dbBucket *bbolt.Bucket
-	tx       *bbolt.Tx
+func checkBPTreeOptions(opt *BPTreeOptions) error {
+	if opt.ColumnFamilyName == "" {
+		return ErrColumnFamilyNameNil
+	}
+
+	if opt.DirPath == "" {
+		return ErrDirPathNil
+	}
+
+	if opt.BucketName == nil || len(opt.BucketName) == 0 {
+		return ErrBucketNameNil
+	}
+
+	if opt.BatchSize < defaultBatchSize {
+		opt.BatchSize = defaultBatchSize
+	}
+	return nil
+}
+
+type BPTreeIter struct {
+	bpTree *BPTree
+	bucket *bbolt.Bucket
+	tx     *bbolt.Tx
 }
 
 func (b *BPTree) Iter() (IndexerIter, error) {
@@ -278,33 +277,33 @@ func (b *BPTree) Iter() (IndexerIter, error) {
 		return nil, ErrBucketNotInit
 	}
 
-	return &boltIter{
-		b:        b,
-		dbBucket: bucket,
-		tx:       tx,
+	return &BPTreeIter{
+		bpTree: b,
+		bucket: bucket,
+		tx:     tx,
 	}, nil
 }
 
-func (b *boltIter) First() (key, value []byte) {
-	return b.dbBucket.Cursor().First()
+func (b *BPTreeIter) First() (key, value []byte) {
+	return b.bucket.Cursor().First()
 }
 
-func (b *boltIter) Last() (key, value []byte) {
-	return b.dbBucket.Cursor().Last()
+func (b *BPTreeIter) Last() (key, value []byte) {
+	return b.bucket.Cursor().Last()
 }
 
-func (b *boltIter) Seek(seek []byte) (key, value []byte) {
-	return b.dbBucket.Cursor().Seek(seek)
+func (b *BPTreeIter) Seek(seek []byte) (key, value []byte) {
+	return b.bucket.Cursor().Seek(seek)
 }
 
-func (b *boltIter) Next() (key, value []byte) {
-	return b.dbBucket.Cursor().Next()
+func (b *BPTreeIter) Next() (key, value []byte) {
+	return b.bucket.Cursor().Next()
 }
 
-func (b *boltIter) Prev() (key, value []byte) {
-	return b.dbBucket.Cursor().Prev()
+func (b *BPTreeIter) Prev() (key, value []byte) {
+	return b.bucket.Cursor().Prev()
 }
 
-func (b *boltIter) Close() (err error) {
+func (b *BPTreeIter) Close() (err error) {
 	return b.tx.Rollback()
 }

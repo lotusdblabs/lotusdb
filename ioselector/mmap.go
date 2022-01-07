@@ -4,7 +4,7 @@ import (
 	"io"
 	"os"
 
-	"github.com/flowercorp/lotusdb/mmap"
+	"github.com/flower-corp/lotusdb/mmap"
 )
 
 type MMapSelector struct {

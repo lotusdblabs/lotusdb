@@ -4,7 +4,7 @@ import (
 	"strconv"
 	"testing"
 
-	"github.com/flowercorp/lotusdb/logfile"
+	"github.com/flower-corp/lotusdb/logfile"
 	"github.com/stretchr/testify/assert"
 	"github.com/stretchr/testify/require"
 )

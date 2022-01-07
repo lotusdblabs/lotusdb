@@ -3,7 +3,7 @@ package vlog
 import (
 	"errors"
 	"fmt"
-	"github.com/flowercorp/lotusdb/logfile"
+	"github.com/flower-corp/lotusdb/logfile"
 	"io/ioutil"
 	"sort"
 	"strconv"

@@ -5,7 +5,7 @@ import (
 	"os"
 	"sync"
 
-	"github.com/flowercorp/lotusdb/util"
+	"github.com/flower-corp/lotusdb/util"
 )
 
 var (
