@@ -1,6 +1,7 @@
 package lotusdb
 
 import (
+	"context"
 	"errors"
 	"fmt"
 	"io/ioutil"
@@ -40,7 +41,7 @@ type ColumnFamily struct {
 }
 
 // OpenColumnFamily open a new or existed column family.
-func (db *LotusDB) OpenColumnFamily(opts ColumnFamilyOptions) (*ColumnFamily, error) {
+func (db *LotusDB) OpenColumnFamily(ctx context.Context, opts ColumnFamilyOptions) (*ColumnFamily, error) {
 	if opts.CfName == "" {
 		return nil, ErrColoumnFamilyNil
 	}
@@ -96,7 +97,8 @@ func (db *LotusDB) OpenColumnFamily(opts ColumnFamilyOptions) (*ColumnFamily, er
 	cf.vlog = valueLog
 
 	db.cfs[opts.CfName] = cf
-	go cf.listenAndFlush()
+
+	go cf.listenAndFlush(ctx)
 	return cf, nil
 }
 
@@ -263,4 +265,14 @@ func (cf *ColumnFamily) getMemtables() []*memtable.Memtable {
 		tables[idx+1] = cf.immuMems[immuLen-idx-1]
 	}
 	return tables
+}
+
+func (cf *ColumnFamily) trimOneImmuMem() {
+	cf.mu.Lock()
+	if len(cf.immuMems) > 1 {
+		cf.immuMems = cf.immuMems[1:]
+	} else {
+		cf.immuMems = cf.immuMems[:0]
+	}
+	cf.mu.Unlock()
 }

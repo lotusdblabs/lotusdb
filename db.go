@@ -1,6 +1,7 @@
 package lotusdb
 
 import (
+	"context"
 	"errors"
 	"os"
 	"sync"
@@ -19,6 +20,7 @@ type LotusDB struct {
 	lockMgr *LockMgr                 // global lock manager that guarantees consistency of read and write.
 	opts    Options
 	mu      sync.Mutex
+	cancel  context.CancelFunc
 }
 
 // Open a new LotusDB instance.
@@ -30,12 +32,20 @@ func Open(opt Options) (*LotusDB, error) {
 		}
 	}
 
-	db := &LotusDB{opts: opt, cfs: make(map[string]*ColumnFamily)}
+	ctx, cancel := context.WithCancel(context.Background())
+
+	db := &LotusDB{
+		opts:   opt,
+		cfs:    make(map[string]*ColumnFamily),
+		cancel: cancel,
+	}
+
 	// load default column family.
 	if opt.CfOpts.CfName == "" {
 		opt.CfOpts.CfName = DefaultColumnFamilyName
 	}
-	if _, err := db.OpenColumnFamily(opt.CfOpts); err != nil {
+
+	if _, err := db.OpenColumnFamily(ctx, opt.CfOpts); err != nil {
 		return nil, err
 	}
 	return db, nil
@@ -43,11 +53,7 @@ func Open(opt Options) (*LotusDB, error) {
 
 // Close close database.
 func (db *LotusDB) Close() error {
-	for _, cf := range db.cfs {
-		if err := cf.Close(); err != nil {
-			return err
-		}
-	}
+	db.cancel()
 	return nil
 }
 

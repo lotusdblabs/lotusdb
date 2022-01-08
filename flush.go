@@ -1,9 +1,7 @@
 package lotusdb
 
 import (
-	"os"
-	"os/signal"
-	"syscall"
+	"context"
 	"time"
 
 	"github.com/flower-corp/lotusdb/index"
@@ -18,6 +16,7 @@ func (cf *ColumnFamily) waitMemSpace() error {
 	if !cf.activeMem.IsFull() {
 		return nil
 	}
+
 	select {
 	case cf.flushChn <- cf.activeMem:
 		cf.immuMems = append(cf.immuMems, cf.activeMem)
@@ -45,11 +44,12 @@ func (cf *ColumnFamily) waitMemSpace() error {
 	return nil
 }
 
-func (cf *ColumnFamily) listenAndFlush() {
-	sig := make(chan os.Signal, 1)
-	signal.Notify(sig, os.Interrupt, syscall.SIGHUP, syscall.SIGINT, syscall.SIGTERM, syscall.SIGQUIT)
+func (cf *ColumnFamily) listenAndFlush(ctx context.Context) {
 	for {
 		select {
+		case <-ctx.Done():
+			// do some thing... eg: cf.Close()
+			return
 		case table := <-cf.flushChn:
 			// iterate and write data to bptree.
 			iter := table.NewIterator(false)
@@ -86,17 +86,7 @@ func (cf *ColumnFamily) listenAndFlush() {
 				logger.Errorf("listenAndFlush: delete wal log file err.%+v", err)
 			}
 
-			cf.mu.Lock()
-			if len(cf.immuMems) > 1 {
-				cf.immuMems = cf.immuMems[1:]
-			} else {
-				cf.immuMems = cf.immuMems[:0]
-			}
-			cf.mu.Unlock()
-		case <-sig:
-			return
-			// db closed or cf closed
-			//case <-closed:
+			cf.trimOneImmuMem()
 		}
 	}
 }
