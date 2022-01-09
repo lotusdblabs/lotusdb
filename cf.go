@@ -3,6 +3,7 @@ package lotusdb
 import (
 	"errors"
 	"fmt"
+	"github.com/flower-corp/lotusdb/flock"
 	"io/ioutil"
 	"os"
 	"sort"
@@ -18,25 +19,34 @@ import (
 )
 
 var (
-	// ErrColoumnFamilyNil .
+	// ErrColoumnFamilyNil column family name is nil.
 	ErrColoumnFamilyNil = errors.New("column family name is nil")
 
-	// ErrColoumnFamilyExists .
-	ErrColoumnFamilyExists = errors.New("column family is already exist")
-
-	// ErrWaitMemSpaceTimeout .
-	ErrWaitMemSpaceTimeout = errors.New("wait enough memtable space for writing timeout")
+	// ErrWaitMemSpaceTimeout wait enough memtable space for writing timeout.
+	ErrWaitMemSpaceTimeout = errors.New("wait enough memtable space for writing timeout, retry later")
 )
 
 // ColumnFamily is a namespace of keys and values.
+// Each key-value pair in LotusDB is associated with exactly one Column Family.
+// If there is no Column Family specified, key-value pair is associated with Column Family "cf_default".
+// Column Families provide a way to logically partition the database.
 type ColumnFamily struct {
-	activeMem *memtable.Memtable   // Active memtable for writing.
-	immuMems  []*memtable.Memtable // Immutable memtables, waiting to be flushed to disk.
-	vlog      *vlog.ValueLog       // Value Log.
-	indexer   index.Indexer
-	flushChn  chan *memtable.Memtable
-	opts      ColumnFamilyOptions
-	mu        sync.Mutex
+	// Active memtable for writing.
+	activeMem *memtable.Memtable
+	// Immutable memtables, waiting to be flushed to disk.
+	immuMems []*memtable.Memtable
+	// Value Log(Put value into value log according to options ValueThreshold).
+	vlog *vlog.ValueLog
+	// Store keys and meta info.
+	indexer index.Indexer
+	// When the active memtable is full, send it to the flushChn, see listenAndFlush.
+	flushChn chan *memtable.Memtable
+	opts     ColumnFamilyOptions
+	mu       sync.Mutex
+	// Prevent concurrent db using.
+	// At least one FileLockGuard(cf/indexer/vlog dirs are all the same).
+	// And at most three FileLockGuards(cf/indexer/vlog dirs are all different).
+	dirLocks []*flock.FileLockGuard
 }
 
 // OpenColumnFamily open a new or existed column family.
@@ -48,21 +58,38 @@ func (db *LotusDB) OpenColumnFamily(opts ColumnFamilyOptions) (*ColumnFamily, er
 	if opts.DirPath == "" {
 		opts.DirPath = db.opts.DBPath
 	}
+	opts.DirPath += separator + opts.CfName
+	if opts.IndexerDir == "" {
+		opts.IndexerDir = opts.DirPath
+	}
+	if opts.ValueLogDir == "" {
+		opts.ValueLogDir = opts.DirPath
+	}
 
 	db.mu.Lock()
 	defer db.mu.Unlock()
-	if _, ok := db.cfs[opts.CfName]; ok {
-		return nil, ErrColoumnFamilyExists
+	if columnFamily, ok := db.cfs[opts.CfName]; ok {
+		return columnFamily, nil
 	}
-	// create columm family path.
-	if !util.PathExist(opts.DirPath) {
-		if err := os.MkdirAll(opts.DirPath, os.ModePerm); err != nil {
-			return nil, err
+	// create dir paths.
+	paths := []string{opts.DirPath, opts.IndexerDir, opts.ValueLogDir}
+	for _, path := range paths {
+		if !util.PathExist(path) {
+			if err := os.MkdirAll(path, os.ModePerm); err != nil {
+				return nil, err
+			}
 		}
+	}
+
+	// acquire file lock to lock cf/indexer/vlog directory.
+	flocks, err := acquireDirLocks(opts.DirPath, opts.IndexerDir, opts.ValueLogDir)
+	if err != nil {
+		return nil, fmt.Errorf("another process is using dir.%v", err.Error())
 	}
 
 	cf := &ColumnFamily{
 		opts:     opts,
+		dirLocks: flocks,
 		flushChn: make(chan *memtable.Memtable, opts.MemtableNums-1),
 	}
 	// open active and immutable memtables.
@@ -75,8 +102,8 @@ func (db *LotusDB) OpenColumnFamily(opts ColumnFamilyOptions) (*ColumnFamily, er
 		IndexType:        index.BptreeBoltDB,
 		ColumnFamilyName: opts.CfName,
 		BucketName:       []byte(opts.CfName),
-		DirPath:          opts.DirPath,
-		BatchSize:        100000,
+		DirPath:          opts.IndexerDir,
+		BatchSize:        opts.FlushBatchSize,
 	}
 	indexer, err := index.NewIndexer(bptreeOpt)
 	if err != nil {
@@ -101,6 +128,9 @@ func (db *LotusDB) OpenColumnFamily(opts ColumnFamilyOptions) (*ColumnFamily, er
 }
 
 func (cf *ColumnFamily) Close() error {
+	for _, dirLock := range cf.dirLocks {
+		dirLock.Release()
+	}
 	return nil
 }
 
@@ -185,7 +215,7 @@ func (cf *ColumnFamily) Stat() error {
 
 func (cf *ColumnFamily) openMemtables() error {
 	// read wal dirs.
-	fileInfos, err := ioutil.ReadDir(cf.opts.WalDir)
+	fileInfos, err := ioutil.ReadDir(cf.opts.DirPath)
 	if err != nil {
 		return err
 	}
@@ -219,7 +249,7 @@ func (cf *ColumnFamily) openMemtables() error {
 	}
 
 	memOpts := memtable.Options{
-		Path:     cf.opts.WalDir,
+		Path:     cf.opts.DirPath,
 		Fsize:    cf.opts.MemtableSize,
 		TableTyp: tableType,
 		IoType:   ioType,
@@ -263,4 +293,24 @@ func (cf *ColumnFamily) getMemtables() []*memtable.Memtable {
 		tables[idx+1] = cf.immuMems[immuLen-idx-1]
 	}
 	return tables
+}
+
+func acquireDirLocks(cfDir, indexerDir, vlogDir string) ([]*flock.FileLockGuard, error) {
+	var dirs = []string{cfDir}
+	if indexerDir != cfDir {
+		dirs = append(dirs, indexerDir)
+	}
+	if vlogDir != cfDir && vlogDir != indexerDir {
+		dirs = append(dirs, vlogDir)
+	}
+
+	var flocks []*flock.FileLockGuard
+	for _, dir := range dirs {
+		lock, err := flock.AcquireFileLock(dir+separator+lockFileName, false)
+		if err != nil {
+			return nil, err
+		}
+		flocks = append(flocks, lock)
+	}
+	return flocks, nil
 }

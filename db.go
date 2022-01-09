@@ -9,21 +9,24 @@ import (
 )
 
 var (
-	// ErrDefaultCfNil .
+	// ErrDefaultCfNil default comumn family is nil.
 	ErrDefaultCfNil = errors.New("default comumn family is nil")
 )
 
-// LotusDB .
+// LotusDB provide basic opetions for a persistent kv store.
+// It`s methods(Put Get Delete) are self explanatory, and executed in default ColumnFamily.
+// You can create a custom ColumnFamily by calling method OpenColumnFamily.
 type LotusDB struct {
-	cfs     map[string]*ColumnFamily // all column families.
-	lockMgr *LockMgr                 // global lock manager that guarantees consistency of read and write.
+	// all column families.
+	cfs map[string]*ColumnFamily
+	// global lock manager that guarantees consistency of read and write.
+	lockMgr *LockMgr
 	opts    Options
 	mu      sync.Mutex
 }
 
-// Open a new LotusDB instance.
+// Open a new LotusDB instance, actually will just open the default column family.
 func Open(opt Options) (*LotusDB, error) {
-	// add dir lock? todo
 	if !util.PathExist(opt.DBPath) {
 		if err := os.MkdirAll(opt.DBPath, os.ModePerm); err != nil {
 			return nil, err

@@ -8,6 +8,7 @@ import (
 const (
 	DefaultColumnFamilyName = "cf_default"
 	separator               = string(os.PathSeparator)
+	lockFileName            = "FLOCK"
 )
 
 type MemTableType int8
@@ -28,7 +29,8 @@ func DefaultOptions(path string) Options {
 			MemtableNums:        5,
 			MemtableType:        SkipList,
 			MemSpaceWaitTimeout: time.Millisecond * 100,
-			WalDir:              cfPath,
+			IndexerDir:          cfPath,
+			FlushBatchSize:      100000,
 			WalMMap:             false,
 			ValueLogDir:         cfPath,
 			ValueLogBlockSize:   1024 << 20,
@@ -45,6 +47,7 @@ func DefaultColumnFamilyOptions(name string) ColumnFamilyOptions {
 		MemtableNums:        5,
 		MemtableType:        SkipList,
 		MemSpaceWaitTimeout: time.Millisecond * 100,
+		FlushBatchSize:      100000,
 		WalMMap:             false,
 		ValueLogBlockSize:   1024 << 20, // 1GB
 		ValueLogMmap:        false,
@@ -77,7 +80,9 @@ type ColumnFamilyOptions struct {
 
 	MemSpaceWaitTimeout time.Duration
 
-	WalDir string
+	IndexerDir string
+
+	FlushBatchSize int
 
 	WalMMap bool
 
