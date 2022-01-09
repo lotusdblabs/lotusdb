@@ -1,3 +1,5 @@
+// +build !windows,!plan9
+
 package flock
 
 import (
@@ -50,7 +52,7 @@ func SyncDir(path string) error {
 	return nil
 }
 
-// Release relase the file lock.
+// Release release the file lock.
 func (fl *FileLockGuard) Release() error {
 	how := syscall.LOCK_UN | syscall.LOCK_NB
 	if err := syscall.Flock(int(fl.fd.Fd()), how); err != nil {

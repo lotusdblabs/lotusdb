@@ -10,18 +10,27 @@ import (
 
 func TestAcquireFileLock(t *testing.T) {
 	testFn := func(readOnly bool, times int, actual int) {
-		path := "/tmp/FLOCK"
-		defer os.Remove(path)
+		path := "/tmp" + string(os.PathSeparator) + "FLOCK"
 		var count uint32
+		var flock *FileLockGuard
+
+		defer func() {
+			if flock != nil {
+				_ = flock.Release()
+			}
+			_ = os.Remove(path)
+		}()
 
 		wg := &sync.WaitGroup{}
 		wg.Add(times)
 		for i := 0; i < times; i++ {
 			go func() {
 				defer wg.Done()
-				_, err := AcquireFileLock(path, readOnly)
+				lock, err := AcquireFileLock(path, readOnly)
 				if err != nil {
 					atomic.AddUint32(&count, 1)
+				} else {
+					flock = lock
 				}
 			}()
 		}
@@ -51,7 +60,7 @@ func TestAcquireFileLock(t *testing.T) {
 }
 
 func TestFileLockGuard_Release(t *testing.T) {
-	path := "/tmp/FLOCK"
+	path := "/tmp" + string(os.PathSeparator) + "FLOCK"
 	defer os.Remove(path)
 
 	lock, err := AcquireFileLock(path, false)
@@ -61,13 +70,15 @@ func TestFileLockGuard_Release(t *testing.T) {
 }
 
 func TestSyncDir(t *testing.T) {
-	path := "/tmp/test-sync/"
+	path := "/tmp" + string(os.PathSeparator) + "test-sync" + string(os.PathSeparator)
 	err := os.MkdirAll(path, os.ModePerm)
 	assert.Nil(t, err)
-	_, err = os.OpenFile(path+"test.txt", os.O_CREATE, 0644)
+	file, err := os.OpenFile(path+"test.txt", os.O_CREATE, 0644)
 	assert.Nil(t, err)
-	defer os.RemoveAll(path)
-
+	defer func() {
+		_ = file.Close()
+		_ = os.RemoveAll(path)
+	}()
 	err = SyncDir(path)
 	assert.Nil(t, err)
 }
