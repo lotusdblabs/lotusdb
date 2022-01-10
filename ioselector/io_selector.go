@@ -7,12 +7,14 @@ import (
 // FilePerm default permission of the newly created log file.
 const FilePerm = 0644
 
-// IOSelector io selector for fileio and mmap
+// IOSelector io selector for fileio and mmap, used by wal and value log right now.
 type IOSelector interface {
-	// Write a log entry to log file.
+	// Write a slice to log file at offset.
+	// It returns the number of bytes written and an error, if any.
 	Write(b []byte, offset int64) (int, error)
 
-	// Read a log entry from offset.
+	// Read a slice from offset.
+	// It returns the number of bytes read and any error encountered.
 	Read(b []byte, offset int64) (int, error)
 
 	// Sync commits the current contents of the file to stable storage.
