@@ -1,8 +1,12 @@
 package ioselector
 
 import (
+	"errors"
 	"os"
 )
+
+// ErrInvalidFsize invalid file size.
+var ErrInvalidFsize = errors.New("fsize can`t be zero or negative")
 
 // FilePerm default permission of the newly created log file.
 const FilePerm = 0644

@@ -16,6 +16,9 @@ type MMapSelector struct {
 
 // NewMMapSelector create a new mmap selector.
 func NewMMapSelector(fName string, fsize int64) (IOSelector, error) {
+	if fsize <= 0 {
+		return nil, ErrInvalidFsize
+	}
 	file, err := openFile(fName, fsize)
 	if err != nil {
 		return nil, err
@@ -74,7 +77,7 @@ func (lm *MMapSelector) Delete() error {
 	if err := lm.fd.Truncate(0); err != nil {
 		return err
 	}
-	if err := lm.Close(); err != nil {
+	if err := lm.fd.Close(); err != nil {
 		return err
 	}
 	return os.Remove(lm.fd.Name())
