@@ -6,15 +6,18 @@ import (
 )
 
 // crc32	typ    kSize	vSize	expiredAt
-//  4    +   1   +   5   +   5    +    10      = 25 (see binary.MaxVarintLen32 and binary.MaxVarintLen64)
+//  4    +   1   +   5   +   5    +    10      = 25 (refer to binary.MaxVarintLen32 and binary.MaxVarintLen64)
 const maxHeaderSize = 25
 
+// EntryType type of Entry.
 type EntryType byte
 
 const (
+	// TypeDelete represents entry type is delete.
 	TypeDelete EntryType = iota + 1
 )
 
+// LogEntry is the data will be appended in wal or vlog file.
 type LogEntry struct {
 	Key       []byte
 	Value     []byte
@@ -30,7 +33,17 @@ type entryHeader struct {
 	expiredAt int64 // time.Unix
 }
 
+// EncodeEntry will encode entry into a byte slice.
+// The encoded Entry looks like:
+// +-------+--------+----------+------------+-----------+-------+---------+
+// |  crc  |  type  | key size | value size | expiresAt |  key  |  value  |
+// +-------+--------+----------+------------+-----------+-------+---------+
+// |------------------------HEADER----------------------|
+//         |--------------------------crc check---------------------------|
 func EncodeEntry(e *LogEntry) ([]byte, int) {
+	if e == nil {
+		return nil, 0
+	}
 	header := make([]byte, maxHeaderSize)
 	// encode header.
 	header[4] = byte(e.Type)
@@ -53,6 +66,9 @@ func EncodeEntry(e *LogEntry) ([]byte, int) {
 }
 
 func decodeHeader(buf []byte) (*entryHeader, int64) {
+	if len(buf) <= 4 {
+		return nil, 0
+	}
 	h := &entryHeader{
 		crc32: binary.LittleEndian.Uint32(buf[:4]),
 		typ:   EntryType(buf[4]),
@@ -72,6 +88,9 @@ func decodeHeader(buf []byte) (*entryHeader, int64) {
 }
 
 func getEntryCrc(e *LogEntry, h []byte) uint32 {
+	if e == nil {
+		return 0
+	}
 	crc := crc32.ChecksumIEEE(h[:])
 	crc = crc32.Update(crc, crc32.IEEETable, e.Key)
 	crc = crc32.Update(crc, crc32.IEEETable, e.Value)
