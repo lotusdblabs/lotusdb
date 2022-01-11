@@ -3,7 +3,6 @@ package ioselector
 import (
 	"fmt"
 	"github.com/stretchr/testify/assert"
-	"os"
 	"path/filepath"
 	"testing"
 )
@@ -14,6 +13,46 @@ func TestNewFileIOSelector(t *testing.T) {
 
 func TestNewMMapSelector(t *testing.T) {
 	testNewIOSelector(t, 1)
+}
+
+func TestFileIOSelector_Write(t *testing.T) {
+	testIOSelectorWrite(t, 0)
+}
+
+func TestMMapSelector_Write(t *testing.T) {
+	testIOSelectorWrite(t, 1)
+}
+
+func TestFileIOSelector_Read(t *testing.T) {
+	testIOSelectorRead(t, 0)
+}
+
+func TestMMapSelector_Read(t *testing.T) {
+	testIOSelectorRead(t, 1)
+}
+
+func TestFileIOSelector_Sync(t *testing.T) {
+	testIOSelectorSync(t, 0)
+}
+
+func TestMMapSelector_Sync(t *testing.T) {
+	testIOSelectorSync(t, 1)
+}
+
+func TestFileIOSelector_Close(t *testing.T) {
+	testIOSelectorClose(t, 0)
+}
+
+func TestMMapSelector_Close(t *testing.T) {
+	testIOSelectorClose(t, 1)
+}
+
+func TestFileIOSelector_Delete(t *testing.T) {
+	testIOSelectorDelete(t, 0)
+}
+
+func TestMMapSelector_Delete(t *testing.T) {
+	testIOSelectorDelete(t, 1)
 }
 
 func testNewIOSelector(t *testing.T, ioType uint8) {
@@ -63,20 +102,27 @@ func testNewIOSelector(t *testing.T, ioType uint8) {
 	}
 }
 
-func TestFileIOSelector_Write(t *testing.T) {
+func testIOSelectorWrite(t *testing.T, ioType uint8) {
 	absPath, err := filepath.Abs(filepath.Join("/tmp", "00000001.vlog"))
 	assert.Nil(t, err)
-	fd, err := openFile(absPath, 100)
+	var size int64 = 1048576
+
+	var selector IOSelector
+	if ioType == 0 {
+		selector, err = NewFileIOSelector(absPath, size)
+	}
+	if ioType == 1 {
+		selector, err = NewMMapSelector(absPath, size)
+	}
 	assert.Nil(t, err)
 	defer func() {
-		if fd != nil {
-			_ = fd.Close()
-			_ = os.Remove(fd.Name())
+		if selector != nil {
+			_ = selector.Delete()
 		}
 	}()
 
 	type fields struct {
-		fd *os.File
+		selector IOSelector
 	}
 	type args struct {
 		b      []byte
@@ -90,31 +136,33 @@ func TestFileIOSelector_Write(t *testing.T) {
 		wantErr bool
 	}{
 		{
-			"nil-byte", fields{fd: fd}, args{b: nil, offset: 0}, 0, false,
+			"nil-byte", fields{selector: selector}, args{b: nil, offset: 0}, 0, false,
 		},
 		{
-			"one-byte", fields{fd: fd}, args{b: []byte("0"), offset: 0}, 1, false,
+			"one-byte", fields{selector: selector}, args{b: []byte("0"), offset: 0}, 1, false,
 		},
 		{
-			"many-bytes", fields{fd: fd}, args{b: []byte("lotusdb"), offset: 0}, 7, false,
+			"many-bytes", fields{selector: selector}, args{b: []byte("lotusdb"), offset: 0}, 7, false,
 		},
 		{
-			"bigvalue-byte", fields{fd: fd}, args{b: []byte(fmt.Sprintf("%01048576d", 123)), offset: 0}, 1048576, false,
+			"bigvalue-byte", fields{selector: selector}, args{b: []byte(fmt.Sprintf("%01048576d", 123)), offset: 0}, 1048576, false,
 		},
 		{
-			"exceed-size", fields{fd: fd}, args{b: []byte(fmt.Sprintf("%01048577d", 123)), offset: 0}, 1048577, false,
+			"exceed-size", fields{selector: selector}, args{b: []byte(fmt.Sprintf("%01048577d", 123)), offset: 0}, 1048577, false,
 		},
 		{
-			"EOF-error", fields{fd: fd}, args{b: []byte("lotusdb"), offset: -1}, 0, true,
+			"EOF-error", fields{selector: selector}, args{b: []byte("lotusdb"), offset: -1}, 0, true,
 		},
 	}
 
 	for _, tt := range tests {
 		t.Run(tt.name, func(t *testing.T) {
-			fio := &FileIOSelector{
-				fd: tt.fields.fd,
+			got, err := tt.fields.selector.Write(tt.args.b, tt.args.offset)
+			// io.EOF err in mmmap.
+			if tt.want == 1048577 && ioType == 1 {
+				tt.wantErr = true
+				tt.want = 0
 			}
-			got, err := fio.Write(tt.args.b, tt.args.offset)
 			if (err != nil) != tt.wantErr {
 				t.Errorf("Write() error = %v, wantErr %v", err, tt.wantErr)
 				return
@@ -126,9 +174,15 @@ func TestFileIOSelector_Write(t *testing.T) {
 	}
 }
 
-func TestFileIOSelector_Read(t *testing.T) {
+func testIOSelectorRead(t *testing.T, ioType uint8) {
 	absPath, err := filepath.Abs(filepath.Join("/tmp", "00000001.wal"))
-	selector, err := NewFileIOSelector(absPath, 100)
+	var selector IOSelector
+	if ioType == 0 {
+		selector, err = NewFileIOSelector(absPath, 100)
+	}
+	if ioType == 1 {
+		selector, err = NewMMapSelector(absPath, 100)
+	}
 	assert.Nil(t, err)
 	defer func() {
 		if selector != nil {
@@ -207,11 +261,18 @@ func writeSomeData(selector IOSelector, t *testing.T) []int64 {
 	return offsets
 }
 
-func TestFileIOSelector_Sync(t *testing.T) {
+func testIOSelectorSync(t *testing.T, ioType uint8) {
 	sync := func(id int, fsize int64) {
 		absPath, err := filepath.Abs(filepath.Join("/tmp", fmt.Sprintf("0000000%d.wal", id)))
 		assert.Nil(t, err)
-		selector, err := NewFileIOSelector(absPath, fsize)
+		var selector IOSelector
+		if ioType == 0 {
+			selector, err = NewFileIOSelector(absPath, fsize)
+		}
+		if ioType == 1 {
+			selector, err = NewMMapSelector(absPath, fsize)
+		}
+		assert.Nil(t, err)
 		defer func() {
 			if selector != nil {
 				_ = selector.Delete()
@@ -222,16 +283,23 @@ func TestFileIOSelector_Sync(t *testing.T) {
 		assert.Nil(t, err)
 	}
 
-	for i := 0; i < 3; i++ {
+	for i := 1; i < 4; i++ {
 		sync(i, int64(i*100))
 	}
 }
 
-func TestFileIOSelector_Close(t *testing.T) {
+func testIOSelectorClose(t *testing.T, ioType uint8) {
 	sync := func(id int, fsize int64) {
 		absPath, err := filepath.Abs(filepath.Join("/tmp", fmt.Sprintf("0000000%d.wal", id)))
 		assert.Nil(t, err)
-		selector, err := NewFileIOSelector(absPath, fsize)
+		var selector IOSelector
+		if ioType == 0 {
+			selector, err = NewFileIOSelector(absPath, fsize)
+		}
+		if ioType == 1 {
+			selector, err = NewMMapSelector(absPath, fsize)
+		}
+		assert.Nil(t, err)
 		defer func() {
 			if selector != nil {
 				// will close before delete it.
@@ -242,12 +310,12 @@ func TestFileIOSelector_Close(t *testing.T) {
 		assert.Nil(t, err)
 	}
 
-	for i := 0; i < 3; i++ {
+	for i := 1; i < 4; i++ {
 		sync(i, int64(i*100))
 	}
 }
 
-func TestFileIOSelector_Delete(t *testing.T) {
+func testIOSelectorDelete(t *testing.T, ioType uint8) {
 	tests := []struct {
 		name    string
 		wantErr bool
@@ -261,7 +329,13 @@ func TestFileIOSelector_Delete(t *testing.T) {
 		t.Run(tt.name, func(t *testing.T) {
 			absPath, err := filepath.Abs(filepath.Join("/tmp", fmt.Sprintf("0000000%d.wal", i)))
 			assert.Nil(t, err)
-			selector, err := NewFileIOSelector(absPath, int64(i*100))
+			var selector IOSelector
+			if ioType == 0 {
+				selector, err = NewFileIOSelector(absPath, int64((i+1)*100))
+			}
+			if ioType == 1 {
+				selector, err = NewFileIOSelector(absPath, int64((i+1)*100))
+			}
 			assert.Nil(t, err)
 
 			if err := selector.Delete(); (err != nil) != tt.wantErr {

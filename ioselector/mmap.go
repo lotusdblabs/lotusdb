@@ -34,7 +34,10 @@ func NewMMapSelector(fName string, fsize int64) (IOSelector, error) {
 // Write copy slice b into mapped region(buf) at offset.
 func (lm *MMapSelector) Write(b []byte, offset int64) (int, error) {
 	length := int64(len(b))
-	if length+offset >= lm.bufLen {
+	if length <= 0 {
+		return 0, nil
+	}
+	if offset < 0 || length+offset > lm.bufLen {
 		return 0, io.EOF
 	}
 	return copy(lm.buf[offset:], b), nil
