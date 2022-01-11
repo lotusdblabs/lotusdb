@@ -30,7 +30,8 @@ type IOSelector interface {
 	// It will return an error if it has already been called.
 	Close() error
 
-	// Delete delete the file
+	// Delete delete the file.
+	// Must close it before delete, and will unmap if in MMapSelector.
 	Delete() error
 }
 
