@@ -3,6 +3,8 @@ package logfile
 import (
 	"fmt"
 	"github.com/stretchr/testify/assert"
+	"os"
+	"path/filepath"
 	"reflect"
 	"sync/atomic"
 	"testing"
@@ -290,4 +292,69 @@ func testLogFileReadLogEntry(t *testing.T, ioType IOType) {
 			}
 		})
 	}
+}
+
+func TestLogFile_Sync(t *testing.T) {
+	sync := func(ioType IOType) {
+		file, err := OpenLogFile("/tmp", 0, 100, WAL, ioType)
+		assert.Nil(t, err)
+		defer func() {
+			if file != nil {
+				_ = file.Delete()
+			}
+		}()
+		err = file.Sync()
+		assert.Nil(t, err)
+	}
+
+	t.Run("fileio", func(t *testing.T) {
+		sync(FileIO)
+	})
+
+	t.Run("mmap", func(t *testing.T) {
+		sync(MMap)
+	})
+}
+
+func TestLogFile_Close(t *testing.T) {
+	var fid uint32 = 0
+	defer func() {
+		f, err := filepath.Abs(filepath.Join("/tmp", fmt.Sprintf("%09d.wal", fid)))
+		assert.Nil(t, err)
+		err = os.Remove(f)
+		assert.Nil(t, err)
+	}()
+
+	closeLf := func(ioType IOType) {
+		file, err := OpenLogFile("/tmp", fid, 100, WAL, ioType)
+		assert.Nil(t, err)
+
+		err = file.Close()
+		assert.Nil(t, err)
+	}
+
+	t.Run("fileio", func(t *testing.T) {
+		closeLf(FileIO)
+	})
+
+	t.Run("mmap", func(t *testing.T) {
+		closeLf(MMap)
+	})
+}
+
+func TestLogFile_Delete(t *testing.T) {
+	deleteLf := func(ioType IOType) {
+		file, err := OpenLogFile("/tmp", 0, 100, WAL, ioType)
+		assert.Nil(t, err)
+		err = file.Delete()
+		assert.Nil(t, err)
+	}
+
+	t.Run("fileio", func(t *testing.T) {
+		deleteLf(FileIO)
+	})
+
+	t.Run("mmap", func(t *testing.T) {
+		deleteLf(MMap)
+	})
 }
