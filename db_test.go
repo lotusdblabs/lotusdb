@@ -24,13 +24,23 @@ func TestOpen(t *testing.T) {
 	t.Log("writing 50w records, time spent: ", time.Since(now).Milliseconds())
 }
 
+func TestLotusDB_Put(t *testing.T) {
+	options := DefaultOptions("/tmp/lotusdb")
+	db, err := Open(options)
+	assert.Nil(t, err)
+	defer db.Close()
+
+	err = db.Put([]byte("k"), []byte("lotusdb"))
+	assert.Nil(t, err)
+}
+
 func TestLotusDB_Get(t *testing.T) {
 	options := DefaultOptions("/tmp/lotusdb")
 	db, err := Open(options)
 	assert.Nil(t, err)
 	defer db.Close()
 
-	v, err := db.Get(GetKey(398721))
+	v, err := db.Get([]byte("k"))
 	if err != nil {
 		t.Log(err)
 	}

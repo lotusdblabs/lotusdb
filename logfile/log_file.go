@@ -4,6 +4,7 @@ import (
 	"errors"
 	"fmt"
 	"hash/crc32"
+	"io"
 	"os"
 	"sync"
 	"sync/atomic"
@@ -96,6 +97,10 @@ func (lf *LogFile) ReadLogEntry(offset int64) (*LogEntry, int64, error) {
 		return nil, 0, err
 	}
 	header, size := decodeHeader(headerBuf)
+	// the end of entries.
+	if header.crc32 == 0 && header.kSize == 0 && header.vSize == 0 {
+		return nil, 0, io.EOF
+	}
 
 	e := &LogEntry{
 		ExpiredAt: header.expiredAt,
