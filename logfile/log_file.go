@@ -4,7 +4,6 @@ import (
 	"errors"
 	"fmt"
 	"hash/crc32"
-	"io"
 	"os"
 	"sync"
 	"sync/atomic"
@@ -98,24 +97,23 @@ func (lf *LogFile) ReadLogEntry(offset int64) (*LogEntry, int64, error) {
 	}
 	header, size := decodeHeader(headerBuf)
 
-	kSize, vSize := int64(header.kSize), int64(header.vSize)
-	if kSize == 0 && vSize == 0 {
-		return nil, 0, io.EOF
-	}
-
-	var entrySize = size + kSize + vSize
-	// read entry key and value.
-	kvBuf, err := lf.readBytes(offset+size, kSize+vSize)
-	if err != nil {
-		return nil, 0, err
-	}
-
 	e := &LogEntry{
-		Key:       kvBuf[:kSize],
-		Value:     kvBuf[kSize:],
 		ExpiredAt: header.expiredAt,
 		Type:      header.typ,
 	}
+	kSize, vSize := int64(header.kSize), int64(header.vSize)
+	var entrySize = size + kSize + vSize
+
+	// read entry key and value.
+	if kSize > 0 || vSize > 0 {
+		kvBuf, err := lf.readBytes(offset+size, kSize+vSize)
+		if err != nil {
+			return nil, 0, err
+		}
+		e.Key = kvBuf[:kSize]
+		e.Value = kvBuf[kSize:]
+	}
+
 	// crc32 check.
 	if crc := getEntryCrc(e, headerBuf[crc32.Size:size]); crc != header.crc32 {
 		return nil, 0, ErrInvalidCrc
@@ -130,6 +128,9 @@ func (lf *LogFile) ReadLogEntry(offset int64) (*LogEntry, int64, error) {
 // Read a byte slice in the log file at offset, slice length is the given size.
 // It returns the byte slice and error, if any.
 func (lf *LogFile) Read(offset int64, size uint32) ([]byte, error) {
+	if size <= 0 {
+		return []byte{}, nil
+	}
 	buf := make([]byte, size)
 	if _, err := lf.IoSelector.Read(buf, offset); err != nil {
 		return nil, err
@@ -140,6 +141,9 @@ func (lf *LogFile) Read(offset int64, size uint32) ([]byte, error) {
 // Write a byte slice at the end of log file.
 // Returns an error, if any.
 func (lf *LogFile) Write(buf []byte) error {
+	if len(buf) <= 0 {
+		return nil
+	}
 	offset := atomic.LoadInt64(&lf.WriteAt)
 	n, err := lf.IoSelector.Write(buf, offset)
 	if err != nil {
