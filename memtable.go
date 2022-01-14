@@ -10,6 +10,8 @@ import (
 	"time"
 )
 
+const paddedSize = 64
+
 type (
 	memtable struct {
 		sklIter *arenaskl.Iterator
@@ -23,19 +25,20 @@ type (
 		fid     uint32
 		fsize   int64
 		ioType  logfile.IOType
-		memSize int64
+		memSize uint32
 	}
 
 	memValue struct {
 		value     []byte
 		expiredAt int64
+		typ       byte
 	}
 )
 
 func openMemtable(opts memOptions) (*memtable, error) {
 	// init skip list and arena.
 	var sklIter = new(arenaskl.Iterator)
-	arena := arenaskl.NewArena(uint32(opts.memSize))
+	arena := arenaskl.NewArena(opts.memSize + uint32(arenaskl.MaxNodeSize))
 	skl := arenaskl.NewSkiplist(arena)
 	sklIter.Init(skl)
 	table := &memtable{opts: opts, skl: skl, sklIter: sklIter}
@@ -52,7 +55,13 @@ func openMemtable(opts memOptions) (*memtable, error) {
 	for {
 		if entry, size, err := wal.ReadLogEntry(offset); err == nil {
 			offset += size
-			err := table.sklIter.Put(entry.Key, entry.Value, uint16(entry.Type))
+			mv := memValue{
+				value:     entry.Value,
+				expiredAt: entry.ExpiredAt,
+				typ:       byte(entry.Type),
+			}
+			mvBuf := mv.encode()
+			err := table.sklIter.Put(entry.Key, mvBuf)
 			if err != nil {
 				logger.Errorf("put value into skip list err.%+v", err)
 				return nil, err
@@ -94,21 +103,34 @@ func (mt *memtable) put(key []byte, value []byte, deleted bool, opts WriteOption
 	}
 
 	// write data into skip list in memory.
-	mv := memValue{value: value, expiredAt: entry.ExpiredAt}
+	mv := memValue{value: value, expiredAt: entry.ExpiredAt, typ: byte(entry.Type)}
 	mvBuf := mv.encode()
-	err := mt.sklIter.Put(key, mvBuf, uint16(entry.Type))
+
+	var aheadSize uint32
+	var full bool
+	defer func() {
+		if full {
+			logger.Errorf("ahead areasize = %d", aheadSize)
+		}
+	}()
+
+	aheadSize = mt.skl.Size()
+	err := mt.sklIter.Put(key, mvBuf)
+	if err == arenaskl.ErrArenaFull {
+		full = true
+		logger.Errorf("areasize = %d", mt.skl.Size())
+	}
 	return err
 }
 
 // Get .
 func (mt *memtable) get(key []byte) []byte {
-	found := mt.sklIter.Seek(key)
-	if !found || mt.sklIter.Meta() == uint16(logfile.TypeDelete) {
+	if found := mt.sklIter.Seek(key); !found {
 		return nil
 	}
 
 	mv := decodeMemValue(mt.sklIter.Value())
-	if len(mv.value) == 0 || mv.expiredAt <= time.Now().Unix() {
+	if mv.typ == byte(logfile.TypeDelete) || mv.expiredAt <= time.Now().Unix() {
 		return nil
 	}
 	return mv.value
@@ -124,8 +146,8 @@ func (mt *memtable) syncWAL() error {
 	return mt.wal.Sync()
 }
 
-func (mt *memtable) isFull() bool {
-	if int64(mt.skl.Size()) >= mt.opts.memSize {
+func (mt *memtable) isFull(delta uint32) bool {
+	if mt.skl.Size()+delta+paddedSize >= mt.opts.memSize {
 		return true
 	}
 	if mt.wal == nil {
@@ -133,7 +155,7 @@ func (mt *memtable) isFull() bool {
 	}
 
 	walSize := atomic.LoadInt64(&mt.wal.WriteAt)
-	return walSize >= mt.opts.memSize
+	return walSize >= int64(mt.opts.memSize)
 }
 
 func (mt *memtable) logFileId() uint32 {
@@ -147,8 +169,9 @@ func (mt *memtable) deleteWal() error {
 }
 
 func (mv *memValue) encode() []byte {
-	head := make([]byte, 10)
-	var index int
+	head := make([]byte, 11)
+	head[0] = mv.typ
+	var index = 1
 	index += binary.PutVarint(head[index:], mv.expiredAt)
 
 	buf := make([]byte, len(mv.value)+index)
@@ -158,8 +181,8 @@ func (mv *memValue) encode() []byte {
 }
 
 func decodeMemValue(buf []byte) memValue {
-	var index int
+	var index = 1
 	ex, n := binary.Varint(buf[index:])
 	index += n
-	return memValue{expiredAt: ex, value: buf[index:]}
+	return memValue{typ: buf[0], expiredAt: ex, value: buf[index:]}
 }

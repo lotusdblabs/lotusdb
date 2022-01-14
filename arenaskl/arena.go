@@ -78,7 +78,7 @@ func (a *Arena) Alloc(size, overflow uint32, align Align) (uint32, error) {
 	}
 
 	// Pad the allocation with enough bytes to ensure the requested alignment.
-	padded := uint32(size) + uint32(align)
+	padded := size + uint32(align)
 
 	// Use 64-bit arithmetic to protect against overflow.
 	newSize := atomic.AddUint64(&a.n, uint64(padded))

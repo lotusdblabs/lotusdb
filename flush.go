@@ -11,15 +11,15 @@ import (
 	"github.com/flower-corp/lotusdb/logger"
 )
 
-func (cf *ColumnFamily) waitMemSpace() error {
+func (cf *ColumnFamily) waitMemSpace(size uint32) error {
 	cf.mu.Lock()
 	defer cf.mu.Unlock()
-	if !cf.activeMem.isFull() {
+	if !cf.activeMem.isFull(size) {
 		return nil
 	}
 
-	t := time.NewTimer(cf.opts.MemSpaceWaitTimeout)
-	defer t.Stop()
+	timer := time.NewTimer(cf.opts.MemSpaceWaitTimeout)
+	defer timer.Stop()
 	select {
 	case cf.flushChn <- cf.activeMem:
 		cf.immuMems = append(cf.immuMems, cf.activeMem)
@@ -31,7 +31,7 @@ func (cf *ColumnFamily) waitMemSpace() error {
 		memOpts := memOptions{
 			path:    cf.opts.DirPath,
 			fid:     cf.activeMem.logFileId() + 1,
-			fsize:   cf.opts.MemtableSize,
+			fsize:   int64(cf.opts.MemtableSize),
 			ioType:  ioType,
 			memSize: cf.opts.MemtableSize,
 		}
@@ -40,7 +40,7 @@ func (cf *ColumnFamily) waitMemSpace() error {
 		} else {
 			cf.activeMem = table
 		}
-	case <-t.C:
+	case <-timer.C:
 		return ErrWaitMemSpaceTimeout
 	}
 	return nil

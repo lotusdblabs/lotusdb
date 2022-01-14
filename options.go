@@ -11,13 +11,6 @@ const (
 	lockFileName            = "FLOCK"
 )
 
-type MemTableType int8
-
-const (
-	SkipList MemTableType = iota
-	HashSkipList
-)
-
 func DefaultOptions(path string) Options {
 	cfPath := path + separator + DefaultColumnFamilyName
 	return Options{
@@ -27,7 +20,6 @@ func DefaultOptions(path string) Options {
 			DirPath:             cfPath,
 			MemtableSize:        64 << 20,
 			MemtableNums:        5,
-			MemtableType:        SkipList,
 			MemSpaceWaitTimeout: time.Millisecond * 100,
 			IndexerDir:          cfPath,
 			FlushBatchSize:      100000,
@@ -45,7 +37,6 @@ func DefaultColumnFamilyOptions(name string) ColumnFamilyOptions {
 		CfName:              name,
 		MemtableSize:        64 << 20, // 64MB
 		MemtableNums:        5,
-		MemtableType:        SkipList,
 		MemSpaceWaitTimeout: time.Millisecond * 100,
 		FlushBatchSize:      100000,
 		WalMMap:             false,
@@ -71,12 +62,10 @@ type ColumnFamilyOptions struct {
 	DirPath string
 
 	// MemtableSize
-	MemtableSize int64
+	MemtableSize uint32
 
 	// MemtableNums max numbers of memtable
 	MemtableNums int
-
-	MemtableType MemTableType
 
 	MemSpaceWaitTimeout time.Duration
 

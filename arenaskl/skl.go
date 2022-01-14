@@ -57,7 +57,7 @@ const (
 	pValue      = 1 / math.E
 	linksSize   = int(unsafe.Sizeof(links{}))
 	deletedVal  = 0
-	maxNodeSize = int(unsafe.Sizeof(node{}))
+	MaxNodeSize = int(unsafe.Sizeof(node{}))
 )
 
 var (
@@ -138,7 +138,7 @@ func (s *Skiplist) Arena() *Arena { return s.arena }
 // Size returns the number of bytes that have allocated from the arena.
 func (s *Skiplist) Size() uint32 { return s.arena.Size() }
 
-func (s *Skiplist) newNode(key, val []byte, meta uint16) (nd *node, height uint32, err error) {
+func (s *Skiplist) newNode(key, val []byte) (nd *node, height uint32, err error) {
 	height = s.randomHeight()
 	nd, err = newNode(s.arena, height)
 	if err != nil {
@@ -161,7 +161,7 @@ func (s *Skiplist) newNode(key, val []byte, meta uint16) (nd *node, height uint3
 		return
 	}
 
-	nd.value, err = s.allocVal(val, meta)
+	nd.value, err = s.allocVal(val)
 	return
 }
 
@@ -188,19 +188,19 @@ func (s *Skiplist) allocKey(key []byte) (keyOffset uint32, keySize uint32, err e
 	return
 }
 
-func (s *Skiplist) allocVal(val []byte, meta uint16) (uint64, error) {
-	if len(val) > math.MaxUint16 {
+func (s *Skiplist) allocVal(val []byte) (uint64, error) {
+	if len(val) > math.MaxUint32 {
 		panic("value is too large")
 	}
 
-	valSize := uint16(len(val))
-	valOffset, err := s.arena.Alloc(uint32(valSize), 0 /* overflow */, Align1)
+	valSize := uint32(len(val))
+	valOffset, err := s.arena.Alloc(valSize, 0 /* overflow */, Align1)
 	if err != nil {
 		return 0, err
 	}
 
-	copy(s.arena.GetBytes(valOffset, uint32(valSize)), val)
-	return encodeValue(valOffset, valSize, meta), nil
+	copy(s.arena.GetBytes(valOffset, valSize), val)
+	return encodeValue(valOffset, valSize), nil
 }
 
 func (s *Skiplist) findSpliceForLevel(key []byte, level int, start *node) (prev, next *node, found bool) {
@@ -242,18 +242,14 @@ func (s *Skiplist) getPrev(nd *node, h int) *node {
 	return (*node)(s.arena.GetPointer(offset))
 }
 
-func encodeValue(valOffset uint32, valSize, meta uint16) uint64 {
-	return uint64(meta)<<48 | uint64(valSize)<<32 | uint64(valOffset)
+func encodeValue(valOffset, valSize uint32) uint64 {
+	return uint64(valSize)<<32 | uint64(valOffset)
 }
 
-func decodeValue(value uint64) (valOffset uint32, valSize uint16) {
+func decodeValue(value uint64) (valOffset uint32, valSize uint32) {
 	valOffset = uint32(value)
-	valSize = uint16(value >> 32)
+	valSize = uint32(value >> 32)
 	return
-}
-
-func decodeMeta(value uint64) uint16 {
-	return uint16(value >> 48)
 }
 
 type links struct {
@@ -274,8 +270,7 @@ type node struct {
 	// Multiple parts of the value are encoded as a single uint64 so that it
 	// can be atomically loaded and stored:
 	//   value offset: uint32 (bits 0-31)
-	//   value size  : uint16 (bits 32-47)
-	//   metadata    : uint16 (bits 48-63)
+	//   value size  : uint16 (bits 32-63)
 	value uint64
 
 	// Most nodes do not need to use the full height of the tower, since the
@@ -297,7 +292,7 @@ func newNode(arena *Arena, height uint32) (nd *node, err error) {
 	// is less than maxHeight.
 	unusedSize := (maxHeight - int(height)) * linksSize
 
-	nodeOffset, err := arena.Alloc(uint32(maxNodeSize-unusedSize), uint32(unusedSize), Align8)
+	nodeOffset, err := arena.Alloc(uint32(MaxNodeSize-unusedSize), uint32(unusedSize), Align8)
 	if err != nil {
 		return
 	}

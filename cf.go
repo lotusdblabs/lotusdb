@@ -41,7 +41,7 @@ type ColumnFamily struct {
 	// When the active memtable is full, send it to the flushChn, see listenAndFlush.
 	flushChn chan *memtable
 	opts     ColumnFamilyOptions
-	mu       sync.Mutex
+	mu       sync.RWMutex
 	// Prevent concurrent db using.
 	// At least one FileLockGuard(cf/indexer/vlog dirs are all the same).
 	// And at most three FileLockGuards(cf/indexer/vlog dirs are all different).
@@ -142,7 +142,8 @@ func (cf *ColumnFamily) Put(key, value []byte) error {
 // PutWithOptions put to current column family with options.
 func (cf *ColumnFamily) PutWithOptions(key, value []byte, opt *WriteOptions) error {
 	// waiting for enough memtable sapce to write.
-	if err := cf.waitMemSpace(); err != nil {
+	size := uint32(len(key) + len(value))
+	if err := cf.waitMemSpace(size); err != nil {
 		return err
 	}
 	if opt == nil {
@@ -241,7 +242,7 @@ func (cf *ColumnFamily) openMemtables() error {
 	}
 	memOpts := memOptions{
 		path:    cf.opts.DirPath,
-		fsize:   cf.opts.MemtableSize,
+		fsize:   int64(cf.opts.MemtableSize),
 		ioType:  ioType,
 		memSize: cf.opts.MemtableSize,
 	}

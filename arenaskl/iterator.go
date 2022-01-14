@@ -62,12 +62,7 @@ func (it *Iterator) Key() []byte {
 // Value returns the value at the current position.
 func (it *Iterator) Value() []byte {
 	valOffset, valSize := decodeValue(it.value)
-	return it.arena.GetBytes(valOffset, uint32(valSize))
-}
-
-// Meta returns the metadata at the current position.
-func (it *Iterator) Meta() uint16 {
-	return decodeMeta(it.value)
+	return it.arena.GetBytes(valOffset, valSize)
 }
 
 // Next advances to the next position. If there are no following nodes, then
@@ -117,11 +112,11 @@ func (it *Iterator) SeekForPrev(key []byte) (found bool) {
 // iterator on it. If the record already exists, then Add positions the iterator
 // on the most current value and returns ErrRecordExists. If there isn't enough
 // room in the arena, then Add returns ErrArenaFull.
-func (it *Iterator) Put(key []byte, val []byte, meta uint16) error {
+func (it *Iterator) Put(key []byte, val []byte) error {
 	var spl [maxHeight]splice
 	if it.seekForSplice(key, &spl) {
 		// Found a matching node, but handle case where it's been deleted.
-		return it.setValueIfDeleted(spl[0].next, val, meta)
+		return it.setValueIfDeleted(spl[0].next, val)
 	}
 
 	if it.list.testing {
@@ -131,7 +126,7 @@ func (it *Iterator) Put(key []byte, val []byte, meta uint16) error {
 		runtime.Gosched()
 	}
 
-	nd, height, err := it.list.newNode(key, val, meta)
+	nd, height, err := it.list.newNode(key, val)
 	if err != nil {
 		return err
 	}
@@ -218,7 +213,7 @@ func (it *Iterator) Put(key []byte, val []byte, meta uint16) error {
 					panic("how can another thread have inserted a node at a non-base level?")
 				}
 
-				return it.setValueIfDeleted(next, val, meta)
+				return it.setValueIfDeleted(next, val)
 			}
 		}
 	}
@@ -234,33 +229,13 @@ func (it *Iterator) Put(key []byte, val []byte, meta uint16) error {
 // returns ErrRecordUpdated. If the record has been deleted, then Set keeps
 // the iterator positioned on the current record with the current value and
 // returns ErrRecordDeleted.
-func (it *Iterator) Set(val []byte, meta uint16) error {
-	newVal, err := it.list.allocVal(val, meta)
+func (it *Iterator) Set(val []byte) error {
+	newVal, err := it.list.allocVal(val)
 	if err != nil {
 		return err
 	}
 
 	return it.trySetValue(newVal)
-}
-
-// SetMeta updates the meta value of the current iteration record if it has not
-// been updated or deleted since iterating or seeking to it. If the record has
-// been updated, then SetMeta positions the iterator on the most current value
-// and returns ErrRecordUpdated. If the record has been deleted, then SetMeta
-// keeps the iterator positioned on the current record with the current value
-// and returns ErrRecordDeleted.
-func (it *Iterator) SetMeta(meta uint16) error {
-	// Try to reuse the same value bytes. Do this only in the case where meta
-	// is increasing, in order to avoid cases where the meta is changed, then
-	// changed back to the original value, which would make it impossible to
-	// detect updates had occurred in the interim.
-	if meta > decodeMeta(it.value) {
-		valOffset, valSize := decodeValue(it.value)
-		newVal := encodeValue(valOffset, valSize, meta)
-		return it.trySetValue(newVal)
-	}
-
-	return it.Set(it.Value(), meta)
 }
 
 // Delete marks the current iterator record as deleted from the store if it
@@ -333,7 +308,7 @@ func (it *Iterator) trySetValue(new uint64) error {
 	return nil
 }
 
-func (it *Iterator) setValueIfDeleted(nd *node, val []byte, meta uint16) error {
+func (it *Iterator) setValueIfDeleted(nd *node, val []byte) error {
 	var newVal uint64
 	var err error
 
@@ -345,7 +320,7 @@ func (it *Iterator) setValueIfDeleted(nd *node, val []byte, meta uint16) error {
 			return ErrRecordExists
 		}
 		if newVal == 0 {
-			newVal, err = it.list.allocVal(val, meta)
+			newVal, err = it.list.allocVal(val)
 			if err != nil {
 				return err
 			}
