@@ -96,7 +96,7 @@ func (mt *memtable) put(key []byte, value []byte, deleted bool, opts WriteOption
 			return err
 		}
 		if opts.Sync {
-			if err := mt.wal.Sync(); err != nil {
+			if err := mt.syncWAL(); err != nil {
 				return err
 			}
 		}
@@ -105,21 +105,7 @@ func (mt *memtable) put(key []byte, value []byte, deleted bool, opts WriteOption
 	// write data into skip list in memory.
 	mv := memValue{value: value, expiredAt: entry.ExpiredAt, typ: byte(entry.Type)}
 	mvBuf := mv.encode()
-
-	var aheadSize uint32
-	var full bool
-	defer func() {
-		if full {
-			logger.Errorf("ahead areasize = %d", aheadSize)
-		}
-	}()
-
-	aheadSize = mt.skl.Size()
 	err := mt.sklIter.Put(key, mvBuf)
-	if err == arenaskl.ErrArenaFull {
-		full = true
-		logger.Errorf("areasize = %d", mt.skl.Size())
-	}
 	return err
 }
 

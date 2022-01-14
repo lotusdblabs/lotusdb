@@ -155,7 +155,7 @@ func (cf *ColumnFamily) PutWithOptions(key, value []byte, opt *WriteOptions) err
 	return nil
 }
 
-// Get get from current column family.
+// Get get value by the specified key from current column family.
 func (cf *ColumnFamily) Get(key []byte) ([]byte, error) {
 	tables := cf.getMemtables()
 	// get from active and immutable memtables.
