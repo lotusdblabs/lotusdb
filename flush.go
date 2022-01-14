@@ -18,6 +18,8 @@ func (cf *ColumnFamily) waitMemSpace() error {
 	if !cf.activeMem.IsFull() {
 		return nil
 	}
+	t := time.NewTimer(cf.opts.MemSpaceWaitTimeout)
+	defer t.Stop()
 	select {
 	case cf.flushChn <- cf.activeMem:
 		cf.immuMems = append(cf.immuMems, cf.activeMem)
@@ -39,7 +41,7 @@ func (cf *ColumnFamily) waitMemSpace() error {
 		} else {
 			cf.activeMem = table
 		}
-	case <-time.After(cf.opts.MemSpaceWaitTimeout):
+	case <-t.C:
 		return ErrWaitMemSpaceTimeout
 	}
 	return nil
