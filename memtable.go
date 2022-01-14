@@ -140,6 +140,12 @@ func (mt *memtable) logFileId() uint32 {
 	return mt.wal.Fid
 }
 
+func (mt *memtable) deleteWal() error {
+	mt.wal.Lock()
+	defer mt.wal.Unlock()
+	return mt.wal.Delete()
+}
+
 func (mv *memValue) encode() []byte {
 	head := make([]byte, 10)
 	var index int

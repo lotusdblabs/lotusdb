@@ -28,12 +28,12 @@ func (cf *ColumnFamily) waitMemSpace() error {
 		if cf.opts.WalMMap {
 			ioType = logfile.MMap
 		}
-		memOpts := memOptions {
-			path:     cf.opts.DirPath,
-			fid:      cf.activeMem.logFileId() + 1,
-			fsize:    cf.opts.MemtableSize,
-			ioType:   ioType,
-			memSize:  cf.opts.MemtableSize,
+		memOpts := memOptions{
+			path:    cf.opts.DirPath,
+			fid:     cf.activeMem.logFileId() + 1,
+			fsize:   cf.opts.MemtableSize,
+			ioType:  ioType,
+			memSize: cf.opts.MemtableSize,
 		}
 		if table, err := openMemtable(memOpts); err != nil {
 			return err
@@ -53,9 +53,9 @@ func (cf *ColumnFamily) listenAndFlush() {
 		select {
 		case table := <-cf.flushChn:
 			// iterate and write data to bptree.
-			iter := table.NewIterator(false)
 			var nodes []*index.IndexerNode
-			for iter.Rewind(); iter.Valid(); iter.Next() {
+			iter := table.sklIter
+			for table.sklIter.SeekToFirst(); iter.Valid(); iter.Next() {
 				node := &index.IndexerNode{Key: iter.Key()}
 				if len(iter.Value()) >= cf.opts.ValueThreshold {
 					valuePos, err := cf.vlog.Write(&logfile.VlogEntry{
@@ -83,7 +83,7 @@ func (cf *ColumnFamily) listenAndFlush() {
 			}
 
 			// delete wal after flush to indexer.
-			if err := table.DeleteWal(); err != nil {
+			if err := table.deleteWal(); err != nil {
 				logger.Errorf("listenAndFlush: delete wal log file err.%+v", err)
 			}
 
