@@ -9,15 +9,15 @@ import (
 	"github.com/flower-corp/lotusdb/index"
 	"github.com/flower-corp/lotusdb/logfile"
 	"github.com/flower-corp/lotusdb/logger"
-	"github.com/flower-corp/lotusdb/memtable"
 )
 
 func (cf *ColumnFamily) waitMemSpace() error {
 	cf.mu.Lock()
 	defer cf.mu.Unlock()
-	if !cf.activeMem.IsFull() {
+	if !cf.activeMem.isFull() {
 		return nil
 	}
+
 	select {
 	case cf.flushChn <- cf.activeMem:
 		cf.immuMems = append(cf.immuMems, cf.activeMem)
@@ -26,15 +26,14 @@ func (cf *ColumnFamily) waitMemSpace() error {
 		if cf.opts.WalMMap {
 			ioType = logfile.MMap
 		}
-		memOpts := memtable.Options{
-			Path:     cf.opts.DirPath,
-			Fid:      cf.activeMem.LogFileId() + 1,
-			Fsize:    cf.opts.MemtableSize,
-			TableTyp: cf.getMemtableType(),
-			IoType:   ioType,
-			MemSize:  cf.opts.MemtableSize,
+		memOpts := memOptions {
+			path:     cf.opts.DirPath,
+			fid:      cf.activeMem.logFileId() + 1,
+			fsize:    cf.opts.MemtableSize,
+			ioType:   ioType,
+			memSize:  cf.opts.MemtableSize,
 		}
-		if table, err := memtable.OpenMemTable(memOpts); err != nil {
+		if table, err := openMemtable(memOpts); err != nil {
 			return err
 		} else {
 			cf.activeMem = table

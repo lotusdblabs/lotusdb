@@ -13,7 +13,6 @@ import (
 
 	"github.com/flower-corp/lotusdb/index"
 	"github.com/flower-corp/lotusdb/logfile"
-	"github.com/flower-corp/lotusdb/memtable"
 	"github.com/flower-corp/lotusdb/util"
 	"github.com/flower-corp/lotusdb/vlog"
 )
@@ -32,15 +31,15 @@ var (
 // Column Families provide a way to logically partition the database.
 type ColumnFamily struct {
 	// Active memtable for writing.
-	activeMem *memtable.Memtable
+	activeMem *memtable
 	// Immutable memtables, waiting to be flushed to disk.
-	immuMems []*memtable.Memtable
+	immuMems []*memtable
 	// Value Log(Put value into value log according to options ValueThreshold).
 	vlog *vlog.ValueLog
 	// Store keys and meta info.
 	indexer index.Indexer
 	// When the active memtable is full, send it to the flushChn, see listenAndFlush.
-	flushChn chan *memtable.Memtable
+	flushChn chan *memtable
 	opts     ColumnFamilyOptions
 	mu       sync.Mutex
 	// Prevent concurrent db using.
@@ -90,7 +89,7 @@ func (db *LotusDB) OpenColumnFamily(opts ColumnFamilyOptions) (*ColumnFamily, er
 	cf := &ColumnFamily{
 		opts:     opts,
 		dirLocks: flocks,
-		flushChn: make(chan *memtable.Memtable, opts.MemtableNums-1),
+		flushChn: make(chan *memtable, opts.MemtableNums-1),
 	}
 	// open active and immutable memtables.
 	if err := cf.openMemtables(); err != nil {
@@ -146,14 +145,10 @@ func (cf *ColumnFamily) PutWithOptions(key, value []byte, opt *WriteOptions) err
 	if err := cf.waitMemSpace(); err != nil {
 		return err
 	}
-
-	var memOpts memtable.Options
-	if opt != nil {
-		memOpts.Sync = opt.Sync
-		memOpts.DisableWal = opt.DisableWal
-		memOpts.ExpiredAt = opt.ExpiredAt
+	if opt == nil {
+		opt = new(WriteOptions)
 	}
-	if err := cf.activeMem.Put(key, value, memOpts); err != nil {
+	if err := cf.activeMem.put(key, value, false, *opt); err != nil {
 		return err
 	}
 	return nil
@@ -164,7 +159,7 @@ func (cf *ColumnFamily) Get(key []byte) ([]byte, error) {
 	tables := cf.getMemtables()
 	// get from active and immutable memtables.
 	for _, mem := range tables {
-		if value := mem.Get(key); len(value) != 0 {
+		if value := mem.get(key); len(value) != 0 {
 			return value, nil
 		}
 	}
@@ -197,13 +192,10 @@ func (cf *ColumnFamily) Delete(key []byte) error {
 
 // DeleteWithOptions delete from current column family with options.
 func (cf *ColumnFamily) DeleteWithOptions(key []byte, opt *WriteOptions) error {
-	var memOpts memtable.Options
-	if opt != nil {
-		memOpts.Sync = opt.Sync
-		memOpts.DisableWal = opt.DisableWal
-		memOpts.ExpiredAt = opt.ExpiredAt
+	if opt == nil {
+		opt = new(WriteOptions)
 	}
-	if err := cf.activeMem.Delete(key, memOpts); err != nil {
+	if err := cf.activeMem.delete(key, *opt); err != nil {
 		return err
 	}
 	return nil
@@ -243,22 +235,19 @@ func (cf *ColumnFamily) openMemtables() error {
 		fids = append(fids, logfile.InitialLogFileId)
 	}
 
-	tableType := cf.getMemtableType()
 	var ioType = logfile.FileIO
 	if cf.opts.WalMMap {
 		ioType = logfile.MMap
 	}
-
-	memOpts := memtable.Options{
-		Path:     cf.opts.DirPath,
-		Fsize:    cf.opts.MemtableSize,
-		TableTyp: tableType,
-		IoType:   ioType,
-		MemSize:  cf.opts.MemtableSize,
+	memOpts := memOptions{
+		path:    cf.opts.DirPath,
+		fsize:   cf.opts.MemtableSize,
+		ioType:  ioType,
+		memSize: cf.opts.MemtableSize,
 	}
 	for i, fid := range fids {
-		memOpts.Fid = fid
-		table, err := memtable.OpenMemTable(memOpts)
+		memOpts.fid = fid
+		table, err := openMemtable(memOpts)
 		if err != nil {
 			return err
 		}
@@ -268,27 +257,15 @@ func (cf *ColumnFamily) openMemtables() error {
 			cf.immuMems = append(cf.immuMems, table)
 		}
 	}
-
 	return nil
 }
 
-func (cf *ColumnFamily) getMemtableType() memtable.TableType {
-	switch cf.opts.MemtableType {
-	case SkipList:
-		return memtable.SkipListRep
-	case HashSkipList:
-		return memtable.HashSkipListRep
-	default:
-		panic(fmt.Sprintf("unsupported memtable type: %d", cf.opts.MemtableType))
-	}
-}
-
-func (cf *ColumnFamily) getMemtables() []*memtable.Memtable {
+func (cf *ColumnFamily) getMemtables() []*memtable {
 	cf.mu.Lock()
 	defer cf.mu.Unlock()
 
 	immuLen := len(cf.immuMems)
-	var tables = make([]*memtable.Memtable, immuLen+1)
+	var tables = make([]*memtable, immuLen+1)
 	tables[0] = cf.activeMem
 	for idx := 0; idx < immuLen; idx++ {
 		tables[idx+1] = cf.immuMems[immuLen-idx-1]

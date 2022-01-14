@@ -6,12 +6,14 @@ import (
 	"github.com/flower-corp/lotusdb/logfile"
 	"github.com/flower-corp/lotusdb/logger"
 	"io"
+	"sync/atomic"
 	"time"
 )
 
 type (
-	Memtable struct {
+	memtable struct {
 		sklIter *arenaskl.Iterator
+		skl     *arenaskl.Skiplist
 		wal     *logfile.LogFile
 		opts    memOptions
 	}
@@ -30,13 +32,13 @@ type (
 	}
 )
 
-func openMemtable(opts memOptions) (*Memtable, error) {
+func openMemtable(opts memOptions) (*memtable, error) {
 	// init skip list and arena.
 	var sklIter = new(arenaskl.Iterator)
 	arena := arenaskl.NewArena(uint32(opts.memSize))
 	skl := arenaskl.NewSkiplist(arena)
 	sklIter.Init(skl)
-	table := &Memtable{opts: opts, sklIter: sklIter}
+	table := &memtable{opts: opts, skl: skl, sklIter: sklIter}
 
 	// open wal log file.
 	wal, err := logfile.OpenLogFile(opts.path, opts.fid, opts.fsize*2, logfile.WAL, opts.ioType)
@@ -66,7 +68,7 @@ func openMemtable(opts memOptions) (*Memtable, error) {
 }
 
 // Put .
-func (mt *Memtable) Put(key []byte, value []byte, deleted bool, opts WriteOptions) error {
+func (mt *memtable) put(key []byte, value []byte, deleted bool, opts WriteOptions) error {
 	entry := &logfile.LogEntry{
 		Key:   key,
 		Value: value,
@@ -99,7 +101,7 @@ func (mt *Memtable) Put(key []byte, value []byte, deleted bool, opts WriteOption
 }
 
 // Get .
-func (mt *Memtable) Get(key []byte) []byte {
+func (mt *memtable) get(key []byte) []byte {
 	found := mt.sklIter.Seek(key)
 	if !found || mt.sklIter.Meta() == uint16(logfile.TypeDelete) {
 		return nil
@@ -110,6 +112,32 @@ func (mt *Memtable) Get(key []byte) []byte {
 		return nil
 	}
 	return mv.value
+}
+
+func (mt *memtable) delete(key []byte, opts WriteOptions) error {
+	return mt.put(key, nil, true, opts)
+}
+
+func (mt *memtable) syncWAL() error {
+	mt.wal.RLock()
+	defer mt.wal.RUnlock()
+	return mt.wal.Sync()
+}
+
+func (mt *memtable) isFull() bool {
+	if int64(mt.skl.Size()) >= mt.opts.memSize {
+		return true
+	}
+	if mt.wal == nil {
+		return false
+	}
+
+	walSize := atomic.LoadInt64(&mt.wal.WriteAt)
+	return walSize >= mt.opts.memSize
+}
+
+func (mt *memtable) logFileId() uint32 {
+	return mt.wal.Fid
 }
 
 func (mv *memValue) encode() []byte {
