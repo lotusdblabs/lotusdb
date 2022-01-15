@@ -1,44 +1,47 @@
-package lotusdb
+package benchmark
 
 import (
+	"fmt"
+	"github.com/flower-corp/lotusdb"
 	"github.com/stretchr/testify/assert"
 	"testing"
 )
 
-// Benchmark for LotusDB
+// Simple Benchmark for LotusDB
 
-func BenchmarkLotusDB_Put(b *testing.B) {
-	options := DefaultOptions("/tmp/lotusdb")
-	db, err := Open(options)
-	assert.Nil(b, err)
+var db *lotusdb.LotusDB
 
-	b.ResetTimer()
-	b.ReportAllocs()
-	for i := 0; i < b.N; i++ {
-		err := db.Put(GetKey(i), GetValue())
-		assert.Nil(b, err)
+func init() {
+	var err error
+	options := lotusdb.DefaultOptions("/tmp/lotusdb")
+	db, err = lotusdb.Open(options)
+	if err != nil {
+		panic(fmt.Sprintf("open lotusdb err.%+v", err))
 	}
 }
 
-func initData(b *testing.B, db *LotusDB) {
+func initData(b *testing.B, db *lotusdb.LotusDB) {
 	for i := 0; i < 500000; i++ {
-		err := db.Put(GetKey(i), GetValue128())
+		err := db.Put(GetKey(i), GetValue128B())
 		assert.Nil(b, err)
 	}
 
 	for i := 500000; i < 1000000; i++ {
-		err := db.Put(GetKey(i), GetValue())
+		err := db.Put(GetKey(i), GetValue4K())
+		assert.Nil(b, err)
+	}
+}
+
+func BenchmarkLotusDB_Put(b *testing.B) {
+	b.ResetTimer()
+	b.ReportAllocs()
+	for i := 0; i < b.N; i++ {
+		err := db.Put(GetKey(i), GetValue128B())
 		assert.Nil(b, err)
 	}
 }
 
 func BenchmarkLotusDB_Get(b *testing.B) {
-	options := DefaultOptions("/tmp/lotusdb")
-	db, err := Open(options)
-	assert.Nil(b, err)
-
-	//initData(b, db)
-
 	b.ResetTimer()
 	b.ReportAllocs()
 	for i := 0; i < b.N; i++ {
