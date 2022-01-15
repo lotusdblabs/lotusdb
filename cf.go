@@ -57,7 +57,6 @@ func (db *LotusDB) OpenColumnFamily(opts ColumnFamilyOptions) (*ColumnFamily, er
 	if opts.DirPath == "" {
 		opts.DirPath = db.opts.DBPath
 	}
-	opts.DirPath += separator + opts.CfName
 	if opts.IndexerDir == "" {
 		opts.IndexerDir = opts.DirPath
 	}

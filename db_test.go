@@ -12,43 +12,47 @@ import (
 )
 
 func TestOpen(t *testing.T) {
-	options := DefaultOptions("/tmp/lotusdb")
-	db, err := Open(options)
-	assert.Nil(t, err)
-	defer func() {
-		db.Close()
-		os.RemoveAll("/tmp/lotusdb")
-	}()
-
-	now := time.Now()
-	for i := 0; i < 1000000; i++ {
-		err := db.Put(GetKey(i), GetValue128())
+	opts := DefaultOptions("/tmp" + separator + "lotusdb")
+	t.Run("default", func(t *testing.T) {
+		defer os.RemoveAll(opts.DBPath)
+		_, err := Open(opts)
 		assert.Nil(t, err)
-	}
-	t.Log("writing 100w records, time spent: ", time.Since(now).Milliseconds())
+	})
+
+	t.Run("spec-dir", func(t *testing.T) {
+		opts.CfOpts.IndexerDir = "/tmp/new-one"
+		opts.CfOpts.ValueLogDir = "/tmp/new-one"
+		defer os.RemoveAll("/tmp/new-one")
+		_, err := Open(opts)
+		assert.Nil(t, err)
+	})
 }
 
 func TestLotusDB_Put(t *testing.T) {
-	options := DefaultOptions("/tmp/lotusdb")
-	db, err := Open(options)
-	assert.Nil(t, err)
-	defer db.Close()
-
-	err = db.Put([]byte("k"), []byte("lotusdb"))
-	assert.Nil(t, err)
-}
-
-func TestLotusDB_Get(t *testing.T) {
-	options := DefaultOptions("/tmp/lotusdb")
-	db, err := Open(options)
-	assert.Nil(t, err)
-	defer db.Close()
-
-	v, err := db.Get([]byte("k"))
-	if err != nil {
-		t.Log(err)
+	type fields struct {
+		db *LotusDB
 	}
-	t.Log("val = ", string(v))
+	type args struct {
+		key   []byte
+		value []byte
+	}
+	tests := []struct {
+		name    string
+		fields  fields
+		args    args
+		wantErr bool
+	}{
+		{
+			"normal", fields{db: nil}, args{key: nil, value: nil}, false,
+		},
+	}
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			if err := tt.fields.db.Put(tt.args.key, tt.args.value); (err != nil) != tt.wantErr {
+				t.Errorf("Put() error = %v, wantErr %v", err, tt.wantErr)
+			}
+		})
+	}
 }
 
 const alphabet = "abcdefghijklmnopqrstuvwxyz0123456789"
