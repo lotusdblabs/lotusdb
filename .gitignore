@@ -3,3 +3,4 @@ lotusdb.iml
 .DS_Store
 codecov.yaml
 coverage.txt
+benchmark
