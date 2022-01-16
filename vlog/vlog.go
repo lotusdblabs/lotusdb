@@ -9,6 +9,7 @@ import (
 	"strconv"
 	"strings"
 	"sync"
+	"sync/atomic"
 )
 
 var (
@@ -139,10 +140,11 @@ func (vlog *ValueLog) Write(ve *logfile.VlogEntry) (*ValuePos, error) {
 		return nil, err
 	}
 
+	writeAt := atomic.LoadInt64(&vlog.activeLogFile.WriteAt)
 	return &ValuePos{
 		Fid:    vlog.activeLogFile.Fid,
 		Size:   uint32(eSize),
-		Offset: vlog.activeLogFile.WriteAt - int64(eSize),
+		Offset: writeAt - int64(eSize),
 	}, nil
 }
 

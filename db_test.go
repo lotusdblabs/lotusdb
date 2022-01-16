@@ -120,6 +120,35 @@ func TestLotusDB_PutWithOptions(t *testing.T) {
 	}
 }
 
+// We will put data until the active memtable is full and be flushed.
+// Then a new active memtable will be created.
+func TestLotusDB_PutUntilMemtableFlush(t *testing.T) {
+	opts := DefaultOptions("/tmp" + separator + "lotusdb")
+	// if you change the default memtable size, change the writeCount too.
+	// make sure the written data size is greater than memtable size.
+	opts.CfOpts.MemtableSize = 64 << 20
+	writeCount := 600000
+	db, err := Open(opts)
+	assert.Nil(t, err)
+	defer destroyDB(db)
+
+	for i := 0; i <= writeCount; i++ {
+		err := db.Put(GetKey(i), GetValue128B())
+		assert.Nil(t, err)
+	}
+
+	// make sure all data are written.
+	v1, err := db.Get(GetKey(0))
+	assert.Nil(t, err)
+	assert.Equal(t, len(v1), 128)
+	v2, err := db.Get(GetKey(writeCount))
+	assert.Nil(t, err)
+	assert.Equal(t, len(v2), 128)
+}
+
+func TestLotusDB_Delete(t *testing.T) {
+}
+
 func TestLotusDB_Get(t *testing.T) {
 	opts := DefaultOptions("/tmp" + separator + "lotusdb")
 	db, err := Open(opts)

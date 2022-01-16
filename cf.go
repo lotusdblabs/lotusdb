@@ -49,6 +49,11 @@ type ColumnFamily struct {
 	dirLocks []*flock.FileLockGuard
 }
 
+// Stat statistics info of column family.
+type Stat struct {
+	MemtableSize int64
+}
+
 // OpenColumnFamily open a new or existed column family.
 func (db *LotusDB) OpenColumnFamily(opts ColumnFamilyOptions) (*ColumnFamily, error) {
 	if opts.CfName == "" {
@@ -206,8 +211,13 @@ func (cf *ColumnFamily) DeleteWithOptions(key []byte, opt *WriteOptions) error {
 }
 
 // Stat returns some statistics info of current column family.
-func (cf *ColumnFamily) Stat() error {
-	return nil
+func (cf *ColumnFamily) Stat() (*Stat, error) {
+	st := &Stat{}
+	tables := cf.getMemtables()
+	for _, table := range tables {
+		st.MemtableSize += int64(table.skl.Size())
+	}
+	return st, nil
 }
 
 func (cf *ColumnFamily) openMemtables() error {

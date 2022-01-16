@@ -55,7 +55,7 @@ func openMemtable(opts memOptions) (*memtable, error) {
 	for {
 		if entry, size, err := wal.ReadLogEntry(offset); err == nil {
 			offset += size
-			mv := memValue{
+			mv := &memValue{
 				value:     entry.Value,
 				expiredAt: entry.ExpiredAt,
 				typ:       byte(entry.Type),

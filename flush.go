@@ -57,10 +57,18 @@ func (cf *ColumnFamily) listenAndFlush() {
 			iter := table.sklIter
 			for table.sklIter.SeekToFirst(); iter.Valid(); iter.Next() {
 				node := &index.IndexerNode{Key: iter.Key()}
+				mv := decodeMemValue(iter.Value())
+				// ignore expired and deleted data.
+				if mv.expiredAt != 0 && mv.expiredAt <= time.Now().Unix() {
+					continue
+				}
+				if mv.typ == byte(logfile.TypeDelete) {
+					continue
+				}
 				if len(iter.Value()) >= cf.opts.ValueThreshold {
 					valuePos, err := cf.vlog.Write(&logfile.VlogEntry{
 						Key:   iter.Key(),
-						Value: iter.Value(),
+						Value: mv.value,
 					})
 					if err != nil {
 						logger.Errorf("write to value log err.%+v", err)
@@ -72,7 +80,7 @@ func (cf *ColumnFamily) listenAndFlush() {
 						Offset: valuePos.Offset,
 					}
 				} else {
-					node.Meta = &index.IndexerMeta{Value: iter.Value()}
+					node.Meta = &index.IndexerMeta{Value: mv.value}
 				}
 				nodes = append(nodes, node)
 			}
