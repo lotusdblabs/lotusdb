@@ -116,7 +116,12 @@ func (mt *memtable) get(key []byte) []byte {
 	}
 
 	mv := decodeMemValue(mt.sklIter.Value())
-	if mv.typ == byte(logfile.TypeDelete) || mv.expiredAt <= time.Now().Unix() {
+	// ignore deleted key.
+	if mv.typ == byte(logfile.TypeDelete) {
+		return nil
+	}
+	// ignore expired key.
+	if mv.expiredAt > 0 && mv.expiredAt <= time.Now().Unix() {
 		return nil
 	}
 	return mv.value
