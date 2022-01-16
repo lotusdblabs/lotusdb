@@ -2,7 +2,6 @@ package lotusdb
 
 import (
 	"os"
-	"path/filepath"
 	"time"
 )
 
@@ -15,19 +14,15 @@ const (
 
 // DefaultOptions default options for opening a LotusDB.
 func DefaultOptions(path string) Options {
-	cfPath, _ := filepath.Abs(filepath.Join(path, DefaultColumnFamilyName))
 	return Options{
 		DBPath: path,
 		CfOpts: ColumnFamilyOptions{
 			CfName:              DefaultColumnFamilyName,
-			DirPath:             cfPath,
 			MemtableSize:        64 << 20,
 			MemtableNums:        5,
 			MemSpaceWaitTimeout: time.Millisecond * 100,
-			IndexerDir:          cfPath,
 			FlushBatchSize:      100000,
 			WalMMap:             false,
-			ValueLogDir:         cfPath,
 			ValueLogFileSize:    1024 << 20,
 			ValueLogMmap:        false,
 			ValueThreshold:      0,

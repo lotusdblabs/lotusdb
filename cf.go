@@ -6,6 +6,7 @@ import (
 	"github.com/flower-corp/lotusdb/flock"
 	"io/ioutil"
 	"os"
+	"path/filepath"
 	"sort"
 	"strconv"
 	"strings"
@@ -57,6 +58,9 @@ func (db *LotusDB) OpenColumnFamily(opts ColumnFamilyOptions) (*ColumnFamily, er
 	if opts.DirPath == "" {
 		opts.DirPath = db.opts.DBPath
 	}
+
+	// use column family name as cf path name.
+	opts.DirPath, _ = filepath.Abs(filepath.Join(opts.DirPath, opts.CfName))
 	if opts.IndexerDir == "" {
 		opts.IndexerDir = opts.DirPath
 	}
