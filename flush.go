@@ -65,7 +65,7 @@ func (cf *ColumnFamily) listenAndFlush() {
 				if mv.typ == byte(logfile.TypeDelete) || (mv.expiredAt != 0 && mv.expiredAt <= time.Now().Unix()) {
 					deletedKeys = append(deletedKeys, key)
 				} else {
-					if len(iter.Value()) >= cf.opts.ValueThreshold {
+					if len(mv.value) >= cf.opts.ValueThreshold {
 						valuePos, err := cf.vlog.Write(&logfile.VlogEntry{Key: key, Value: mv.value})
 						if err != nil {
 							logger.Errorf("write to value log err.%+v", err)

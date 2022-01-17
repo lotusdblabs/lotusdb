@@ -34,6 +34,119 @@ func TestOpen(t *testing.T) {
 	})
 }
 
+func TestLotusDB_Put(t *testing.T) {
+	opts := DefaultOptions("/tmp" + separator + "lotusdb")
+	db, err := Open(opts)
+	assert.Nil(t, err)
+	defer destroyDB(db)
+
+	type fields struct {
+		db *LotusDB
+	}
+	type args struct {
+		key   []byte
+		value []byte
+	}
+	tests := []struct {
+		name    string
+		fields  fields
+		args    args
+		wantErr bool
+	}{
+		{
+			"nil-key-val", fields{db: db}, args{key: nil, value: nil}, false,
+		},
+		{
+			"nil-key", fields{db: db}, args{key: nil, value: GetValue16B()}, false,
+		},
+		{
+			"nil-val", fields{db: db}, args{key: GetKey(4423), value: nil}, false,
+		},
+		{
+			"with-key-val", fields{db: db}, args{key: GetKey(990), value: GetValue16B()}, false,
+		},
+		{
+			"with-key-big-val", fields{db: db}, args{key: GetKey(44012), value: GetValue4K()}, false,
+		},
+	}
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			if err := tt.fields.db.Put(tt.args.key, tt.args.value); (err != nil) != tt.wantErr {
+				t.Errorf("Put() error = %v, wantErr %v", err, tt.wantErr)
+			}
+		})
+	}
+}
+
+func TestLotusDB_PutWithOptions(t *testing.T) {
+	opts := DefaultOptions("/tmp" + separator + "lotusdb")
+	db, err := Open(opts)
+	assert.Nil(t, err)
+	defer destroyDB(db)
+
+	type fields struct {
+		db *LotusDB
+	}
+	type args struct {
+		key   []byte
+		value []byte
+		opt   *WriteOptions
+	}
+	tests := []struct {
+		name    string
+		fields  fields
+		args    args
+		wantErr bool
+	}{
+		{
+			"nil-options", fields{db: db}, args{key: GetKey(13), value: GetValue128B(), opt: nil}, false,
+		},
+		{
+			"with-sync", fields{db: db}, args{key: GetKey(99832), value: GetValue128B(), opt: &WriteOptions{Sync: true}}, false,
+		},
+		{
+			"with-disableWAL", fields{db: db}, args{key: GetKey(54221), value: GetValue128B(), opt: &WriteOptions{DisableWal: true}}, false,
+		},
+		{
+			"with-ttl", fields{db: db}, args{key: GetKey(9901), value: GetValue128B(), opt: &WriteOptions{ExpiredAt: time.Now().Add(time.Minute).Unix()}}, false,
+		},
+	}
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			db := tt.fields.db
+			if err := db.PutWithOptions(tt.args.key, tt.args.value, tt.args.opt); (err != nil) != tt.wantErr {
+				t.Errorf("PutWithOptions() error = %v, wantErr %v", err, tt.wantErr)
+			}
+		})
+	}
+}
+
+// We will put data until the active memtable is full and be flushed.
+// Then a new active memtable will be created.
+func TestLotusDB_PutUntilMemtableFlush(t *testing.T) {
+	opts := DefaultOptions("/tmp" + separator + "lotusdb")
+	// if you change the default memtable size, change the writeCount too.
+	// make sure the written data size is greater than memtable size.
+	opts.CfOpts.MemtableSize = 64 << 20
+	writeCount := 600000
+	db, err := Open(opts)
+	assert.Nil(t, err)
+	defer destroyDB(db)
+
+	for i := 0; i <= writeCount; i++ {
+		err := db.Put(GetKey(i), GetValue128B())
+		assert.Nil(t, err)
+	}
+
+	// make sure all data are written.
+	v1, err := db.Get(GetKey(0))
+	assert.Nil(t, err)
+	assert.Equal(t, len(v1), 128)
+	v2, err := db.Get(GetKey(writeCount))
+	assert.Nil(t, err)
+	assert.Equal(t, len(v2), 128)
+}
+
 func TestLotusDB_Get(t *testing.T) {
 	opts := DefaultOptions("/tmp" + separator + "lotusdb")
 	db, err := Open(opts)
@@ -85,6 +198,44 @@ func TestLotusDB_Get(t *testing.T) {
 				t.Errorf("Get() got = %v, want %v", got, tt.want)
 			}
 		})
+	}
+}
+
+func TestLotusDB_GetKVFromIndexer(t *testing.T) {
+	// set the threshold bigger that value will be stored only in indexer.
+	testGetKV(t, 64<<20)
+}
+
+func TestLotusDB_GetKeyFromIndexerAndValFromVLog(t *testing.T) {
+	// set the threshold smaller that value will be stored in value log.
+	testGetKV(t, 0)
+}
+
+func testGetKV(t *testing.T, valueThreshold int) {
+	opts := DefaultOptions("/tmp" + separator + "lotusdb")
+	opts.CfOpts.ValueThreshold = valueThreshold
+	db, err := Open(opts)
+	assert.Nil(t, err)
+	defer destroyDB(db)
+
+	var writeCount = 600000
+	for i := 0; i <= writeCount; i++ {
+		err := db.Put(GetKey(i), GetValue128B())
+		assert.Nil(t, err)
+	}
+
+	keys := [][]byte{
+		GetKey(0),
+		GetKey(9230),
+		GetKey(77842),
+		GetKey(200000),
+		GetKey(writeCount),
+	}
+
+	for _, tt := range keys {
+		v, err := db.Get(tt)
+		assert.Nil(t, err)
+		assert.Equal(t, len(v), 128)
 	}
 }
 
@@ -201,119 +352,6 @@ func TestLotusDB_DeleteAfterFlush(t *testing.T) {
 			}
 		})
 	}
-}
-
-func TestLotusDB_Put(t *testing.T) {
-	opts := DefaultOptions("/tmp" + separator + "lotusdb")
-	db, err := Open(opts)
-	assert.Nil(t, err)
-	defer destroyDB(db)
-
-	type fields struct {
-		db *LotusDB
-	}
-	type args struct {
-		key   []byte
-		value []byte
-	}
-	tests := []struct {
-		name    string
-		fields  fields
-		args    args
-		wantErr bool
-	}{
-		{
-			"nil-key-val", fields{db: db}, args{key: nil, value: nil}, false,
-		},
-		{
-			"nil-key", fields{db: db}, args{key: nil, value: GetValue16B()}, false,
-		},
-		{
-			"nil-val", fields{db: db}, args{key: GetKey(4423), value: nil}, false,
-		},
-		{
-			"with-key-val", fields{db: db}, args{key: GetKey(990), value: GetValue16B()}, false,
-		},
-		{
-			"with-key-big-val", fields{db: db}, args{key: GetKey(44012), value: GetValue4K()}, false,
-		},
-	}
-	for _, tt := range tests {
-		t.Run(tt.name, func(t *testing.T) {
-			if err := tt.fields.db.Put(tt.args.key, tt.args.value); (err != nil) != tt.wantErr {
-				t.Errorf("Put() error = %v, wantErr %v", err, tt.wantErr)
-			}
-		})
-	}
-}
-
-func TestLotusDB_PutWithOptions(t *testing.T) {
-	opts := DefaultOptions("/tmp" + separator + "lotusdb")
-	db, err := Open(opts)
-	assert.Nil(t, err)
-	defer destroyDB(db)
-
-	type fields struct {
-		db *LotusDB
-	}
-	type args struct {
-		key   []byte
-		value []byte
-		opt   *WriteOptions
-	}
-	tests := []struct {
-		name    string
-		fields  fields
-		args    args
-		wantErr bool
-	}{
-		{
-			"nil-options", fields{db: db}, args{key: GetKey(13), value: GetValue128B(), opt: nil}, false,
-		},
-		{
-			"with-sync", fields{db: db}, args{key: GetKey(99832), value: GetValue128B(), opt: &WriteOptions{Sync: true}}, false,
-		},
-		{
-			"with-disableWAL", fields{db: db}, args{key: GetKey(54221), value: GetValue128B(), opt: &WriteOptions{DisableWal: true}}, false,
-		},
-		{
-			"with-ttl", fields{db: db}, args{key: GetKey(9901), value: GetValue128B(), opt: &WriteOptions{ExpiredAt: time.Now().Add(time.Minute).Unix()}}, false,
-		},
-	}
-	for _, tt := range tests {
-		t.Run(tt.name, func(t *testing.T) {
-			db := tt.fields.db
-			if err := db.PutWithOptions(tt.args.key, tt.args.value, tt.args.opt); (err != nil) != tt.wantErr {
-				t.Errorf("PutWithOptions() error = %v, wantErr %v", err, tt.wantErr)
-			}
-		})
-	}
-}
-
-// We will put data until the active memtable is full and be flushed.
-// Then a new active memtable will be created.
-func TestLotusDB_PutUntilMemtableFlush(t *testing.T) {
-	opts := DefaultOptions("/tmp" + separator + "lotusdb")
-	// if you change the default memtable size, change the writeCount too.
-	// make sure the written data size is greater than memtable size.
-	opts.CfOpts.MemtableSize = 64 << 20
-	writeCount := 600000
-	db, err := Open(opts)
-	assert.Nil(t, err)
-	defer destroyDB(db)
-
-	for i := 0; i <= writeCount; i++ {
-		err := db.Put(GetKey(i), GetValue128B())
-		assert.Nil(t, err)
-	}
-
-	// make sure all data are written.
-	v1, err := db.Get(GetKey(0))
-	assert.Nil(t, err)
-	assert.Equal(t, len(v1), 128)
-	v2, err := db.Get(GetKey(writeCount))
-	assert.Nil(t, err)
-	assert.Equal(t, len(v2), 128)
 }
 
 func destroyDB(db *LotusDB) {

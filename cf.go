@@ -168,7 +168,7 @@ func (cf *ColumnFamily) Get(key []byte) ([]byte, error) {
 	tables := cf.getMemtables()
 	// get from active and immutable memtables.
 	for _, mem := range tables {
-		if value := mem.get(key); len(value) != 0 {
+		if invalid, value := mem.get(key); len(value) != 0 || invalid {
 			return value, nil
 		}
 	}

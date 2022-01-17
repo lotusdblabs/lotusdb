@@ -118,21 +118,21 @@ func (mt *memtable) put(key []byte, value []byte, deleted bool, opts WriteOption
 }
 
 // Get .
-func (mt *memtable) get(key []byte) []byte {
+func (mt *memtable) get(key []byte) (bool, []byte) {
 	if found := mt.sklIter.Seek(key); !found {
-		return nil
+		return false, nil
 	}
 
 	mv := decodeMemValue(mt.sklIter.Value())
 	// ignore deleted key.
 	if mv.typ == byte(logfile.TypeDelete) {
-		return nil
+		return true, nil
 	}
 	// ignore expired key.
 	if mv.expiredAt > 0 && mv.expiredAt <= time.Now().Unix() {
-		return nil
+		return true, nil
 	}
-	return mv.value
+	return false, mv.value
 }
 
 func (mt *memtable) delete(key []byte, opts WriteOptions) error {

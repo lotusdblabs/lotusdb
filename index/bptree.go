@@ -12,12 +12,6 @@ const (
 	defaultBatchSize    = 10000
 )
 
-var manager *BPTreeManager
-
-func init() {
-	manager = &BPTreeManager{treeMap: make(map[string]*BPTree)}
-}
-
 type BPTreeOptions struct {
 	IndexType        IndexerType
 	ColumnFamilyName string
@@ -70,23 +64,6 @@ func (bo *BPTreeOptions) GetDirPath() string {
 func BptreeBolt(opt *BPTreeOptions) (*BPTree, error) {
 	if err := checkBPTreeOptions(opt); err != nil {
 		return nil, err
-	}
-
-	// check
-	manager.RLock()
-	if db, ok := manager.treeMap[opt.GetColumnFamilyName()]; ok {
-		manager.RUnlock()
-		return db, nil
-	}
-
-	// lock
-	manager.RUnlock()
-	manager.Lock()
-	defer manager.Unlock()
-
-	// check
-	if db, ok := manager.treeMap[opt.GetColumnFamilyName()]; ok {
-		return db, nil
 	}
 
 	// open metadatadb and db
@@ -143,7 +120,6 @@ func BptreeBolt(opt *BPTreeOptions) (*BPTree, error) {
 		db:         db,
 		opts:       opt,
 	}
-	manager.treeMap[opt.GetColumnFamilyName()] = b
 	return b, nil
 }
 
