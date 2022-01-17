@@ -61,7 +61,12 @@ func openMemtable(opts memOptions) (*memtable, error) {
 				typ:       byte(entry.Type),
 			}
 			mvBuf := mv.encode()
-			err := table.sklIter.Put(entry.Key, mvBuf)
+			var err error
+			if table.sklIter.Seek(entry.Key) {
+				err = table.sklIter.Set(mvBuf)
+			} else {
+				err = table.sklIter.Put(entry.Key, mvBuf)
+			}
 			if err != nil {
 				logger.Errorf("put value into skip list err.%+v", err)
 				return nil, err
@@ -105,8 +110,11 @@ func (mt *memtable) put(key []byte, value []byte, deleted bool, opts WriteOption
 	// write data into skip list in memory.
 	mv := memValue{value: value, expiredAt: entry.ExpiredAt, typ: byte(entry.Type)}
 	mvBuf := mv.encode()
-	err := mt.sklIter.Put(key, mvBuf)
-	return err
+	if mt.sklIter.Seek(key) {
+		return mt.sklIter.Set(mvBuf)
+	} else {
+		return mt.sklIter.Put(key, mvBuf)
+	}
 }
 
 // Get .

@@ -59,6 +59,8 @@ type Indexer interface {
 
 	Delete(key []byte) error
 
+	DeleteBatch(keys [][]byte) error
+
 	Close() (err error)
 
 	Iter() (iter IndexerIter, err error)

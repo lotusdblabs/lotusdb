@@ -208,6 +208,38 @@ func (b *BPTree) PutBatch(nodes []*IndexerNode) (offset int, err error) {
 	return len(nodes) - 1, nil
 }
 
+func (b *BPTree) DeleteBatch(keys [][]byte) error {
+	batchLoopNum := len(keys) / b.opts.BatchSize
+	if len(keys)%b.opts.BatchSize > 0 {
+		batchLoopNum++
+	}
+
+	batchlimit := b.opts.BatchSize
+	for batchIdx := 0; batchIdx < batchLoopNum; batchIdx++ {
+		offset := batchIdx * batchlimit
+		tx, err := b.db.Begin(true)
+		if err != nil {
+			return err
+		}
+		bucket := tx.Bucket(b.opts.BucketName)
+
+	itemLoop:
+		for itemIdx := offset; itemIdx < (offset + b.opts.BatchSize - 1); itemIdx++ {
+			if itemIdx >= len(keys) {
+				break itemLoop
+			}
+			if err := bucket.Delete(keys[itemIdx]); err != nil {
+				_ = tx.Rollback()
+				return err
+			}
+		}
+		if err := tx.Commit(); err != nil {
+			return err
+		}
+	}
+	return nil
+}
+
 func (b *BPTree) Delete(key []byte) error {
 	tx, err := b.db.Begin(false)
 	if err != nil {

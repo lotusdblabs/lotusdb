@@ -54,42 +54,43 @@ func (cf *ColumnFamily) listenAndFlush() {
 		case table := <-cf.flushChn:
 			// iterate and write data to bptree.
 			var nodes []*index.IndexerNode
+			var deletedKeys [][]byte
 			iter := table.sklIter
 			for table.sklIter.SeekToFirst(); iter.Valid(); iter.Next() {
 				node := &index.IndexerNode{Key: iter.Key()}
 				mv := decodeMemValue(iter.Value())
-				// delete invalid keys from indexer.todo
-				if mv.expiredAt != 0 && mv.expiredAt <= time.Now().Unix() {
-					continue
-				}
-				if mv.typ == byte(logfile.TypeDelete) {
-					continue
-				}
-				if len(iter.Value()) >= cf.opts.ValueThreshold {
-					valuePos, err := cf.vlog.Write(&logfile.VlogEntry{
-						Key:   iter.Key(),
-						Value: mv.value,
-					})
-					if err != nil {
-						logger.Errorf("write to value log err.%+v", err)
-						break
-					}
-					node.Meta = &index.IndexerMeta{
-						Fid:    valuePos.Fid,
-						Size:   valuePos.Size,
-						Offset: valuePos.Offset,
-					}
+				key := iter.Key()
+
+				// delete invalid keys from indexer.
+				if mv.typ == byte(logfile.TypeDelete) || (mv.expiredAt != 0 && mv.expiredAt <= time.Now().Unix()) {
+					deletedKeys = append(deletedKeys, key)
 				} else {
-					node.Meta = &index.IndexerMeta{Value: mv.value}
+					if len(iter.Value()) >= cf.opts.ValueThreshold {
+						valuePos, err := cf.vlog.Write(&logfile.VlogEntry{Key: key, Value: mv.value})
+						if err != nil {
+							logger.Errorf("write to value log err.%+v", err)
+							break
+						}
+						node.Meta = &index.IndexerMeta{
+							Fid:    valuePos.Fid,
+							Size:   valuePos.Size,
+							Offset: valuePos.Offset,
+						}
+					} else {
+						node.Meta = &index.IndexerMeta{Value: mv.value}
+					}
+					nodes = append(nodes, node)
 				}
-				nodes = append(nodes, node)
 			}
 
 			if _, err := cf.indexer.PutBatch(nodes); err != nil {
 				logger.Errorf("write to indexer err.%+v", err)
 				break
 			}
-
+			if err := cf.indexer.DeleteBatch(deletedKeys); err != nil {
+				logger.Errorf("delete keys in indexer err.%+v", err)
+				break
+			}
 			// delete wal after flush to indexer.
 			if err := table.deleteWal(); err != nil {
 				logger.Errorf("listenAndFlush: delete wal log file err.%+v", err)

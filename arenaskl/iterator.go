@@ -113,9 +113,6 @@ func (it *Iterator) SeekForPrev(key []byte) (found bool) {
 // on the most current value and returns ErrRecordExists. If there isn't enough
 // room in the arena, then Add returns ErrArenaFull.
 func (it *Iterator) Put(key []byte, val []byte) error {
-	if found := it.Seek(key); found {
-		return it.Set(val)
-	}
 	var spl [maxHeight]splice
 	if it.seekForSplice(key, &spl) {
 		// Found a matching node, but handle case where it's been deleted.
