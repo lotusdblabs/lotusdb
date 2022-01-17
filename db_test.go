@@ -146,9 +146,6 @@ func TestLotusDB_PutUntilMemtableFlush(t *testing.T) {
 	assert.Equal(t, len(v2), 128)
 }
 
-func TestLotusDB_Delete(t *testing.T) {
-}
-
 func TestLotusDB_Get(t *testing.T) {
 	opts := DefaultOptions("/tmp" + separator + "lotusdb")
 	db, err := Open(opts)
@@ -198,6 +195,121 @@ func TestLotusDB_Get(t *testing.T) {
 			}
 			if !reflect.DeepEqual(got, tt.want) {
 				t.Errorf("Get() got = %v, want %v", got, tt.want)
+			}
+		})
+	}
+}
+
+func TestLotusDB_Delete(t *testing.T) {
+	opts := DefaultOptions("/tmp" + separator + "lotusdb")
+	db, err := Open(opts)
+	assert.Nil(t, err)
+	defer destroyDB(db)
+
+	var writeCount = 100
+	// write some data.
+	for i := 0; i <= writeCount; i++ {
+		err := db.Put(GetKey(i), GetValue16B())
+		if i == 32 {
+			err := db.Put(GetKey(i), []byte("lotusdb"))
+			assert.Nil(t, err)
+		}
+		assert.Nil(t, err)
+	}
+
+	type fields struct {
+		db *LotusDB
+	}
+	type args struct {
+		key []byte
+	}
+	tests := []struct {
+		name     string
+		fields   fields
+		args     args
+		wantErr  bool
+		nilValue bool
+	}{
+		{
+			"nil", fields{db: db}, args{key: nil}, false, false,
+		},
+		{
+			"not-existed-key", fields{db: db}, args{key: []byte("not-exist")}, false, false,
+		},
+		// "existed-key-1" and "existed-key-2" are suitable for deleting keys before flush.
+		{
+			"existed-key-1", fields{db: db}, args{key: GetKey(0)}, false, true,
+		},
+		{
+			"existed-key-2", fields{db: db}, args{key: GetKey(writeCount)}, false, true,
+		},
+	}
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			db := tt.fields.db
+			if err := db.Delete(tt.args.key); (err != nil) != tt.wantErr {
+				t.Errorf("Delete() error = %v, wantErr %v", err, tt.wantErr)
+			}
+			if tt.nilValue {
+				val, err := db.Get(tt.args.key)
+				assert.Nil(t, err)
+				if len(val) != 0 {
+					t.Errorf("Delete() val = %v, want a nil value", val)
+				}
+			}
+		})
+	}
+}
+
+func TestLotusDB_DeleteAfterFlush(t *testing.T) {
+	opts := DefaultOptions("/tmp" + separator + "lotusdb")
+	db, err := Open(opts)
+	assert.Nil(t, err)
+	defer destroyDB(db)
+
+	// write enough data that can trigger flush opeation.
+	var writeCount = 600000
+	for i := 0; i <= writeCount; i++ {
+		err := db.Put(GetKey(i), GetValue16B())
+		if i == 32 {
+			err := db.Put(GetKey(i), []byte("lotusdb"))
+			assert.Nil(t, err)
+		}
+		assert.Nil(t, err)
+	}
+
+	type fields struct {
+		db *LotusDB
+	}
+	type args struct {
+		key []byte
+	}
+	tests := []struct {
+		name     string
+		fields   fields
+		args     args
+		wantErr  bool
+		nilValue bool
+	}{
+		{
+			"after-flush-1", fields{db: db}, args{key: GetKey(0)}, false, true,
+		},
+		{
+			"after-flush-2", fields{db: db}, args{key: GetKey(200000)}, false, true,
+		},
+	}
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			db := tt.fields.db
+			if err := db.Delete(tt.args.key); (err != nil) != tt.wantErr {
+				t.Errorf("Delete() error = %v, wantErr %v", err, tt.wantErr)
+			}
+			if tt.nilValue {
+				val, err := db.Get(tt.args.key)
+				assert.Nil(t, err)
+				if len(val) != 0 {
+					t.Errorf("Delete() val = %v, want a nil value", val)
+				}
 			}
 		})
 	}

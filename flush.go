@@ -58,7 +58,7 @@ func (cf *ColumnFamily) listenAndFlush() {
 			for table.sklIter.SeekToFirst(); iter.Valid(); iter.Next() {
 				node := &index.IndexerNode{Key: iter.Key()}
 				mv := decodeMemValue(iter.Value())
-				// ignore expired and deleted data.
+				// delete invalid keys from indexer.todo
 				if mv.expiredAt != 0 && mv.expiredAt <= time.Now().Unix() {
 					continue
 				}
