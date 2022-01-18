@@ -5,10 +5,14 @@ import (
 	"os"
 )
 
+// FileLockGuard holds a lock of file on a directory.
 type FileLockGuard struct {
+	// file descirptor on directory.
 	fd *os.File
 }
 
+// AcquireFileLock acquire the lock on the directory by syscall.Flock.
+// Return a FileLockGuard or an error, if any.
 func AcquireFileLock(path string, readOnly bool) (*FileLockGuard, error) {
 	var (
 		flag int
@@ -31,6 +35,7 @@ func AcquireFileLock(path string, readOnly bool) (*FileLockGuard, error) {
 	return &FileLockGuard{fd: file}, nil
 }
 
+// SyncDir commits the current contents of the directory to stable storage.
 func SyncDir(path string) error {
 	fd, err := os.Open(path)
 	if err != nil {
@@ -47,6 +52,7 @@ func SyncDir(path string) error {
 	return nil
 }
 
+// Release release the file lock.
 func (fl *FileLockGuard) Release() error {
 	return fl.fd.Close()
 }
