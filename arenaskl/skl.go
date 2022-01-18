@@ -53,10 +53,11 @@ import (
 )
 
 const (
-	maxHeight   = 20
-	pValue      = 1 / math.E
-	linksSize   = int(unsafe.Sizeof(links{}))
-	deletedVal  = 0
+	maxHeight  = 20
+	pValue     = 1 / math.E
+	linksSize  = int(unsafe.Sizeof(links{}))
+	deletedVal = 0
+	// MaxNodeSize self-explanatory.
 	MaxNodeSize = int(unsafe.Sizeof(node{}))
 )
 
@@ -86,6 +87,7 @@ func init() {
 	}
 }
 
+// Skiplist is an in-memory data structure held by memtable.
 type Skiplist struct {
 	arena  *Arena
 	head   *node

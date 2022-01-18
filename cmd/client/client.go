@@ -22,6 +22,7 @@ var commandList = [][]string{
 var commandSet map[string]bool
 
 var (
+	// ErrCmdNotFound the command not found.
 	ErrCmdNotFound = errors.New("the command not found")
 )
 

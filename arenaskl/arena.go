@@ -29,10 +29,13 @@ var (
 	ErrArenaFull = errors.New("allocation failed because arena is full")
 )
 
+// Align requested alignment.
 type Align uint8
 
 const (
+	// Align1 align 0.
 	Align1 = 0
+	// Align8 align 7
 	Align8 = 7
 )
 
@@ -53,6 +56,7 @@ func NewArena(size uint32) *Arena {
 	return out
 }
 
+// Size size have been allocated.
 func (a *Arena) Size() uint32 {
 	s := atomic.LoadUint64(&a.n)
 	if s > math.MaxUint32 {
@@ -62,14 +66,17 @@ func (a *Arena) Size() uint32 {
 	return uint32(s)
 }
 
+// Cap capacity of arena buffer.
 func (a *Arena) Cap() uint32 {
 	return uint32(len(a.buf))
 }
 
+// Reset reset size of arena.
 func (a *Arena) Reset() {
 	atomic.StoreUint64(&a.n, 1)
 }
 
+// Alloc allocate memory buffer by the given size.
 func (a *Arena) Alloc(size, overflow uint32, align Align) (uint32, error) {
 	// Verify that the arena isn't already full.
 	origSize := atomic.LoadUint64(&a.n)
@@ -92,6 +99,8 @@ func (a *Arena) Alloc(size, overflow uint32, align Align) (uint32, error) {
 	return offset, nil
 }
 
+// GetBytes returns byte slice at offset. The given size should be just the value
+// size and should NOT include the meta bytes.
 func (a *Arena) GetBytes(offset uint32, size uint32) []byte {
 	if offset == 0 {
 		return nil
@@ -99,6 +108,7 @@ func (a *Arena) GetBytes(offset uint32, size uint32) []byte {
 	return a.buf[offset : offset+size]
 }
 
+// GetPointer get pointer at offset.
 func (a *Arena) GetPointer(offset uint32) unsafe.Pointer {
 	if offset == 0 {
 		return nil
@@ -106,6 +116,7 @@ func (a *Arena) GetPointer(offset uint32) unsafe.Pointer {
 	return unsafe.Pointer(&a.buf[offset])
 }
 
+// GetPointerOffset get the pointer offset in buffer.
 func (a *Arena) GetPointerOffset(ptr unsafe.Pointer) uint32 {
 	if ptr == nil {
 		return 0

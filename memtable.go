@@ -121,9 +121,8 @@ func (mt *memtable) put(key []byte, value []byte, deleted bool, opts WriteOption
 	mvBuf := mv.encode()
 	if mt.sklIter.Seek(key) {
 		return mt.sklIter.Set(mvBuf)
-	} else {
-		return mt.sklIter.Put(key, mvBuf)
 	}
+	return mt.sklIter.Put(key, mvBuf)
 }
 
 // get value from memtable.
