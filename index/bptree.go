@@ -59,9 +59,9 @@ func (bo *BPTreeOptions) GetDirPath() string {
 	return bo.DirPath
 }
 
-// BptreeBolt create a boltdb instance.
+// NewBPTree create a boltdb instance.
 // A file can only be opened once. if not, file lock competition will occur.
-func BptreeBolt(opt *BPTreeOptions) (*BPTree, error) {
+func NewBPTree(opt *BPTreeOptions) (*BPTree, error) {
 	if err := checkBPTreeOptions(opt); err != nil {
 		return nil, err
 	}
@@ -239,7 +239,17 @@ func (b *BPTree) Get(key []byte) (*IndexerMeta, error) {
 	return DecodeMeta(buf), nil
 }
 
-func (b *BPTree) Close() (err error) {
+func (b *BPTree) Sync() error {
+	if err := b.db.Sync(); err != nil {
+		return err
+	}
+	if err := b.metedatadb.Sync(); err != nil {
+		return err
+	}
+	return nil
+}
+
+func (b *BPTree) Close() error {
 	if err := b.db.Close(); err != nil {
 		return err
 	}

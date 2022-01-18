@@ -61,6 +61,8 @@ type Indexer interface {
 
 	DeleteBatch(keys [][]byte) error
 
+	Sync() error
+
 	Close() (err error)
 
 	Iter() (iter IndexerIter, err error)
@@ -73,7 +75,7 @@ func NewIndexer(opts IndexerOptions) (Indexer, error) {
 		if !ok {
 			return nil, ErrOptionsTypeNotMatch
 		}
-		return BptreeBolt(boltOpts)
+		return NewBPTree(boltOpts)
 	default:
 		panic("unknown indexer type")
 	}

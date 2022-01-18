@@ -91,6 +91,11 @@ func (cf *ColumnFamily) listenAndFlush() {
 				logger.Errorf("delete keys in indexer err.%+v", err)
 				break
 			}
+			// must fsync before delete wal.
+			if err := cf.indexer.Sync(); err != nil {
+				logger.Errorf("sync indexer err.%+v", err)
+				break
+			}
 			// delete wal after flush to indexer.
 			if err := table.deleteWal(); err != nil {
 				logger.Errorf("listenAndFlush: delete wal log file err.%+v", err)

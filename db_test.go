@@ -309,7 +309,7 @@ func TestLotusDB_DeleteAfterFlush(t *testing.T) {
 	// write enough data that can trigger flush operation.
 	var writeCount = 600000
 	for i := 0; i <= writeCount; i++ {
-		err := db.Put(GetKey(i), GetValue16B())
+		err := db.Put(GetKey(i), GetValue128B())
 		if i == 32 {
 			err := db.Put(GetKey(i), []byte("lotusdb"))
 			assert.Nil(t, err)

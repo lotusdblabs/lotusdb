@@ -13,6 +13,11 @@ import (
 const paddedSize = 64
 
 type (
+	// memtable is an in-memory data structure holding data before they are flushed into indexer and value log.
+	// Currently the only supported data structure is skip list, see arenaskl.Skiplist.
+	// New writes always insert data to memtable, and reads has query from memtable before reading from indexer and vlog, because memtable`s data is newer.
+	// Once a memtable is full(memtable has its threshold, see MemtableSize in options), it becomes immutable and replaced by a new memtable.
+	// A background goroutine will flush the content of memtable into indexer or vlog, after which the memtable can be deleted.
 	memtable struct {
 		sklIter *arenaskl.Iterator
 		skl     *arenaskl.Skiplist
@@ -20,6 +25,7 @@ type (
 		opts    memOptions
 	}
 
+	// options held by memtable for opening new memtables.
 	memOptions struct {
 		path    string
 		fid     uint32
@@ -28,6 +34,7 @@ type (
 		memSize uint32
 	}
 
+	// in-memory values stored in memtable.
 	memValue struct {
 		value     []byte
 		expiredAt int64
@@ -35,6 +42,8 @@ type (
 	}
 )
 
+// memtable holds a wal(write ahead log), so when opening a memtable, actually it open the corresponding wal file.
+// and load all entries from wal to rebuild the content of the skip list.
 func openMemtable(opts memOptions) (*memtable, error) {
 	// init skip list and arena.
 	var sklIter = new(arenaskl.Iterator)
@@ -81,7 +90,7 @@ func openMemtable(opts memOptions) (*memtable, error) {
 	return table, nil
 }
 
-// Put .
+// put new writes to memtable.
 func (mt *memtable) put(key []byte, value []byte, deleted bool, opts WriteOptions) error {
 	entry := &logfile.LogEntry{
 		Key:   key,
@@ -94,7 +103,7 @@ func (mt *memtable) put(key []byte, value []byte, deleted bool, opts WriteOption
 		entry.Type = logfile.TypeDelete
 	}
 
-	// write entrt into wal first.
+	// write entrty into wal first.
 	buf, _ := logfile.EncodeEntry(entry)
 	if !opts.DisableWal && mt.wal != nil {
 		if err := mt.wal.Write(buf); err != nil {
@@ -117,7 +126,8 @@ func (mt *memtable) put(key []byte, value []byte, deleted bool, opts WriteOption
 	}
 }
 
-// Get .
+// get value from memtable.
+// if the specified key is marked as deleted or expired, a true bool value is returned.
 func (mt *memtable) get(key []byte) (bool, []byte) {
 	if found := mt.sklIter.Seek(key); !found {
 		return false, nil
@@ -135,6 +145,7 @@ func (mt *memtable) get(key []byte) (bool, []byte) {
 	return false, mv.value
 }
 
+// delete operation is to put a key and a special tombstone value.
 func (mt *memtable) delete(key []byte, opts WriteOptions) error {
 	return mt.put(key, nil, true, opts)
 }
