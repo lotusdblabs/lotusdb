@@ -13,8 +13,10 @@ import (
 )
 
 var (
+	// ErrActiveLogFileNil .
 	ErrActiveLogFileNil = errors.New("active log file not exists")
-	ErrLogFileNil       = errors.New("log file %d not exists")
+	// ErrLogFileNil .
+	ErrLogFileNil = errors.New("log file %d not exists")
 )
 
 type (
@@ -90,6 +92,7 @@ func OpenValueLog(path string, blockSize int64, ioType logfile.IOType) (*ValueLo
 	return vlog, nil
 }
 
+// Read .
 func (vlog *ValueLog) Read(fid, size uint32, offset int64) (*logfile.VlogEntry, error) {
 	var logFile *logfile.LogFile
 	if fid == vlog.activeLogFile.Fid {
@@ -120,6 +123,7 @@ func (vlog *ValueLog) Read(fid, size uint32, offset int64) (*logfile.VlogEntry, 
 	return logfile.DecodeVlogEntry(b), nil
 }
 
+// Write .
 func (vlog *ValueLog) Write(ve *logfile.VlogEntry) (*ValuePos, error) {
 	buf, eSize := logfile.EncodeVlogEntry(ve)
 	// if active is reach to thereshold, close it and open a new one.
@@ -148,6 +152,7 @@ func (vlog *ValueLog) Write(ve *logfile.VlogEntry) (*ValuePos, error) {
 	}, nil
 }
 
+// Sync .
 func (vlog *ValueLog) Sync() error {
 	if vlog.activeLogFile == nil {
 		return ErrActiveLogFileNil
@@ -158,6 +163,7 @@ func (vlog *ValueLog) Sync() error {
 	return vlog.activeLogFile.Sync()
 }
 
+// Close .
 func (vlog *ValueLog) Close() error {
 	if vlog.activeLogFile == nil {
 		return ErrActiveLogFileNil

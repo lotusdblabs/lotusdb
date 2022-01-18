@@ -33,32 +33,32 @@ type BPTree struct {
 	metedatadb *bbolt.DB
 }
 
-// SetType self explanatory.
+// SetType self-explanatory.
 func (bo *BPTreeOptions) SetType(typ IndexerType) {
 	bo.IndexType = typ
 }
 
-// SetColumnFamilyName self explanatory.
+// SetColumnFamilyName self-explanatory.
 func (bo *BPTreeOptions) SetColumnFamilyName(cfName string) {
 	bo.ColumnFamilyName = cfName
 }
 
-// SetDirPath self explanatory.
+// SetDirPath self-explanatory.
 func (bo *BPTreeOptions) SetDirPath(dirPath string) {
 	bo.DirPath = dirPath
 }
 
-// GetType self explanatory.
+// GetType self-explanatory.
 func (bo *BPTreeOptions) GetType() IndexerType {
 	return bo.IndexType
 }
 
-// GetColumnFamilyName self explanatory.
+// GetColumnFamilyName self-explanatory.
 func (bo *BPTreeOptions) GetColumnFamilyName() string {
 	return bo.ColumnFamilyName
 }
 
-// GetDirPath self explanatory.
+// GetDirPath self-explanatory.
 func (bo *BPTreeOptions) GetDirPath() string {
 	return bo.DirPath
 }
@@ -129,20 +129,16 @@ func NewBPTree(opt *BPTreeOptions) (*BPTree, error) {
 
 // Put method starts a transaction.
 // This method writes kv according to the bucket, and creates it if the bucket name does not exist.
-func (b *BPTree) Put(k, v []byte) (err error) {
+func (b *BPTree) Put(key, value []byte) (err error) {
 	var tx *bbolt.Tx
-	tx, err = b.db.Begin(true)
-	if err != nil {
+	if tx, err = b.db.Begin(true); err != nil {
 		return
 	}
-
 	bucket := tx.Bucket(b.opts.BucketName)
-
-	err = bucket.Put(k, v)
-	if err != nil {
+	if err = bucket.Put(key, value); err != nil {
+		_ = tx.Rollback()
 		return
 	}
-
 	return tx.Commit()
 }
 
