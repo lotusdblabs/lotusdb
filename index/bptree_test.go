@@ -1,10 +1,14 @@
 package index
 
 import (
+	"bytes"
+	"fmt"
 	"github.com/stretchr/testify/assert"
 	"io/ioutil"
+	"math/rand"
 	"os"
 	"testing"
+	"time"
 )
 
 func TestNewBPTree(t *testing.T) {
@@ -50,6 +54,15 @@ func TestNewBPTree(t *testing.T) {
 }
 
 func TestBPTree_Put(t *testing.T) {
+	path, err := ioutil.TempDir("", "indexer")
+	assert.Nil(t, err)
+	opts := &BPTreeOptions{DirPath: path, IndexType: BptreeBoltDB, ColumnFamilyName: "test", BucketName: []byte("test"), BatchSize: 100000}
+	tree, err := NewBPTree(opts)
+	assert.Nil(t, err)
+	defer func() {
+		_ = os.RemoveAll(path)
+	}()
+
 	type fields struct {
 		bptree *BPTree
 	}
@@ -63,13 +76,228 @@ func TestBPTree_Put(t *testing.T) {
 		args    args
 		wantErr bool
 	}{
-		{},
+		{
+			"nil-key", fields{bptree: tree}, args{key: nil, value: GetValue16B()}, true,
+		},
+		{
+			"nil-value", fields{bptree: tree}, args{key: GetKey(12), value: nil}, false,
+		},
+		{
+			"key-value", fields{bptree: tree}, args{key: GetKey(882), value: GetValue128B()}, false,
+		},
+		{
+			"key-big-value", fields{bptree: tree}, args{key: GetKey(33902), value: GetValue4K()}, false,
+		},
 	}
 	for _, tt := range tests {
 		t.Run(tt.name, func(t *testing.T) {
 			b := tt.fields.bptree
 			if err := b.Put(tt.args.key, tt.args.value); (err != nil) != tt.wantErr {
 				t.Errorf("Put() error = %v, wantErr %v", err, tt.wantErr)
+			}
+		})
+	}
+}
+
+func TestBPTree_PutBatch(t *testing.T) {
+	path, err := ioutil.TempDir("", "indexer")
+	assert.Nil(t, err)
+	opts := &BPTreeOptions{DirPath: path, IndexType: BptreeBoltDB, ColumnFamilyName: "test", BucketName: []byte("test"), BatchSize: 200000}
+	tree, err := NewBPTree(opts)
+	assert.Nil(t, err)
+	defer func() {
+		_ = os.RemoveAll(path)
+	}()
+
+	getkv := func(nums int) []*IndexerNode {
+		var nodes []*IndexerNode
+		for i := nums; i <= nums*2; i++ {
+			node := &IndexerNode{Key: GetKey(i)}
+			meta := new(IndexerMeta)
+			if i%2 == 0 {
+				meta.Value = GetValue16B()
+			} else {
+				meta.Fid = uint32(i)
+				meta.Size = uint32(i * 12)
+				meta.Offset = int64(i * 101)
+			}
+			node.Meta = meta
+			nodes = append(nodes, node)
+		}
+		return nodes
+	}
+
+	var testData [][]*IndexerNode
+	// 0
+	testData = append(testData, nil)
+	// 1
+	testData = append(testData, getkv(1))
+	// 10
+	testData = append(testData, getkv(10))
+	// 10w
+	testData = append(testData, getkv(100000))
+	// 20w
+	testData = append(testData, getkv(200000))
+
+	type fields struct {
+		tree *BPTree
+	}
+	type args struct {
+		nodes []*IndexerNode
+	}
+	tests := []struct {
+		name       string
+		fields     fields
+		args       args
+		wantOffset int
+		wantErr    bool
+		readKeys   []int
+	}{
+		{
+			"zero", fields{tree: tree}, args{nodes: testData[0]}, len(testData[0]) - 1, false, nil,
+		},
+		{
+			"one", fields{tree: tree}, args{nodes: testData[1]}, len(testData[1]) - 1, false, []int{1},
+		},
+		{
+			"ten", fields{tree: tree}, args{nodes: testData[2]}, len(testData[2]) - 1, false, []int{10, 20},
+		},
+		{
+			"10w", fields{tree: tree}, args{nodes: testData[3]}, len(testData[3]) - 1, false, []int{100000, 200000},
+		},
+		{
+			"20w", fields{tree: tree}, args{nodes: testData[4]}, len(testData[4]) - 1, false, []int{200000, 400000},
+		},
+	}
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			b := tt.fields.tree
+			gotOffset, err := b.PutBatch(tt.args.nodes)
+			if (err != nil) != tt.wantErr {
+				t.Errorf("PutBatch() error = %v, wantErr %v", err, tt.wantErr)
+				return
+			}
+			if gotOffset != tt.wantOffset {
+				t.Errorf("PutBatch() gotOffset = %v, want %v", gotOffset, tt.wantOffset)
+			}
+
+			// make sure all writes are valid.
+			for _, i := range tt.readKeys {
+				meta, err := b.Get(GetKey(i))
+				assert.Nil(t, err)
+				if len(meta.Value) == 0 && (meta.Fid == 0 && meta.Size == 0 || meta.Offset == 0) {
+					t.Errorf("PutBatch() got a nil meta, want a valid meta.")
+				}
+			}
+		})
+	}
+}
+
+const alphabet = "abcdefghijklmnopqrstuvwxyz0123456789"
+
+func init() {
+	rand.Seed(time.Now().Unix())
+}
+
+// GetKey length: 32 Bytes
+func GetKey(n int) []byte {
+	return []byte("kvstore-bench-key------" + fmt.Sprintf("%09d", n))
+}
+
+func GetValue16B() []byte {
+	var str bytes.Buffer
+	for i := 0; i < 16; i++ {
+		str.WriteByte(alphabet[rand.Int()%36])
+	}
+	return []byte(str.String())
+}
+
+func GetValue128B() []byte {
+	var str bytes.Buffer
+	for i := 0; i < 128; i++ {
+		str.WriteByte(alphabet[rand.Int()%36])
+	}
+	return []byte(str.String())
+}
+
+func GetValue4K() []byte {
+	var str bytes.Buffer
+	for i := 0; i < 4096; i++ {
+		str.WriteByte(alphabet[rand.Int()%36])
+	}
+	return []byte(str.String())
+}
+
+func TestBPTree_Get(t *testing.T) {
+	path, err := ioutil.TempDir("", "indexer")
+	assert.Nil(t, err)
+	opts := &BPTreeOptions{DirPath: path, IndexType: BptreeBoltDB, ColumnFamilyName: "test", BucketName: []byte("test"), BatchSize: 200000}
+	tree, err := NewBPTree(opts)
+	assert.Nil(t, err)
+	defer func() {
+		_ = os.RemoveAll(path)
+	}()
+
+	// write some data.
+	writeCount := 100
+	deleted1 := writeCount - 33
+	deleted2 := writeCount - 74
+	for i := 0; i <= writeCount; i++ {
+		err := tree.Put(GetKey(i), GetValue128B())
+		assert.Nil(t, err)
+	}
+
+	// delete
+	err = tree.Delete(GetKey(deleted1))
+	assert.Nil(t, err)
+	err = tree.Delete(GetKey(deleted2))
+	assert.Nil(t, err)
+
+	type fields struct {
+		tree *BPTree
+	}
+	type args struct {
+		key []byte
+	}
+	tests := []struct {
+		name      string
+		fields    fields
+		args      args
+		wantValid bool
+		wantErr   bool
+	}{
+		{
+			"nil", fields{tree: tree}, args{key: nil}, false, false,
+		},
+		{
+			"not-exist", fields{tree: tree}, args{key: GetKey(1009932)}, false, false,
+		},
+		{
+			"existed-1", fields{tree: tree}, args{key: GetKey(0)}, true, false,
+		},
+		{
+			"existed-2", fields{tree: tree}, args{key: GetKey(writeCount)}, true, false,
+		},
+		{
+			"deleted-1", fields{tree: tree}, args{key: GetKey(deleted1)}, false, false,
+		},
+		{
+			"deleted-2", fields{tree: tree}, args{key: GetKey(deleted2)}, false, false,
+		},
+	}
+
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			b := tt.fields.tree
+			got, err := b.Get(tt.args.key)
+			if (err != nil) != tt.wantErr {
+				t.Errorf("Get() error = %v, wantErr %v", err, tt.wantErr)
+				return
+			}
+			if tt.wantValid {
+				if len(got.Value) == 0 && (got.Fid == 0 && got.Size == 0 || got.Offset == 0) {
+					t.Errorf("Get() got a nil meta, want a valid meta")
+				}
 			}
 		})
 	}
