@@ -19,7 +19,7 @@ func TestNewBPTree(t *testing.T) {
 	}()
 
 	type args struct {
-		opt *BPTreeOptions
+		opt BPTreeOptions
 	}
 	tests := []struct {
 		name    string
@@ -27,16 +27,16 @@ func TestNewBPTree(t *testing.T) {
 		wantErr bool
 	}{
 		{
-			"normal", args{opt: &BPTreeOptions{DirPath: path, IndexType: BptreeBoltDB, ColumnFamilyName: "test-1", BucketName: []byte("test-1"), BatchSize: 1000}}, false,
+			"normal", args{opt: BPTreeOptions{DirPath: path, IndexType: BptreeBoltDB, ColumnFamilyName: "test-1", BucketName: []byte("test-1"), BatchSize: 1000}}, false,
 		},
 		{
-			"no-dir-path", args{opt: &BPTreeOptions{DirPath: "", IndexType: BptreeBoltDB, ColumnFamilyName: "test-1", BucketName: []byte("test-1"), BatchSize: 1000}}, true,
+			"no-dir-path", args{opt: BPTreeOptions{DirPath: "", IndexType: BptreeBoltDB, ColumnFamilyName: "test-1", BucketName: []byte("test-1"), BatchSize: 1000}}, true,
 		},
 		{
-			"no-cf-name", args{opt: &BPTreeOptions{DirPath: path, IndexType: BptreeBoltDB, ColumnFamilyName: "", BucketName: []byte("test-1"), BatchSize: 1000}}, true,
+			"no-cf-name", args{opt: BPTreeOptions{DirPath: path, IndexType: BptreeBoltDB, ColumnFamilyName: "", BucketName: []byte("test-1"), BatchSize: 1000}}, true,
 		},
 		{
-			"no-bucket-name", args{opt: &BPTreeOptions{DirPath: path, IndexType: BptreeBoltDB, ColumnFamilyName: "test-1", BucketName: nil, BatchSize: 1000}}, true,
+			"no-bucket-name", args{opt: BPTreeOptions{DirPath: path, IndexType: BptreeBoltDB, ColumnFamilyName: "test-1", BucketName: nil, BatchSize: 1000}}, true,
 		},
 	}
 	for _, tt := range tests {
@@ -56,7 +56,7 @@ func TestNewBPTree(t *testing.T) {
 func TestBPTree_Put(t *testing.T) {
 	path, err := ioutil.TempDir("", "indexer")
 	assert.Nil(t, err)
-	opts := &BPTreeOptions{DirPath: path, IndexType: BptreeBoltDB, ColumnFamilyName: "test", BucketName: []byte("test"), BatchSize: 100000}
+	opts := BPTreeOptions{DirPath: path, IndexType: BptreeBoltDB, ColumnFamilyName: "test", BucketName: []byte("test"), BatchSize: 100000}
 	tree, err := NewBPTree(opts)
 	assert.Nil(t, err)
 	defer func() {
@@ -102,7 +102,7 @@ func TestBPTree_Put(t *testing.T) {
 func TestBPTree_PutBatch(t *testing.T) {
 	path, err := ioutil.TempDir("", "indexer")
 	assert.Nil(t, err)
-	opts := &BPTreeOptions{DirPath: path, IndexType: BptreeBoltDB, ColumnFamilyName: "test", BucketName: []byte("test"), BatchSize: 200000}
+	opts := BPTreeOptions{DirPath: path, IndexType: BptreeBoltDB, ColumnFamilyName: "test", BucketName: []byte("test"), BatchSize: 200000}
 	tree, err := NewBPTree(opts)
 	assert.Nil(t, err)
 	defer func() {
@@ -231,7 +231,7 @@ func GetValue4K() []byte {
 func TestBPTree_Get(t *testing.T) {
 	path, err := ioutil.TempDir("", "indexer")
 	assert.Nil(t, err)
-	opts := &BPTreeOptions{DirPath: path, IndexType: BptreeBoltDB, ColumnFamilyName: "test", BucketName: []byte("test"), BatchSize: 200000}
+	opts := BPTreeOptions{DirPath: path, IndexType: BptreeBoltDB, ColumnFamilyName: "test", BucketName: []byte("test"), BatchSize: 200000}
 	tree, err := NewBPTree(opts)
 	assert.Nil(t, err)
 	defer func() {
@@ -301,4 +301,189 @@ func TestBPTree_Get(t *testing.T) {
 			}
 		})
 	}
+}
+
+func TestBPTree_Delete(t *testing.T) {
+	path, err := ioutil.TempDir("", "indexer")
+	assert.Nil(t, err)
+	opts := BPTreeOptions{DirPath: path, IndexType: BptreeBoltDB, ColumnFamilyName: "test", BucketName: []byte("test"), BatchSize: 200000}
+	tree, err := NewBPTree(opts)
+	assert.Nil(t, err)
+	defer func() {
+		_ = os.RemoveAll(path)
+	}()
+	// write some data.
+	writeCount := 100
+	for i := 0; i <= writeCount; i++ {
+		err := tree.Put(GetKey(i), GetValue128B())
+		assert.Nil(t, err)
+	}
+
+	type fields struct {
+		tree *BPTree
+	}
+	type args struct {
+		key []byte
+	}
+	tests := []struct {
+		name    string
+		fields  fields
+		args    args
+		wantErr bool
+	}{
+		{
+			"nil", fields{tree: tree}, args{key: nil}, false,
+		},
+		{
+			"not-exist", fields{tree: tree}, args{key: GetKey(writeCount + 100993)}, false,
+		},
+		{
+			"exist", fields{tree: tree}, args{key: GetKey(writeCount)}, false,
+		},
+	}
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			b := tt.fields.tree
+			if err := b.Delete(tt.args.key); (err != nil) != tt.wantErr {
+				t.Errorf("Delete() error = %v, wantErr %v", err, tt.wantErr)
+			}
+		})
+	}
+}
+
+func TestBPTree_DeleteBatch(t *testing.T) {
+	path, err := ioutil.TempDir("", "indexer")
+	assert.Nil(t, err)
+	opts := BPTreeOptions{DirPath: path, IndexType: BptreeBoltDB, ColumnFamilyName: "test", BucketName: []byte("test"), BatchSize: 179933}
+	tree, err := NewBPTree(opts)
+	assert.Nil(t, err)
+	defer func() {
+		_ = os.RemoveAll(path)
+	}()
+	// write some data.
+	writeCount := 500000
+	var nodes []*IndexerNode
+	for i := 0; i <= writeCount; i++ {
+		nodes = append(nodes, &IndexerNode{
+			Key:  GetKey(i),
+			Meta: &IndexerMeta{Value: GetValue16B()},
+		})
+	}
+	_, err = tree.PutBatch(nodes)
+	assert.Nil(t, err)
+
+	getKeys := func(nums int) [][]byte {
+		var keys [][]byte
+		for i := nums; i < nums*2; i++ {
+			keys = append(keys, GetKey(i))
+		}
+		return keys
+	}
+
+	var deletedKeys [][][]byte
+	// 0
+	deletedKeys = append(deletedKeys, nil)
+	// 1
+	deletedKeys = append(deletedKeys, getKeys(1))
+	// 10
+	deletedKeys = append(deletedKeys, getKeys(10))
+	// 10w
+	deletedKeys = append(deletedKeys, getKeys(100000))
+	// 20w
+	deletedKeys = append(deletedKeys, getKeys(200000))
+
+	type fields struct {
+		tree *BPTree
+	}
+	type args struct {
+		keys [][]byte
+	}
+	tests := []struct {
+		name    string
+		fields  fields
+		args    args
+		wantErr bool
+	}{
+		{
+			"nil", fields{tree: tree}, args{keys: deletedKeys[0]}, false,
+		},
+		{
+			"one", fields{tree: tree}, args{keys: deletedKeys[1]}, false,
+		},
+		{
+			"ten", fields{tree: tree}, args{keys: deletedKeys[2]}, false,
+		},
+		{
+			"10w", fields{tree: tree}, args{keys: deletedKeys[3]}, false,
+		},
+		{
+			"20w", fields{tree: tree}, args{keys: deletedKeys[4]}, false,
+		},
+	}
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			b := tt.fields.tree
+			if err := b.DeleteBatch(tt.args.keys); (err != nil) != tt.wantErr {
+				t.Errorf("DeleteBatch() error = %v, wantErr %v", err, tt.wantErr)
+			}
+
+			// make sure keys are truly deleted.
+			for _, k := range tt.args.keys {
+				got, err := b.Get(k)
+				assert.Nil(t, err)
+				if !(len(got.Value) == 0 && (got.Fid == 0 && got.Size == 0 || got.Offset == 0)) {
+					t.Log("key = ", string(k))
+					t.Errorf("DeleteBatch() want a nil value after deleted, but got = %v", got)
+				}
+			}
+		})
+	}
+}
+
+func TestBPTree_Sync(t *testing.T) {
+	path, err := ioutil.TempDir("", "indexer")
+	assert.Nil(t, err)
+	opts := BPTreeOptions{DirPath: path, IndexType: BptreeBoltDB, ColumnFamilyName: "test", BucketName: []byte("test"), BatchSize: 200000}
+	tree, err := NewBPTree(opts)
+	assert.Nil(t, err)
+	defer func() {
+		_ = os.RemoveAll(path)
+	}()
+
+	// write some data.
+	writeCount := 5000
+	var nodes []*IndexerNode
+	for i := 0; i <= writeCount; i++ {
+		nodes = append(nodes, &IndexerNode{
+			Key:  GetKey(i),
+			Meta: &IndexerMeta{Value: GetValue16B()},
+		})
+	}
+
+	err = tree.Sync()
+	assert.Nil(t, err)
+}
+
+func TestBPTree_Close(t *testing.T) {
+	path, err := ioutil.TempDir("", "indexer")
+	assert.Nil(t, err)
+	opts := BPTreeOptions{DirPath: path, IndexType: BptreeBoltDB, ColumnFamilyName: "test", BucketName: []byte("test"), BatchSize: 200000}
+	tree, err := NewBPTree(opts)
+	assert.Nil(t, err)
+	defer func() {
+		_ = os.RemoveAll(path)
+	}()
+
+	// write some data.
+	writeCount := 5000
+	var nodes []*IndexerNode
+	for i := 0; i <= writeCount; i++ {
+		nodes = append(nodes, &IndexerNode{
+			Key:  GetKey(i),
+			Meta: &IndexerMeta{Value: GetValue16B()},
+		})
+	}
+
+	err = tree.Close()
+	assert.Nil(t, err)
 }

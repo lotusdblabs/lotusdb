@@ -6,10 +6,7 @@ import (
 	"go.etcd.io/bbolt"
 )
 
-const (
-	defaultBatchLoopNum = 1
-	defaultBatchSize    = 100000
-)
+const defaultBatchSize = 100000
 
 // BPTreeOptions options for creating a new bptree.
 type BPTreeOptions struct {
@@ -27,7 +24,7 @@ type BPTreeOptions struct {
 
 // BPTree is a standard b+tree used to store index data.
 type BPTree struct {
-	opts *BPTreeOptions
+	opts BPTreeOptions
 	db   *bbolt.DB
 	// todo
 	metedatadb *bbolt.DB
@@ -65,7 +62,7 @@ func (bo *BPTreeOptions) GetDirPath() string {
 
 // NewBPTree create a boltdb instance.
 // A file can only be opened once. if not, file lock competition will occur.
-func NewBPTree(opt *BPTreeOptions) (*BPTree, error) {
+func NewBPTree(opt BPTreeOptions) (*BPTree, error) {
 	if err := checkBPTreeOptions(opt); err != nil {
 		return nil, err
 	}
@@ -147,12 +144,9 @@ func (b *BPTree) Put(key, value []byte) (err error) {
 // If this function fails during execution, we can write again from the offset position.
 // If offset == len(kv) - 1 , all writes are successful.
 func (b *BPTree) PutBatch(nodes []*IndexerNode) (offset int, err error) {
-	var batchLoopNum = defaultBatchLoopNum
-	if len(nodes) > b.opts.BatchSize {
-		batchLoopNum = len(nodes) / b.opts.BatchSize
-		if len(nodes)%b.opts.BatchSize > 0 {
-			batchLoopNum++
-		}
+	batchLoopNum := len(nodes) / b.opts.BatchSize
+	if len(nodes)%b.opts.BatchSize > 0 {
+		batchLoopNum++
 	}
 
 	batchlimit := b.opts.BatchSize
@@ -166,7 +160,7 @@ func (b *BPTree) PutBatch(nodes []*IndexerNode) (offset int, err error) {
 		bucket := tx.Bucket(b.opts.BucketName)
 
 	itemLoop:
-		for itemIdx := offset; itemIdx < (offset + b.opts.BatchSize - 1); itemIdx++ {
+		for itemIdx := offset; itemIdx < offset+b.opts.BatchSize; itemIdx++ {
 			if itemIdx >= len(nodes) {
 				break itemLoop
 			}
@@ -200,7 +194,7 @@ func (b *BPTree) DeleteBatch(keys [][]byte) error {
 		bucket := tx.Bucket(b.opts.BucketName)
 
 	itemLoop:
-		for itemIdx := offset; itemIdx < (offset + b.opts.BatchSize - 1); itemIdx++ {
+		for itemIdx := offset; itemIdx < offset+b.opts.BatchSize; itemIdx++ {
 			if itemIdx >= len(keys) {
 				break itemLoop
 			}
@@ -259,7 +253,7 @@ func (b *BPTree) Close() error {
 	return nil
 }
 
-func checkBPTreeOptions(opt *BPTreeOptions) error {
+func checkBPTreeOptions(opt BPTreeOptions) error {
 	if opt.ColumnFamilyName == "" {
 		return ErrColumnFamilyNameNil
 	}

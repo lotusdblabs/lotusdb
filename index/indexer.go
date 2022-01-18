@@ -76,10 +76,10 @@ func NewIndexer(opts IndexerOptions) (Indexer, error) {
 	switch opts.GetType() {
 	case BptreeBoltDB:
 		boltOpts, ok := opts.(*BPTreeOptions)
-		if !ok {
+		if !ok || boltOpts == nil {
 			return nil, ErrOptionsTypeNotMatch
 		}
-		return NewBPTree(boltOpts)
+		return NewBPTree(*boltOpts)
 	default:
 		panic("unknown indexer type")
 	}
