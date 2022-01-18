@@ -7,33 +7,20 @@ import (
 )
 
 var (
-	// ErrColumnFamilyNameNil .
+	// ErrColumnFamilyNameNil column family name is nil.
 	ErrColumnFamilyNameNil = errors.New("column family name is nil")
 
-	// ErrBucketNameNil .
+	// ErrBucketNameNil bucket name is nil.
 	ErrBucketNameNil = errors.New("bucket name is nil")
 
-	// ErrDirPathNil .
-	ErrDirPathNil = errors.New("bptree dir path is nil")
+	// ErrDirPathNil indexer dir path is nil.
+	ErrDirPathNil = errors.New("indexer dir path is nil")
 
-	// ErrBucketNotInit .
+	// ErrBucketNotInit bucket not init.
 	ErrBucketNotInit = errors.New("bucket not init")
 
-	// ErrOptionsTypeNotMatch .
+	// ErrOptionsTypeNotMatch indexer options not match.
 	ErrOptionsTypeNotMatch = errors.New("indexer options not match")
-)
-
-type IndexerTx interface{}
-
-type IndexerNode struct {
-	Key  []byte
-	Meta *IndexerMeta
-}
-
-type IndexerType int8
-
-const (
-	BptreeBoltDB IndexerType = iota
 )
 
 const (
@@ -43,6 +30,23 @@ const (
 	metaHeaderSize      = 5 + 5 + 10
 )
 
+// IndexerType type of indexer.
+type IndexerType int8
+
+const (
+	// BptreeBoltDB represents indexer using bptree.
+	BptreeBoltDB IndexerType = iota
+)
+
+// IndexerNode represents the value stored in indexer, including Key and Meta info,
+type IndexerNode struct {
+	Key  []byte
+	Meta *IndexerMeta
+}
+
+// IndexerMeta meta info of a key.
+// If value exists, it means both key and value will be stored in indexer.
+// If not, we will store some info(Fid, Size, Offset) to find the value in value log.
 type IndexerMeta struct {
 	Value  []byte
 	Fid    uint32
@@ -115,8 +119,7 @@ type IndexerIter interface {
 	Close() error
 }
 
-// EncodeMeta .
-func EncodeMeta(m *IndexerMeta) []byte {
+func encodeMeta(m *IndexerMeta) []byte {
 	header := make([]byte, metaHeaderSize)
 	var index int
 	index += binary.PutVarint(header[index:], int64(m.Fid))
@@ -133,7 +136,7 @@ func EncodeMeta(m *IndexerMeta) []byte {
 	}
 }
 
-func DecodeMeta(buf []byte) *IndexerMeta {
+func decodeMeta(buf []byte) *IndexerMeta {
 	m := &IndexerMeta{}
 	var index int
 	fid, n := binary.Varint(buf[index:])

@@ -1,7 +1,6 @@
 package index
 
 import (
-	"sync"
 	"time"
 
 	"go.etcd.io/bbolt"
@@ -9,52 +8,57 @@ import (
 
 const (
 	defaultBatchLoopNum = 1
-	defaultBatchSize    = 10000
+	defaultBatchSize    = 100000
 )
 
+// BPTreeOptions options for creating a new bptree.
 type BPTreeOptions struct {
-	IndexType        IndexerType
+	// DirPath path to store index data.
+	DirPath string
+	// IndexType bptree(bolt).
+	IndexType IndexerType
+	// ColumnFamilyName db column family name, must be unique.
 	ColumnFamilyName string
-	BucketName       []byte
-	DirPath          string
-
-	BatchSize   int
-	MaxDataSize int64
+	// BucketName usually the the same as column family name, must be unique.
+	BucketName []byte
+	// BatchSize flush batch size.
+	BatchSize int
 }
 
+// BPTree is a standard b+tree used to store index data.
 type BPTree struct {
-	db   *bbolt.DB
 	opts *BPTreeOptions
-
+	db   *bbolt.DB
 	// todo
 	metedatadb *bbolt.DB
 }
 
-type BPTreeManager struct {
-	treeMap map[string]*BPTree
-	sync.RWMutex
-}
-
+// SetType self explanatory.
 func (bo *BPTreeOptions) SetType(typ IndexerType) {
 	bo.IndexType = typ
 }
 
+// SetColumnFamilyName self explanatory.
 func (bo *BPTreeOptions) SetColumnFamilyName(cfName string) {
 	bo.ColumnFamilyName = cfName
 }
 
+// SetDirPath self explanatory.
 func (bo *BPTreeOptions) SetDirPath(dirPath string) {
 	bo.DirPath = dirPath
 }
 
+// GetType self explanatory.
 func (bo *BPTreeOptions) GetType() IndexerType {
 	return bo.IndexType
 }
 
+// GetColumnFamilyName self explanatory.
 func (bo *BPTreeOptions) GetColumnFamilyName() string {
 	return bo.ColumnFamilyName
 }
 
+// GetDirPath self explanatory.
 func (bo *BPTreeOptions) GetDirPath() string {
 	return bo.DirPath
 }
@@ -123,9 +127,8 @@ func NewBPTree(opt *BPTreeOptions) (*BPTree, error) {
 	return b, nil
 }
 
-// Put The put method starts a transaction.
-// This method writes kv according to the bucket,
-// and creates it if the bucket name does not exist.
+// Put method starts a transaction.
+// This method writes kv according to the bucket, and creates it if the bucket name does not exist.
 func (b *BPTree) Put(k, v []byte) (err error) {
 	var tx *bbolt.Tx
 	tx, err = b.db.Begin(true)
@@ -171,9 +174,9 @@ func (b *BPTree) PutBatch(nodes []*IndexerNode) (offset int, err error) {
 			if itemIdx >= len(nodes) {
 				break itemLoop
 			}
-			meta := EncodeMeta(nodes[itemIdx].Meta)
+			meta := encodeMeta(nodes[itemIdx].Meta)
 			if err := bucket.Put(nodes[itemIdx].Key, meta); err != nil {
-				tx.Rollback()
+				_ = tx.Rollback()
 				return offset, err
 			}
 		}
@@ -184,6 +187,7 @@ func (b *BPTree) PutBatch(nodes []*IndexerNode) (offset int, err error) {
 	return len(nodes) - 1, nil
 }
 
+// DeleteBatch delete data in batch.
 func (b *BPTree) DeleteBatch(keys [][]byte) error {
 	batchLoopNum := len(keys) / b.opts.BatchSize
 	if len(keys)%b.opts.BatchSize > 0 {
@@ -216,29 +220,28 @@ func (b *BPTree) DeleteBatch(keys [][]byte) error {
 	return nil
 }
 
+// Delete a specified key from indexer.
 func (b *BPTree) Delete(key []byte) error {
-	tx, err := b.db.Begin(false)
-	if err != nil {
-		return err
-	}
-	defer tx.Commit()
-
-	return tx.Bucket(b.opts.BucketName).Delete(key)
+	return b.db.Update(func(tx *bbolt.Tx) error {
+		return tx.Bucket(b.opts.BucketName).Delete(key)
+	})
 }
 
-// Get The put method starts a transaction.
-// This method reads the value from the bucket with key,
+// Get reads the value from the bucket with key.
 func (b *BPTree) Get(key []byte) (*IndexerMeta, error) {
 	tx, err := b.db.Begin(false)
 	if err != nil {
 		return nil, err
 	}
-	defer tx.Rollback()
+	defer func() {
+		_ = tx.Rollback()
+	}()
 
 	buf := tx.Bucket(b.opts.BucketName).Get(key)
-	return DecodeMeta(buf), nil
+	return decodeMeta(buf), nil
 }
 
+// Sync executes fdatasync() against the database file handle.
 func (b *BPTree) Sync() error {
 	if err := b.db.Sync(); err != nil {
 		return err
@@ -249,6 +252,7 @@ func (b *BPTree) Sync() error {
 	return nil
 }
 
+// Close close bolt db.
 func (b *BPTree) Close() error {
 	if err := b.db.Close(); err != nil {
 		return err
