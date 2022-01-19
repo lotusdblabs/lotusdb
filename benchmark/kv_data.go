@@ -14,12 +14,12 @@ func init() {
 }
 
 // GetKey length: 32 Bytes
-func GetKey(n int) []byte {
+func getKey(n int) []byte {
 	return []byte("kvstore-bench-key------" + fmt.Sprintf("%09d", n))
 }
 
 // GetValue128B .
-func GetValue128B() []byte {
+func getValue128B() []byte {
 	var str bytes.Buffer
 	for i := 0; i < 128; i++ {
 		str.WriteByte(alphabet[rand.Int()%36])
@@ -28,7 +28,7 @@ func GetValue128B() []byte {
 }
 
 // GetValue4K .
-func GetValue4K() []byte {
+func getValue4K() []byte {
 	var str bytes.Buffer
 	for i := 0; i < 4096; i++ {
 		str.WriteByte(alphabet[rand.Int()%36])

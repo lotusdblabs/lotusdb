@@ -22,12 +22,12 @@ func init() {
 
 func initData(b *testing.B, db *lotusdb.LotusDB) {
 	for i := 0; i < 500000; i++ {
-		err := db.Put(GetKey(i), GetValue128B())
+		err := db.Put(getKey(i), getValue128B())
 		assert.Nil(b, err)
 	}
 
 	for i := 500000; i < 1000000; i++ {
-		err := db.Put(GetKey(i), GetValue4K())
+		err := db.Put(getKey(i), getValue4K())
 		assert.Nil(b, err)
 	}
 }
@@ -36,7 +36,7 @@ func BenchmarkLotusDB_Put(b *testing.B) {
 	b.ResetTimer()
 	b.ReportAllocs()
 	for i := 0; i < b.N; i++ {
-		err := db.Put(GetKey(i), GetValue128B())
+		err := db.Put(getKey(i), getValue128B())
 		assert.Nil(b, err)
 	}
 }
@@ -45,7 +45,7 @@ func BenchmarkLotusDB_Get(b *testing.B) {
 	b.ResetTimer()
 	b.ReportAllocs()
 	for i := 0; i < b.N; i++ {
-		_, err := db.Get(GetKey(i))
+		_, err := db.Get(getKey(i))
 		assert.Nil(b, err)
 	}
 }

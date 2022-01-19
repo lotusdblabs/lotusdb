@@ -27,7 +27,7 @@ type IOSelector interface {
 	Sync() error
 
 	// Close closes the File, rendering it unusable for I/O.
-	// It will return an error if it has already been called.
+	// It will return an error if it has already been closed.
 	Close() error
 
 	// Delete delete the file.

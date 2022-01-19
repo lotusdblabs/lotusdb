@@ -3,6 +3,7 @@ package ioselector
 import (
 	"fmt"
 	"github.com/stretchr/testify/assert"
+	"os"
 	"path/filepath"
 	"testing"
 )
@@ -291,6 +292,9 @@ func testIOSelectorSync(t *testing.T, ioType uint8) {
 func testIOSelectorClose(t *testing.T, ioType uint8) {
 	sync := func(id int, fsize int64) {
 		absPath, err := filepath.Abs(filepath.Join("/tmp", fmt.Sprintf("0000000%d.wal", id)))
+		defer func() {
+			_ = os.Remove(absPath)
+		}()
 		assert.Nil(t, err)
 		var selector IOSelector
 		if ioType == 0 {
@@ -302,8 +306,8 @@ func testIOSelectorClose(t *testing.T, ioType uint8) {
 		assert.Nil(t, err)
 		defer func() {
 			if selector != nil {
-				// will close before delete it.
-				_ = selector.Delete()
+				err := selector.Close()
+				assert.Nil(t, err)
 			}
 		}()
 		writeSomeData(selector, t)

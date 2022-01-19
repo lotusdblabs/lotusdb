@@ -354,6 +354,54 @@ func TestLotusDB_DeleteAfterFlush(t *testing.T) {
 	}
 }
 
+func TestLotusDB_Close(t *testing.T) {
+	opts := DefaultOptions("/tmp" + separator + "lotusdb")
+	db, err := Open(opts)
+	assert.Nil(t, err)
+	defer destroyDB(db)
+
+	// write some data.
+	var writeCount = 600000
+	for i := 0; i <= writeCount; i++ {
+		err := db.Put(GetKey(i), GetValue128B())
+		assert.Nil(t, err)
+	}
+
+	err = db.Close()
+	assert.Nil(t, err)
+}
+
+// write some data and reopen it.
+func TestReOpenDB(t *testing.T) {
+	opts := DefaultOptions("/tmp" + separator + "lotusdb")
+	db, err := Open(opts)
+	assert.Nil(t, err)
+	defer destroyDB(db)
+
+	// write some data.
+	var writeCount = 600000
+	for i := 0; i <= writeCount; i++ {
+		err := db.Put(GetKey(i), GetValue128B())
+		assert.Nil(t, err)
+	}
+
+	err = db.Close()
+	assert.Nil(t, err)
+
+	// reopen db.
+	db2, err := Open(opts)
+	assert.Nil(t, err)
+
+	// make sure all writes are valid.
+	v1, err := db2.Get(GetKey(0))
+	assert.Nil(t, err)
+	t.Log(string(v1))
+
+	v2, err := db2.Get(GetKey(writeCount))
+	assert.Nil(t, err)
+	t.Log(string(v2))
+}
+
 func destroyDB(db *LotusDB) {
 	if db != nil {
 		if err := os.RemoveAll(db.opts.DBPath); err != nil {
