@@ -8,13 +8,6 @@ import (
 	"runtime"
 )
 
-const (
-	Ldate      = log.Ldate
-	Lshortfile = log.Lshortfile
-	LstdFlags  = log.LstdFlags
-	Ltime      = log.Ltime
-)
-
 type (
 	LogLevel int
 	LogType  int
@@ -41,7 +34,7 @@ const (
 var _log = New()
 
 func init() {
-	SetFlags(Ldate | Ltime | Lshortfile)
+	SetFlags(log.Ldate | log.Ltime | log.Lshortfile)
 	SetHighlighting(runtime.GOOS != "windows")
 }
 
@@ -56,7 +49,7 @@ func NewLogger(w io.Writer, prefix string) *Logger {
 	} else {
 		level = LogLevelInfo
 	}
-	return &Logger{_log: log.New(w, prefix, LstdFlags), level: level, highlighting: true}
+	return &Logger{_log: log.New(w, prefix, log.LstdFlags), level: level, highlighting: true}
 }
 
 func GlobalLogger() *log.Logger {
