@@ -3,14 +3,20 @@ package flock
 import (
 	"github.com/stretchr/testify/assert"
 	"os"
+	"path/filepath"
 	"sync"
 	"sync/atomic"
 	"testing"
 )
 
+// don`t execute the test many times(>5) at once, otherwise you may get an "too many open files" err.
 func TestAcquireFileLock(t *testing.T) {
 	testFn := func(readOnly bool, times int, actual int) {
-		path := "/tmp" + string(os.PathSeparator) + "FLOCK"
+		path, err := filepath.Abs(filepath.Join("/tmp", "flock-test"))
+		assert.Nil(t, err)
+		err = os.MkdirAll(path, os.ModePerm)
+		assert.Nil(t, err)
+
 		var count uint32
 		var flock *FileLockGuard
 
@@ -18,7 +24,9 @@ func TestAcquireFileLock(t *testing.T) {
 			if flock != nil {
 				_ = flock.Release()
 			}
-			_ = os.Remove(path)
+			if err = os.RemoveAll(path); err != nil {
+				t.Error(err)
+			}
 		}()
 
 		wg := &sync.WaitGroup{}
@@ -26,7 +34,7 @@ func TestAcquireFileLock(t *testing.T) {
 		for i := 0; i < times; i++ {
 			go func() {
 				defer wg.Done()
-				lock, err := AcquireFileLock(path, readOnly)
+				lock, err := AcquireFileLock(filepath.Join(path, "FLOCK"), readOnly)
 				if err != nil {
 					atomic.AddUint32(&count, 1)
 				} else {
@@ -47,7 +55,7 @@ func TestAcquireFileLock(t *testing.T) {
 	})
 
 	t.Run("exclusive-3", func(t *testing.T) {
-		testFn(false, 500, 499)
+		testFn(false, 15, 14)
 	})
 
 	t.Run("shared-1", func(t *testing.T) {
@@ -55,25 +63,33 @@ func TestAcquireFileLock(t *testing.T) {
 	})
 
 	t.Run("shared-2", func(t *testing.T) {
-		testFn(true, 500, 0)
+		testFn(true, 15, 0)
 	})
 }
 
 func TestFileLockGuard_Release(t *testing.T) {
-	path := "/tmp" + string(os.PathSeparator) + "FLOCK"
-	defer os.Remove(path)
+	path, err := filepath.Abs(filepath.Join("/tmp", "flock-test"))
+	err = os.MkdirAll(path, os.ModePerm)
+	assert.Nil(t, err)
 
-	lock, err := AcquireFileLock(path, false)
+	assert.Nil(t, err)
+	defer func() {
+		_ = os.Remove(path)
+	}()
+
+	lock, err := AcquireFileLock(filepath.Join(path, "FLOCK"), false)
 	assert.Nil(t, err)
 	err = lock.Release()
 	assert.Nil(t, err)
 }
 
 func TestSyncDir(t *testing.T) {
-	path := "/tmp" + string(os.PathSeparator) + "test-sync" + string(os.PathSeparator)
-	err := os.MkdirAll(path, os.ModePerm)
+	path, err := filepath.Abs(filepath.Join("/tmp", "flock-test"))
 	assert.Nil(t, err)
-	file, err := os.OpenFile(path+"test.txt", os.O_CREATE, 0644)
+	err = os.MkdirAll(path, os.ModePerm)
+	assert.Nil(t, err)
+
+	file, err := os.OpenFile(filepath.Join(path, "test.txt"), os.O_CREATE, 0644)
 	assert.Nil(t, err)
 	defer func() {
 		_ = file.Close()

@@ -4,13 +4,16 @@ import (
 	"github.com/stretchr/testify/assert"
 	"io/ioutil"
 	"os"
+	"path/filepath"
 	"reflect"
 	"testing"
 	"time"
 )
 
 func TestLotusDB_OpenColumnFamily(t *testing.T) {
-	opts := DefaultOptions("/tmp" + separator + "lotusdb")
+	path, err := filepath.Abs(filepath.Join("/tmp", "lotusdb-opencf"))
+	assert.Nil(t, err)
+	opts := DefaultOptions(path)
 	db, err := Open(opts)
 	assert.Nil(t, err)
 	defer destroyDB(db)
@@ -27,8 +30,8 @@ func TestLotusDB_OpenColumnFamily(t *testing.T) {
 	})
 
 	t.Run("spec-dir", func(t *testing.T) {
-		cfopt := DefaultColumnFamilyOptions("cf-1")
-		dir, _ := ioutil.TempDir("", "lotusdb")
+		cfopt := DefaultColumnFamilyOptions("cf-2")
+		dir, _ := ioutil.TempDir("", "lotusdb-opencf2")
 		defer func() {
 			_ = os.RemoveAll(dir)
 		}()
