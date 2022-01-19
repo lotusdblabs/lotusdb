@@ -272,12 +272,14 @@ func checkBPTreeOptions(opt BPTreeOptions) error {
 	return nil
 }
 
+// BPTreeIter bptree iterator.
 type BPTreeIter struct {
 	bpTree *BPTree
 	bucket *bbolt.Bucket
 	tx     *bbolt.Tx
 }
 
+// Iter .
 func (b *BPTree) Iter() (IndexerIter, error) {
 	tx, err := b.db.Begin(false)
 	if err != nil {
@@ -296,26 +298,32 @@ func (b *BPTree) Iter() (IndexerIter, error) {
 	}, nil
 }
 
+// First .
 func (b *BPTreeIter) First() (key, value []byte) {
 	return b.bucket.Cursor().First()
 }
 
+// Last .
 func (b *BPTreeIter) Last() (key, value []byte) {
 	return b.bucket.Cursor().Last()
 }
 
+// Seek .
 func (b *BPTreeIter) Seek(seek []byte) (key, value []byte) {
 	return b.bucket.Cursor().Seek(seek)
 }
 
+// Next .
 func (b *BPTreeIter) Next() (key, value []byte) {
 	return b.bucket.Cursor().Next()
 }
 
+// Prev .
 func (b *BPTreeIter) Prev() (key, value []byte) {
 	return b.bucket.Cursor().Prev()
 }
 
+// Close .
 func (b *BPTreeIter) Close() (err error) {
 	return b.tx.Rollback()
 }

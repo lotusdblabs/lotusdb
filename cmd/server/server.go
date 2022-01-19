@@ -16,15 +16,20 @@ import (
 )
 
 const (
-	PUT    = "PUT"
-	GET    = "GET"
+	// PUT put command.
+	PUT = "PUT"
+	// GET get command.
+	GET = "GET"
+	// DELETE delete command.
 	DELETE = "DELETE"
 )
 
 var db *lotusdb.LotusDB
 
 var (
+	// ErrArgsNumNotMatch number of args not match.
 	ErrArgsNumNotMatch = errors.New("the number of args not match")
+	// ErrNotSupportedCmd command not be supported.
 	ErrNotSupportedCmd = errors.New("the command not be supported")
 )
 

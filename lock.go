@@ -8,7 +8,9 @@ import (
 )
 
 var (
-	ErrLockWaitTimeout  = errors.New("lock wait timeout")
+	// ErrLockWaitTimeout .
+	ErrLockWaitTimeout = errors.New("lock wait timeout")
+	// ErrInvalidStripeIdx .
 	ErrInvalidStripeIdx = errors.New("stripe index is invalid")
 )
 
@@ -31,7 +33,7 @@ type (
 		stripeNum int
 	}
 
-	// LockMapStripe
+	// LockMapStripe .
 	LockMapStripe struct {
 		// chn is used as a  lock of stripe, must hold the lock before modify keys map.
 		chn     chan struct{}
@@ -39,7 +41,7 @@ type (
 		waiters waitersMap
 	}
 
-	// LockInfo
+	// LockInfo .
 	LockInfo struct {
 		exclusive bool
 		txnIds    map[uint64]struct{}
@@ -148,6 +150,7 @@ func (lm *LockMgr) TryLockKey(txnId uint64, cfId int, key uint64, timeout time.D
 	return ErrLockWaitTimeout
 }
 
+// UnlockKey .
 func (lm *LockMgr) UnlockKey(txnId uint64, cfId int, key uint64) {
 	// find the lock map of column family id.
 	lockMap := lm.getLockMap(cfId)
