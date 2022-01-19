@@ -273,57 +273,57 @@ func checkBPTreeOptions(opt BPTreeOptions) error {
 }
 
 // BPTreeIter bptree iterator.
-type BPTreeIter struct {
-	bpTree *BPTree
-	bucket *bbolt.Bucket
-	tx     *bbolt.Tx
-}
-
-// Iter .
-func (b *BPTree) Iter() (IndexerIter, error) {
-	tx, err := b.db.Begin(false)
-	if err != nil {
-		return nil, err
-	}
-
-	bucket := tx.Bucket(b.opts.BucketName)
-	if bucket == nil {
-		return nil, ErrBucketNotInit
-	}
-
-	return &BPTreeIter{
-		bpTree: b,
-		bucket: bucket,
-		tx:     tx,
-	}, nil
-}
-
-// First .
-func (b *BPTreeIter) First() (key, value []byte) {
-	return b.bucket.Cursor().First()
-}
-
-// Last .
-func (b *BPTreeIter) Last() (key, value []byte) {
-	return b.bucket.Cursor().Last()
-}
-
-// Seek .
-func (b *BPTreeIter) Seek(seek []byte) (key, value []byte) {
-	return b.bucket.Cursor().Seek(seek)
-}
-
-// Next .
-func (b *BPTreeIter) Next() (key, value []byte) {
-	return b.bucket.Cursor().Next()
-}
-
-// Prev .
-func (b *BPTreeIter) Prev() (key, value []byte) {
-	return b.bucket.Cursor().Prev()
-}
-
-// Close .
-func (b *BPTreeIter) Close() (err error) {
-	return b.tx.Rollback()
-}
+//type BPTreeIter struct {
+//	bpTree *BPTree
+//	bucket *bbolt.Bucket
+//	tx     *bbolt.Tx
+//}
+//
+//// Iter .
+//func (b *BPTree) Iter() (IndexerIter, error) {
+//	tx, err := b.db.Begin(false)
+//	if err != nil {
+//		return nil, err
+//	}
+//
+//	bucket := tx.Bucket(b.opts.BucketName)
+//	if bucket == nil {
+//		return nil, ErrBucketNotInit
+//	}
+//
+//	return &BPTreeIter{
+//		bpTree: b,
+//		bucket: bucket,
+//		tx:     tx,
+//	}, nil
+//}
+//
+//// First .
+//func (b *BPTreeIter) First() (key, value []byte) {
+//	return b.bucket.Cursor().First()
+//}
+//
+//// Last .
+//func (b *BPTreeIter) Last() (key, value []byte) {
+//	return b.bucket.Cursor().Last()
+//}
+//
+//// Seek .
+//func (b *BPTreeIter) Seek(seek []byte) (key, value []byte) {
+//	return b.bucket.Cursor().Seek(seek)
+//}
+//
+//// Next .
+//func (b *BPTreeIter) Next() (key, value []byte) {
+//	return b.bucket.Cursor().Next()
+//}
+//
+//// Prev .
+//func (b *BPTreeIter) Prev() (key, value []byte) {
+//	return b.bucket.Cursor().Prev()
+//}
+//
+//// Close .
+//func (b *BPTreeIter) Close() (err error) {
+//	return b.tx.Rollback()
+//}

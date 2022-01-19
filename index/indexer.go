@@ -70,7 +70,7 @@ type Indexer interface {
 
 	Close() (err error)
 
-	Iter() (iter IndexerIter, err error)
+	//Iter() (iter IndexerIter, err error)
 }
 
 // NewIndexer create a new Indexer by the given options, return an error, if any.
