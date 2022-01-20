@@ -204,3 +204,23 @@ func TestColumnFamily_Get(t *testing.T) {
 		})
 	}
 }
+
+func TestColumnFamily_Stat(t *testing.T) {
+	opts := DefaultOptions("/tmp" + separator + "lotusdb")
+	db, err := Open(opts)
+	assert.Nil(t, err)
+	defer destroyDB(db)
+
+	cf, err := db.OpenColumnFamily(DefaultColumnFamilyOptions("cf_default"))
+	assert.Nil(t, err)
+
+	// write some data
+	for i := 0; i < 100; i++ {
+		err := db.Put(GetKey(i), GetValue16B())
+		assert.Nil(t, err)
+	}
+
+	stat, err := cf.Stat()
+	assert.Nil(t, err)
+	assert.NotNil(t, stat)
+}

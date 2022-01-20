@@ -49,3 +49,14 @@ func BenchmarkLotusDB_Get(b *testing.B) {
 		assert.Nil(b, err)
 	}
 }
+
+func TestKVData(t *testing.T) {
+	key := getKey(0)
+	assert.NotNil(t, key)
+
+	v1 := getValue128B()
+	assert.NotNil(t, v1)
+
+	v2 := getValue4K()
+	assert.NotNil(t, v2)
+}

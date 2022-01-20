@@ -137,7 +137,9 @@ func (db *LotusDB) OpenColumnFamily(opts ColumnFamilyOptions) (*ColumnFamily, er
 // Close close current colun family.
 func (cf *ColumnFamily) Close() error {
 	for _, dirLock := range cf.dirLocks {
-		dirLock.Release()
+		if err := dirLock.Release(); err != nil {
+			return err
+		}
 	}
 	return nil
 }
