@@ -13,14 +13,15 @@ import (
 )
 
 var (
-	// ErrActiveLogFileNil .
+	// ErrActiveLogFileNil active log file not exists.
 	ErrActiveLogFileNil = errors.New("active log file not exists")
-	// ErrLogFileNil .
+	// ErrLogFileNil log file not exists.
 	ErrLogFileNil = errors.New("log file %d not exists")
 )
 
 type (
-	// ValueLog value log.
+	// ValueLog value log is named after the concept in Wisckey paper(https://www.usenix.org/system/files/conference/fast16/fast16-papers-lu.pdf).
+	// Values will be stored in value log if its size exceed ValueThreshold in options.
 	ValueLog struct {
 		sync.RWMutex
 		opt           options
@@ -92,7 +93,8 @@ func OpenValueLog(path string, blockSize int64, ioType logfile.IOType) (*ValueLo
 	return vlog, nil
 }
 
-// Read .
+// Read a VLogEntry from a specified vlog file at offset, returns an error, if any.
+// If reading from a non-active log file, and the specified file is not open, then we will open it and set it into logFiles.
 func (vlog *ValueLog) Read(fid, size uint32, offset int64) (*logfile.VlogEntry, error) {
 	var logFile *logfile.LogFile
 	if fid == vlog.activeLogFile.Fid {
@@ -123,7 +125,8 @@ func (vlog *ValueLog) Read(fid, size uint32, offset int64) (*logfile.VlogEntry, 
 	return logfile.DecodeVlogEntry(b), nil
 }
 
-// Write .
+// Write new VLogEntry to value log file.
+// If the active log file is full, it will be closed and a new active file will be created to replace it.
 func (vlog *ValueLog) Write(ve *logfile.VlogEntry) (*ValuePos, error) {
 	buf, eSize := logfile.EncodeVlogEntry(ve)
 	// if active is reach to thereshold, close it and open a new one.
@@ -152,7 +155,7 @@ func (vlog *ValueLog) Write(ve *logfile.VlogEntry) (*ValuePos, error) {
 	}, nil
 }
 
-// Sync .
+// Sync only for the active log file.
 func (vlog *ValueLog) Sync() error {
 	if vlog.activeLogFile == nil {
 		return ErrActiveLogFileNil
@@ -163,7 +166,7 @@ func (vlog *ValueLog) Sync() error {
 	return vlog.activeLogFile.Sync()
 }
 
-// Close .
+// Close only for the active log file.
 func (vlog *ValueLog) Close() error {
 	if vlog.activeLogFile == nil {
 		return ErrActiveLogFileNil
