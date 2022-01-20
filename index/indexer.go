@@ -16,9 +16,6 @@ var (
 	// ErrDirPathNil indexer dir path is nil.
 	ErrDirPathNil = errors.New("indexer dir path is nil")
 
-	// ErrBucketNotInit bucket not init.
-	ErrBucketNotInit = errors.New("bucket not init")
-
 	// ErrOptionsTypeNotMatch indexer options not match.
 	ErrOptionsTypeNotMatch = errors.New("indexer options not match")
 )
@@ -50,7 +47,6 @@ type IndexerNode struct {
 type IndexerMeta struct {
 	Value  []byte
 	Fid    uint32
-	Size   uint32
 	Offset int64
 }
 
@@ -132,7 +128,6 @@ func encodeMeta(m *IndexerMeta) []byte {
 	header := make([]byte, metaHeaderSize)
 	var index int
 	index += binary.PutVarint(header[index:], int64(m.Fid))
-	index += binary.PutVarint(header[index:], int64(m.Size))
 	index += binary.PutVarint(header[index:], m.Offset)
 
 	if m.Value != nil {
@@ -150,10 +145,6 @@ func decodeMeta(buf []byte) *IndexerMeta {
 	var index int
 	fid, n := binary.Varint(buf[index:])
 	m.Fid = uint32(fid)
-	index += n
-
-	size, n := binary.Varint(buf[index:])
-	m.Size = uint32(size)
 	index += n
 
 	offset, n := binary.Varint(buf[index:])

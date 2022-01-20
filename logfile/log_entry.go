@@ -5,9 +5,10 @@ import (
 	"hash/crc32"
 )
 
+// MaxHeaderSize max entry header size.
 // crc32	typ    kSize	vSize	expiredAt
 //  4    +   1   +   5   +   5    +    10      = 25 (refer to binary.MaxVarintLen32 and binary.MaxVarintLen64)
-const maxHeaderSize = 25
+const MaxHeaderSize = 25
 
 // EntryType type of Entry.
 type EntryType byte
@@ -44,7 +45,7 @@ func EncodeEntry(e *LogEntry) ([]byte, int) {
 	if e == nil {
 		return nil, 0
 	}
-	header := make([]byte, maxHeaderSize)
+	header := make([]byte, MaxHeaderSize)
 	// encode header.
 	header[4] = byte(e.Type)
 	var index = 5

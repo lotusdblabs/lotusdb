@@ -64,6 +64,10 @@ func openMemtable(opts memOptions) (*memtable, error) {
 	for {
 		if entry, size, err := wal.ReadLogEntry(offset); err == nil {
 			offset += size
+			// No need to use atomic updates.
+			// This function is only be executed in one goroutine at startup.
+			wal.WriteAt += size
+
 			mv := &memValue{
 				value:     entry.Value,
 				expiredAt: entry.ExpiredAt,
@@ -81,7 +85,7 @@ func openMemtable(opts memOptions) (*memtable, error) {
 				return nil, err
 			}
 		} else {
-			if err == io.EOF {
+			if err == io.EOF || err == logfile.ErrEndOfEntry {
 				break
 			}
 			return nil, err

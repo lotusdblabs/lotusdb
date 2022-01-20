@@ -395,11 +395,11 @@ func TestReOpenDB(t *testing.T) {
 	// make sure all writes are valid.
 	v1, err := db2.Get(GetKey(0))
 	assert.Nil(t, err)
-	t.Log(string(v1))
+	assert.NotNil(t, v1)
 
 	v2, err := db2.Get(GetKey(writeCount))
 	assert.Nil(t, err)
-	t.Log(string(v2))
+	assert.NotNil(t, v2)
 }
 
 func destroyDB(db *LotusDB) {

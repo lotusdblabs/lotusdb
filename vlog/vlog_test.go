@@ -23,10 +23,11 @@ func testOpenValueLog(t *testing.T, ioType logfile.IOType) {
 	path, err := filepath.Abs(filepath.Join("/tmp", "vlog-test"))
 	assert.Nil(t, err)
 	err = os.MkdirAll(path, os.ModePerm)
+	assert.Nil(t, err)
+
 	defer func() {
 		_ = os.RemoveAll(path)
 	}()
-	assert.Nil(t, err)
 	type args struct {
 		path      string
 		blockSize int64
@@ -69,11 +70,22 @@ func testOpenValueLog(t *testing.T, ioType logfile.IOType) {
 }
 
 func TestValueLog_Write(t *testing.T) {
+	path, err := filepath.Abs(filepath.Join("/tmp", "vlog-test"))
+	assert.Nil(t, err)
+	err = os.MkdirAll(path, os.ModePerm)
+	assert.Nil(t, err)
+
+	defer func() {
+		//_ = os.RemoveAll(path)
+	}()
+	vlog, err := OpenValueLog(path, 100, logfile.FileIO)
+	assert.Nil(t, err)
+
 	type fields struct {
 		vlog *ValueLog
 	}
 	type args struct {
-		ve *logfile.VlogEntry
+		e *logfile.LogEntry
 	}
 	tests := []struct {
 		name    string
@@ -82,12 +94,17 @@ func TestValueLog_Write(t *testing.T) {
 		want    *ValuePos
 		wantErr bool
 	}{
-		//{},
+		{
+			"nil-entry", fields{vlog: vlog}, args{e: nil}, &ValuePos{}, false,
+		},
+		{
+			"no-key", fields{vlog: vlog}, args{e: &logfile.LogEntry{Value: []byte("lotusdb")}}, &ValuePos{Fid: 0, Offset: 0}, false,
+		},
 	}
 	for _, tt := range tests {
 		t.Run(tt.name, func(t *testing.T) {
 			vlog := tt.fields.vlog
-			got, err := vlog.Write(tt.args.ve)
+			got, err := vlog.Write(tt.args.e)
 			if (err != nil) != tt.wantErr {
 				t.Errorf("Write() error = %v, wantErr %v", err, tt.wantErr)
 				return
@@ -97,4 +114,14 @@ func TestValueLog_Write(t *testing.T) {
 			}
 		})
 	}
+}
+
+func TestValueLog_Close(t *testing.T) {
+	//path, err := filepath.Abs(filepath.Join("/tmp", "vlog-test"))
+	//assert.Nil(t, err)
+	//err = os.MkdirAll(path, os.ModePerm)
+	//assert.Nil(t, err)
+	//
+	//log, err := OpenValueLog(path, 1024 << 20, logfile.FileIO)
+	//assert.Nil(t, err)
 }

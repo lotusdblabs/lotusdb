@@ -4,6 +4,7 @@ import (
 	"errors"
 	"fmt"
 	"github.com/flower-corp/lotusdb/logfile"
+	"io"
 	"io/ioutil"
 	"sort"
 	"strconv"
@@ -15,6 +16,7 @@ import (
 var (
 	// ErrActiveLogFileNil active log file not exists.
 	ErrActiveLogFileNil = errors.New("active log file not exists")
+
 	// ErrLogFileNil log file not exists.
 	ErrLogFileNil = errors.New("log file %d not exists")
 )
@@ -32,7 +34,6 @@ type (
 	// ValuePos value position.
 	ValuePos struct {
 		Fid    uint32
-		Size   uint32
 		Offset int64
 	}
 
@@ -90,12 +91,16 @@ func OpenValueLog(path string, blockSize int64, ioType logfile.IOType) (*ValueLo
 	for i := 0; i < len(fids)-1; i++ {
 		vlog.logFiles[fids[i]] = &logfile.LogFile{Fid: fids[i]}
 	}
+
+	if err := vlog.setLogFileState(); err != nil {
+		return nil, err
+	}
 	return vlog, nil
 }
 
 // Read a VLogEntry from a specified vlog file at offset, returns an error, if any.
 // If reading from a non-active log file, and the specified file is not open, then we will open it and set it into logFiles.
-func (vlog *ValueLog) Read(fid, size uint32, offset int64) (*logfile.VlogEntry, error) {
+func (vlog *ValueLog) Read(fid uint32, offset int64) (*logfile.LogEntry, error) {
 	var logFile *logfile.LogFile
 	if fid == vlog.activeLogFile.Fid {
 		logFile = vlog.activeLogFile
@@ -118,17 +123,17 @@ func (vlog *ValueLog) Read(fid, size uint32, offset int64) (*logfile.VlogEntry, 
 		return nil, fmt.Errorf(ErrLogFileNil.Error(), fid)
 	}
 
-	b, err := logFile.Read(offset, size)
-	if err != nil {
-		return nil, err
+	entry, _, err := logFile.ReadLogEntry(offset)
+	if err == logfile.ErrEndOfEntry {
+		return &logfile.LogEntry{}, nil
 	}
-	return logfile.DecodeVlogEntry(b), nil
+	return entry, err
 }
 
 // Write new VLogEntry to value log file.
 // If the active log file is full, it will be closed and a new active file will be created to replace it.
-func (vlog *ValueLog) Write(ve *logfile.VlogEntry) (*ValuePos, error) {
-	buf, eSize := logfile.EncodeVlogEntry(ve)
+func (vlog *ValueLog) Write(ent *logfile.LogEntry) (*ValuePos, error) {
+	buf, eSize := logfile.EncodeEntry(ent)
 	// if active is reach to thereshold, close it and open a new one.
 	if vlog.activeLogFile.WriteAt+int64(eSize) >= vlog.opt.blockSize {
 		vlog.Lock()
@@ -150,7 +155,6 @@ func (vlog *ValueLog) Write(ve *logfile.VlogEntry) (*ValuePos, error) {
 	writeAt := atomic.LoadInt64(&vlog.activeLogFile.WriteAt)
 	return &ValuePos{
 		Fid:    vlog.activeLogFile.Fid,
-		Size:   uint32(eSize),
 		Offset: writeAt - int64(eSize),
 	}, nil
 }
@@ -185,6 +189,36 @@ func (vlog *ValueLog) createLogFile() (*logfile.LogFile, error) {
 		return nil, err
 	}
 	return logFile, nil
+}
+
+func (vlog *ValueLog) setLogFileState() error {
+	if vlog.activeLogFile == nil {
+		return ErrActiveLogFileNil
+	}
+	var offset int64 = 0
+	for {
+		if _, size, err := vlog.activeLogFile.ReadLogEntry(offset); err == nil {
+			offset += size
+			// No need to use atomic updates.
+			// This function is only be executed in one goroutine at startup.
+			vlog.activeLogFile.WriteAt += size
+		} else {
+			if err == io.EOF || err == logfile.ErrEndOfEntry {
+				break
+			}
+			return err
+		}
+	}
+	// if active file`s capacity is nearly close to block size, open a new active file.
+	if vlog.activeLogFile.WriteAt+logfile.MaxHeaderSize >= vlog.opt.blockSize {
+		vlog.logFiles[vlog.activeLogFile.Fid] = vlog.activeLogFile
+		logFile, err := vlog.createLogFile()
+		if err != nil {
+			return err
+		}
+		vlog.activeLogFile = logFile
+	}
+	return nil
 }
 
 // do it later.

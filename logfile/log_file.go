@@ -4,7 +4,6 @@ import (
 	"errors"
 	"fmt"
 	"hash/crc32"
-	"io"
 	"os"
 	"sync"
 	"sync/atomic"
@@ -18,6 +17,9 @@ var (
 
 	// ErrWriteSizeNotEqual write size is not equal to entry size.
 	ErrWriteSizeNotEqual = errors.New("logfile: write size is not equal to entry size")
+
+	// ErrEndOfEntry end of entry in log file.
+	ErrEndOfEntry = errors.New("logfile: end of entry in log file")
 )
 
 const (
@@ -88,18 +90,18 @@ func OpenLogFile(path string, fid uint32, fsize int64, ftype FileType, ioType IO
 }
 
 // ReadLogEntry read a LogEntry from log file at offset.
-// It returns a LogEntry, entry size and err, if any.
+// It returns a LogEntry, entry size and an error, if any.
 // If offset is invalid, the err is io.EOF.
 func (lf *LogFile) ReadLogEntry(offset int64) (*LogEntry, int64, error) {
 	// read entry header.
-	headerBuf, err := lf.readBytes(offset, maxHeaderSize)
+	headerBuf, err := lf.readBytes(offset, MaxHeaderSize)
 	if err != nil {
 		return nil, 0, err
 	}
 	header, size := decodeHeader(headerBuf)
 	// the end of entries.
 	if header.crc32 == 0 && header.kSize == 0 && header.vSize == 0 {
-		return nil, 0, io.EOF
+		return nil, 0, ErrEndOfEntry
 	}
 
 	e := &LogEntry{
@@ -123,10 +125,6 @@ func (lf *LogFile) ReadLogEntry(offset int64) (*LogEntry, int64, error) {
 	if crc := getEntryCrc(e, headerBuf[crc32.Size:size]); crc != header.crc32 {
 		return nil, 0, ErrInvalidCrc
 	}
-
-	// No need to use atomic updates.
-	// This function is only be executed in one goroutine.
-	lf.WriteAt += entrySize
 	return e, entrySize, nil
 }
 

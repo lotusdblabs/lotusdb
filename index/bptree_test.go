@@ -118,7 +118,6 @@ func TestBPTree_PutBatch(t *testing.T) {
 				meta.Value = GetValue16B()
 			} else {
 				meta.Fid = uint32(i)
-				meta.Size = uint32(i * 12)
 				meta.Offset = int64(i * 101)
 			}
 			node.Meta = meta
@@ -185,7 +184,7 @@ func TestBPTree_PutBatch(t *testing.T) {
 			for _, i := range tt.readKeys {
 				meta, err := b.Get(GetKey(i))
 				assert.Nil(t, err)
-				if len(meta.Value) == 0 && (meta.Fid == 0 && meta.Size == 0 || meta.Offset == 0) {
+				if len(meta.Value) == 0 && (meta.Fid == 0 && meta.Offset == 0) {
 					t.Errorf("PutBatch() got a nil meta, want a valid meta.")
 				}
 			}
@@ -295,7 +294,7 @@ func TestBPTree_Get(t *testing.T) {
 				return
 			}
 			if tt.wantValid {
-				if len(got.Value) == 0 && (got.Fid == 0 && got.Size == 0 || got.Offset == 0) {
+				if len(got.Value) == 0 && (got.Fid == 0 && got.Offset == 0) {
 					t.Errorf("Get() got a nil meta, want a valid meta")
 				}
 			}
@@ -431,7 +430,7 @@ func TestBPTree_DeleteBatch(t *testing.T) {
 			for _, k := range tt.args.keys {
 				got, err := b.Get(k)
 				assert.Nil(t, err)
-				if !(len(got.Value) == 0 && (got.Fid == 0 && got.Size == 0 || got.Offset == 0)) {
+				if !(len(got.Value) == 0 && (got.Fid == 0 && got.Offset == 0)) {
 					t.Log("key = ", string(k))
 					t.Errorf("DeleteBatch() want a nil value after deleted, but got = %v", got)
 				}

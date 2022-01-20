@@ -66,14 +66,13 @@ func (cf *ColumnFamily) listenAndFlush() {
 					deletedKeys = append(deletedKeys, key)
 				} else {
 					if len(mv.value) >= cf.opts.ValueThreshold {
-						valuePos, err := cf.vlog.Write(&logfile.VlogEntry{Key: key, Value: mv.value})
+						valuePos, err := cf.vlog.Write(&logfile.LogEntry{Key: key, Value: mv.value})
 						if err != nil {
 							logger.Errorf("write to value log err.%+v", err)
 							break
 						}
 						node.Meta = &index.IndexerMeta{
 							Fid:    valuePos.Fid,
-							Size:   valuePos.Size,
 							Offset: valuePos.Offset,
 						}
 					} else {

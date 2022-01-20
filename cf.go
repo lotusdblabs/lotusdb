@@ -184,16 +184,16 @@ func (cf *ColumnFamily) Get(key []byte) ([]byte, error) {
 	}
 
 	// get value from value log.
-	if indexMeta.Size != 0 {
-		ve, err := cf.vlog.Read(indexMeta.Fid, indexMeta.Size, indexMeta.Offset)
+	if len(indexMeta.Value) == 0 {
+		ent, err := cf.vlog.Read(indexMeta.Fid, indexMeta.Offset)
 		if err != nil {
 			return nil, err
 		}
-		if len(ve.Value) != 0 {
-			return ve.Value, nil
+		if len(ent.Value) != 0 {
+			return ent.Value, nil
 		}
 	}
-	return nil, nil
+	return indexMeta.Value, nil
 }
 
 // Delete delete from current column family.
