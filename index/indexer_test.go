@@ -1,6 +1,9 @@
 package index
 
 import (
+	"github.com/stretchr/testify/assert"
+	"os"
+	"path/filepath"
 	"reflect"
 	"testing"
 )
@@ -62,6 +65,40 @@ func TestDecodeMeta(t *testing.T) {
 		t.Run(tt.name, func(t *testing.T) {
 			if got := decodeMeta(tt.args.buf); !reflect.DeepEqual(got, tt.want) {
 				t.Errorf("DecodeMeta() = %v, want %v", got, tt.want)
+			}
+		})
+	}
+}
+
+func TestNewIndexer(t *testing.T) {
+	path, err := filepath.Abs(filepath.Join("/tmp", "indexer-test"))
+	assert.Nil(t, err)
+	err = os.MkdirAll(path, os.ModePerm)
+	assert.Nil(t, err)
+	defer func() {
+		_ = os.RemoveAll(path)
+	}()
+	type args struct {
+		opts IndexerOptions
+	}
+	tests := []struct {
+		name    string
+		args    args
+		wantErr bool
+	}{
+		{
+			"bptree-bolt", args{&BPTreeOptions{DirPath: path, IndexType: BptreeBoltDB, ColumnFamilyName: "test-1", BucketName: []byte("test-1"), BatchSize: 1000}}, false,
+		},
+	}
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			got, err := NewIndexer(tt.args.opts)
+			if (err != nil) != tt.wantErr {
+				t.Errorf("NewIndexer() error = %v, wantErr %v", err, tt.wantErr)
+				return
+			}
+			if !tt.wantErr {
+				assert.NotNil(t, got)
 			}
 		})
 	}

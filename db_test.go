@@ -32,6 +32,11 @@ func TestOpen(t *testing.T) {
 		opendb(opts)
 		_ = os.RemoveAll(dir)
 	})
+
+	t.Run("no-cf-name", func(t *testing.T) {
+		opts.CfOpts.CfName = ""
+		opendb(opts)
+	})
 }
 
 func TestLotusDB_Put(t *testing.T) {
