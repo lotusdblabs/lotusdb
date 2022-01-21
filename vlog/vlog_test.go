@@ -1,6 +1,7 @@
 package vlog
 
 import (
+	"bytes"
 	"github.com/flower-corp/lotusdb/logfile"
 	"github.com/stretchr/testify/assert"
 	"os"
@@ -70,15 +71,25 @@ func testOpenValueLog(t *testing.T, ioType logfile.IOType) {
 }
 
 func TestValueLog_Write(t *testing.T) {
+	t.Run("fileio", func(t *testing.T) {
+		testValueLogWrite(t, logfile.FileIO)
+	})
+
+	t.Run("mmap", func(t *testing.T) {
+		testValueLogWrite(t, logfile.MMap)
+	})
+}
+
+func testValueLogWrite(t *testing.T, ioType logfile.IOType) {
 	path, err := filepath.Abs(filepath.Join("/tmp", "vlog-test"))
 	assert.Nil(t, err)
 	err = os.MkdirAll(path, os.ModePerm)
 	assert.Nil(t, err)
 
 	defer func() {
-		//_ = os.RemoveAll(path)
+		_ = os.RemoveAll(path)
 	}()
-	vlog, err := OpenValueLog(path, 100, logfile.FileIO)
+	vlog, err := OpenValueLog(path, 100, ioType)
 	assert.Nil(t, err)
 
 	type fields struct {
@@ -94,11 +105,18 @@ func TestValueLog_Write(t *testing.T) {
 		want    *ValuePos
 		wantErr bool
 	}{
+		// don`t run the sub test alone, because the offset is incremental, run them all at once!!!
 		{
 			"nil-entry", fields{vlog: vlog}, args{e: nil}, &ValuePos{}, false,
 		},
 		{
 			"no-key", fields{vlog: vlog}, args{e: &logfile.LogEntry{Value: []byte("lotusdb")}}, &ValuePos{Fid: 0, Offset: 0}, false,
+		},
+		{
+			"no-value", fields{vlog: vlog}, args{e: &logfile.LogEntry{Key: []byte("key1")}}, &ValuePos{Fid: 0, Offset: 15}, false,
+		},
+		{
+			"with-key-value", fields{vlog: vlog}, args{e: &logfile.LogEntry{Key: []byte("key2"), Value: []byte("lotusdb-2")}}, &ValuePos{Fid: 0, Offset: 27}, false,
 		},
 	}
 	for _, tt := range tests {
@@ -112,16 +130,57 @@ func TestValueLog_Write(t *testing.T) {
 			if !reflect.DeepEqual(got, tt.want) {
 				t.Errorf("Write() got = %v, want %v", got, tt.want)
 			}
+			// get from vlog.
+			if tt.args.e != nil {
+				e, err := vlog.Read(got.Fid, got.Offset)
+				assert.Nil(t, err)
+				if bytes.Compare(e.Key, tt.args.e.Key) != 0 || bytes.Compare(e.Value, tt.args.e.Value) != 0 {
+					t.Errorf("Write() write = %v, but got = %v", tt.args.e, got)
+				}
+			}
 		})
 	}
 }
 
-func TestValueLog_Close(t *testing.T) {
-	//path, err := filepath.Abs(filepath.Join("/tmp", "vlog-test"))
-	//assert.Nil(t, err)
-	//err = os.MkdirAll(path, os.ModePerm)
-	//assert.Nil(t, err)
-	//
-	//log, err := OpenValueLog(path, 1024 << 20, logfile.FileIO)
-	//assert.Nil(t, err)
+func TestValueLog_WriteAfterReopen(t *testing.T) {
+	path, err := filepath.Abs(filepath.Join("/tmp", "vlog-test"))
+	assert.Nil(t, err)
+	err = os.MkdirAll(path, os.ModePerm)
+	assert.Nil(t, err)
+
+	defer func() {
+		_ = os.RemoveAll(path)
+	}()
+	vlog, err := OpenValueLog(path, 100, logfile.FileIO)
+	assert.Nil(t, err)
+
+	tests := []*logfile.LogEntry{
+		{
+			Key: []byte("key-1"), Value: []byte("val-1")},
+		{
+			Key: []byte("key-2"), Value: []byte("val-2"),
+		},
+	}
+	var pos []*ValuePos
+
+	pos1, err := vlog.Write(tests[0])
+	assert.Nil(t, err)
+	pos = append(pos, pos1)
+
+	err = vlog.Close()
+	assert.Nil(t, err)
+
+	// reopen it.
+	vlog, err = OpenValueLog(path, 100, logfile.MMap)
+	pos2, err := vlog.Write(tests[1])
+	assert.Nil(t, err)
+	pos = append(pos, pos2)
+
+	for i := 0; i < len(pos); i++ {
+		res, err := vlog.Read(pos[i].Fid, pos[i].Offset)
+		assert.Nil(t, err)
+		if bytes.Compare(res.Key, tests[i].Key) != 0 || bytes.Compare(res.Value, tests[i].Value) != 0 {
+			t.Errorf("WriteAfterReopen() write = %v, but got = %v", tests[i], res)
+		}
+	}
 }
