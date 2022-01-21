@@ -39,6 +39,7 @@ func TestOpenValueLog(t *testing.T) {
 
 		// open again, the old active log file is close to full, so we weill create a new active log file.
 		vlog1, err := OpenValueLog(path, 180, logfile.FileIO)
+		assert.Nil(t, err)
 		assert.NotNil(t, vlog1)
 	})
 }
@@ -198,6 +199,7 @@ func TestValueLog_WriteAfterReopen(t *testing.T) {
 
 	// reopen it.
 	vlog, err = OpenValueLog(path, 100, logfile.MMap)
+	assert.Nil(t, err)
 	pos2, err := vlog.Write(tests[1])
 	assert.Nil(t, err)
 	pos = append(pos, pos2)

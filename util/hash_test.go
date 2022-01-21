@@ -68,6 +68,12 @@ func TestMemHash3(t *testing.T) {
 	assert.Equal(t, hash1, hash2)
 }
 
+func TestMemHash_SpecialCase(t *testing.T) {
+	buf := make([]byte, 0)
+	u := rthash(buf, 0)
+	assert.Equal(t, u, uint64(0))
+}
+
 func BenchmarkMemHash(b *testing.B) {
 	b.ResetTimer()
 	b.ReportAllocs()

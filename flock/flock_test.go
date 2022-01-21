@@ -76,6 +76,7 @@ func TestAcquireFileLock_NotExist(t *testing.T) {
 
 func TestFileLockGuard_Release(t *testing.T) {
 	path, err := filepath.Abs(filepath.Join("/tmp", "flock-test"))
+	assert.Nil(t, err)
 	err = os.MkdirAll(path, os.ModePerm)
 	assert.Nil(t, err)
 
