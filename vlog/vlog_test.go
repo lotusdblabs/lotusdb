@@ -2,12 +2,15 @@ package vlog
 
 import (
 	"bytes"
+	"fmt"
 	"github.com/flower-corp/lotusdb/logfile"
 	"github.com/stretchr/testify/assert"
+	"math/rand"
 	"os"
 	"path/filepath"
 	"reflect"
 	"testing"
+	"time"
 )
 
 func TestOpenValueLog(t *testing.T) {
@@ -17,6 +20,26 @@ func TestOpenValueLog(t *testing.T) {
 
 	t.Run("mmap", func(t *testing.T) {
 		testOpenValueLog(t, logfile.MMap)
+	})
+
+	t.Run("set file state", func(t *testing.T) {
+		path, err := filepath.Abs(filepath.Join("/tmp", "vlog-test"))
+		assert.Nil(t, err)
+		err = os.MkdirAll(path, os.ModePerm)
+		assert.Nil(t, err)
+
+		defer func() {
+			_ = os.RemoveAll(path)
+		}()
+		vlog, err := OpenValueLog(path, 180, logfile.FileIO)
+		assert.Nil(t, err)
+
+		_, err = vlog.Write(&logfile.LogEntry{Key: GetKey(923), Value: GetValue128B()})
+		assert.Nil(t, err)
+
+		// open again, the old active log file is close to full, so we weill create a new active log file.
+		vlog1, err := OpenValueLog(path, 180, logfile.FileIO)
+		assert.NotNil(t, vlog1)
 	})
 }
 
@@ -89,7 +112,7 @@ func testValueLogWrite(t *testing.T, ioType logfile.IOType) {
 	defer func() {
 		_ = os.RemoveAll(path)
 	}()
-	vlog, err := OpenValueLog(path, 100, ioType)
+	vlog, err := OpenValueLog(path, 1024<<20, ioType)
 	assert.Nil(t, err)
 
 	type fields struct {
@@ -117,6 +140,9 @@ func testValueLogWrite(t *testing.T, ioType logfile.IOType) {
 		},
 		{
 			"with-key-value", fields{vlog: vlog}, args{e: &logfile.LogEntry{Key: []byte("key2"), Value: []byte("lotusdb-2")}}, &ValuePos{Fid: 0, Offset: 27}, false,
+		},
+		{
+			"key-big-value", fields{vlog: vlog}, args{e: &logfile.LogEntry{Key: []byte("key3"), Value: GetValue4K()}}, &ValuePos{Fid: 0, Offset: 48}, false,
 		},
 	}
 	for _, tt := range tests {
@@ -183,4 +209,228 @@ func TestValueLog_WriteAfterReopen(t *testing.T) {
 			t.Errorf("WriteAfterReopen() write = %v, but got = %v", tests[i], res)
 		}
 	}
+}
+
+func TestValueLog_WriteUntilNewActiveFileOpen(t *testing.T) {
+	t.Run("fileio", func(t *testing.T) {
+		testValueLogWriteUntilNewActiveFileOpen(t, logfile.FileIO)
+	})
+
+	t.Run("mmap", func(t *testing.T) {
+		testValueLogWriteUntilNewActiveFileOpen(t, logfile.MMap)
+	})
+}
+
+func testValueLogWriteUntilNewActiveFileOpen(t *testing.T, ioType logfile.IOType) {
+	path, err := filepath.Abs(filepath.Join("/tmp", "vlog-test"))
+	assert.Nil(t, err)
+	err = os.MkdirAll(path, os.ModePerm)
+	assert.Nil(t, err)
+
+	defer func() {
+		_ = os.RemoveAll(path)
+	}()
+	vlog, err := OpenValueLog(path, 10<<20, ioType)
+	assert.Nil(t, err)
+
+	writeCount := 100000
+	var poses []*ValuePos
+	random := rand.Intn(writeCount - 1)
+	if random == 0 {
+		random++
+	}
+	for i := 0; i <= writeCount; i++ {
+		pos, err := vlog.Write(&logfile.LogEntry{Key: GetKey(i), Value: GetValue128B()})
+		assert.Nil(t, err)
+		if i == 0 || i == writeCount || i == random {
+			poses = append(poses, pos)
+		}
+	}
+	// make sure all writes are valid.
+	for i := 0; i < len(poses); i++ {
+		e, err := vlog.Read(poses[i].Fid, poses[i].Offset)
+		assert.Nil(t, err)
+		if len(e.Key) == 0 && len(e.Value) == 0 {
+			t.Errorf("WriteUntilNewActiveFileOpen() write a valid entry, but got = %v", e)
+		}
+	}
+}
+
+func TestValueLog_Read(t *testing.T) {
+	t.Run("fileio", func(t *testing.T) {
+		testValueLogRead(t, logfile.FileIO)
+	})
+
+	t.Run("mmap", func(t *testing.T) {
+		testValueLogRead(t, logfile.MMap)
+	})
+}
+
+func testValueLogRead(t *testing.T, ioType logfile.IOType) {
+	path, err := filepath.Abs(filepath.Join("/tmp", "vlog-test"))
+	assert.Nil(t, err)
+	err = os.MkdirAll(path, os.ModePerm)
+	assert.Nil(t, err)
+
+	defer func() {
+		_ = os.RemoveAll(path)
+	}()
+	vlog, err := OpenValueLog(path, 10<<20, ioType)
+	assert.Nil(t, err)
+
+	type data struct {
+		e   *logfile.LogEntry
+		pos *ValuePos
+	}
+	var datas []*data
+
+	// write some data.
+	writeCount := 100000
+	random := rand.Intn(writeCount - 1)
+	if random == 0 {
+		random++
+	}
+	for i := 0; i <= writeCount; i++ {
+		v := GetValue128B()
+		pos, err := vlog.Write(&logfile.LogEntry{Key: GetKey(i), Value: v})
+		assert.Nil(t, err)
+		if i == 0 || i == writeCount || i == random {
+			datas = append(datas, &data{e: &logfile.LogEntry{Key: GetKey(i), Value: v}, pos: pos})
+		}
+	}
+
+	type fields struct {
+		vlog *ValueLog
+	}
+	type args struct {
+		fid    uint32
+		offset int64
+	}
+	tests := []struct {
+		name    string
+		fields  fields
+		args    args
+		want    *logfile.LogEntry
+		wantErr bool
+	}{
+		{
+			"invalid-fid", fields{vlog: vlog}, args{fid: 100, offset: 0}, nil, true,
+		},
+		{
+			"invalid-offset", fields{vlog: vlog}, args{fid: 0, offset: -23}, nil, true,
+		},
+		{
+			"offset-not-entry", fields{vlog: vlog}, args{fid: 0, offset: 1}, nil, true,
+		},
+		{
+			"valid-0", fields{vlog: vlog}, args{fid: datas[0].pos.Fid, offset: datas[0].pos.Offset}, datas[0].e, false,
+		},
+		{
+			"valid-1", fields{vlog: vlog}, args{fid: datas[1].pos.Fid, offset: datas[1].pos.Offset}, datas[1].e, false,
+		},
+		{
+			"valid-2", fields{vlog: vlog}, args{fid: datas[2].pos.Fid, offset: datas[2].pos.Offset}, datas[2].e, false,
+		},
+	}
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			vlog := tt.fields.vlog
+			got, err := vlog.Read(tt.args.fid, tt.args.offset)
+			if (err != nil) != tt.wantErr {
+				t.Errorf("Read() error = %v, wantErr %v", err, tt.wantErr)
+				return
+			}
+			if !reflect.DeepEqual(got, tt.want) {
+				t.Errorf("Read() got = %v, want %v", got, tt.want)
+			}
+		})
+	}
+}
+
+func TestValueLog_ReadFromArchivedFile(t *testing.T) {
+	path, err := filepath.Abs(filepath.Join("/tmp", "vlog-test"))
+	assert.Nil(t, err)
+	err = os.MkdirAll(path, os.ModePerm)
+	assert.Nil(t, err)
+
+	defer func() {
+		_ = os.RemoveAll(path)
+	}()
+	vlog, err := OpenValueLog(path, 10<<20, logfile.FileIO)
+	assert.Nil(t, err)
+
+	writeCount := 100000
+	for i := 0; i <= writeCount; i++ {
+		_, err := vlog.Write(&logfile.LogEntry{Key: GetKey(i), Value: GetValue128B()})
+		assert.Nil(t, err)
+	}
+	// close and reopen it.
+	err = vlog.Close()
+	assert.Nil(t, err)
+
+	vlog1, err := OpenValueLog(path, 10<<20, logfile.FileIO)
+	assert.Nil(t, err)
+	e, err := vlog1.Read(0, 0)
+	assert.Nil(t, err)
+	assert.True(t, len(e.Key) > 0)
+	assert.True(t, len(e.Value) > 0)
+}
+
+func TestValueLog_Sync(t *testing.T) {
+	path, err := filepath.Abs(filepath.Join("/tmp", "vlog-test"))
+	assert.Nil(t, err)
+	err = os.MkdirAll(path, os.ModePerm)
+	assert.Nil(t, err)
+
+	defer func() {
+		_ = os.RemoveAll(path)
+	}()
+	vlog, err := OpenValueLog(path, 10<<20, logfile.FileIO)
+	assert.Nil(t, err)
+
+	err = vlog.Sync()
+	assert.Nil(t, err)
+}
+
+func TestValueLog_Close(t *testing.T) {
+	path, err := filepath.Abs(filepath.Join("/tmp", "vlog-test"))
+	assert.Nil(t, err)
+	err = os.MkdirAll(path, os.ModePerm)
+	assert.Nil(t, err)
+
+	defer func() {
+		_ = os.RemoveAll(path)
+	}()
+	vlog, err := OpenValueLog(path, 10<<20, logfile.MMap)
+	assert.Nil(t, err)
+
+	err = vlog.Close()
+	assert.Nil(t, err)
+}
+
+const alphabet = "abcdefghijklmnopqrstuvwxyz0123456789"
+
+func init() {
+	rand.Seed(time.Now().Unix())
+}
+
+// GetKey length: 32 Bytes
+func GetKey(n int) []byte {
+	return []byte("kvstore-bench-key------" + fmt.Sprintf("%09d", n))
+}
+
+func GetValue128B() []byte {
+	var str bytes.Buffer
+	for i := 0; i < 128; i++ {
+		str.WriteByte(alphabet[rand.Int()%36])
+	}
+	return []byte(str.String())
+}
+
+func GetValue4K() []byte {
+	var str bytes.Buffer
+	for i := 0; i < 4096; i++ {
+		str.WriteByte(alphabet[rand.Int()%36])
+	}
+	return []byte(str.String())
 }

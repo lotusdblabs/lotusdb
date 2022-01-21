@@ -70,7 +70,7 @@ func OpenValueLog(path string, blockSize int64, ioType logfile.IOType) (*ValueLo
 
 	// load in order.
 	sort.Slice(fids, func(i, j int) bool {
-		return fids[i] > fids[j]
+		return fids[i] < fids[j]
 	})
 	if len(fids) == 0 {
 		fids = append(fids, logfile.InitialLogFileId)
@@ -137,6 +137,9 @@ func (vlog *ValueLog) Write(ent *logfile.LogEntry) (*ValuePos, error) {
 	// if active is reach to thereshold, close it and open a new one.
 	if vlog.activeLogFile.WriteAt+int64(eSize) >= vlog.opt.blockSize {
 		vlog.Lock()
+		if err := vlog.Sync(); err != nil {
+			return nil, err
+		}
 		vlog.logFiles[vlog.activeLogFile.Fid] = vlog.activeLogFile
 
 		logFile, err := vlog.createLogFile()
@@ -219,9 +222,4 @@ func (vlog *ValueLog) setLogFileState() error {
 		vlog.activeLogFile = logFile
 	}
 	return nil
-}
-
-// do it later.
-func (vlog *ValueLog) compact() {
-	// todo
 }
