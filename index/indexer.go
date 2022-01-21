@@ -135,9 +135,8 @@ func encodeMeta(m *IndexerMeta) []byte {
 		copy(buf[:index], header[:])
 		copy(buf[index:], m.Value)
 		return buf
-	} else {
-		return header[:index]
 	}
+	return header[:index]
 }
 
 func decodeMeta(buf []byte) *IndexerMeta {

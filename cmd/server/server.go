@@ -97,6 +97,7 @@ func banner() {
 	fmt.Println("A powerful storage engine for TiDB and TiKV")
 }
 
+// ExecuteCmds execute command and get result.
 func ExecuteCmds(cmds []string) (result []byte, err error) {
 	switch strings.ToUpper(cmds[0]) {
 	case PUT:
