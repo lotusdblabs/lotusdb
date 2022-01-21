@@ -486,3 +486,14 @@ func TestBPTree_Close(t *testing.T) {
 	err = tree.Close()
 	assert.Nil(t, err)
 }
+
+func TestBPTreeOptions(t *testing.T) {
+	opts := &BPTreeOptions{}
+	opts.SetDirPath("tmp")
+	opts.SetType(BptreeBoltDB)
+	opts.SetColumnFamilyName("cf_default")
+
+	opts.GetType()
+	opts.GetDirPath()
+	opts.GetColumnFamilyName()
+}
