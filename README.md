@@ -12,7 +12,7 @@ Key features:
 
 LotusDB is inspired by a paper named [SLM-DB](https://www.usenix.org/conference/fast19/presentation/kaiyrakhmet) in USENIX FAST ’19, and the [Wisckey](https://www.usenix.org/system/files/conference/fast16/fast16-papers-lu.pdf) paper also helps a lot.
 
-
+![](https://github.com/flower-corp/lotusdb/blob/main/resource/img/design-overview.png)
 
 ## Quick Start
 
@@ -24,7 +24,7 @@ coming soon.
 
 ## Contributing
 
-
+see [CONTRIBUTING.md](https://github.com/flower-corp/lotusdb/blob/main/CONTRIBUTING.md)
 
 ## License
 
