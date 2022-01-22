@@ -224,3 +224,53 @@ func TestColumnFamily_Stat(t *testing.T) {
 	assert.Nil(t, err)
 	assert.NotNil(t, stat)
 }
+
+func TestColumnFamily_IsClosed(t *testing.T) {
+	opts := DefaultOptions("/tmp" + separator + "lotusdb")
+	db, err := Open(opts)
+	assert.Nil(t, err)
+	defer destroyDB(db)
+
+	cf, err := db.OpenColumnFamily(DefaultColumnFamilyOptions("cf_default"))
+	assert.Nil(t, err)
+
+	c1 := cf.IsClosed()
+	assert.False(t, c1)
+
+	err = cf.Close()
+	assert.Nil(t, err)
+
+	c2 := cf.IsClosed()
+	assert.True(t, c2)
+}
+
+func TestColumnFamily_Sync(t *testing.T) {
+	opts := DefaultOptions("/tmp" + separator + "lotusdb")
+	db, err := Open(opts)
+	assert.Nil(t, err)
+	defer destroyDB(db)
+
+	cf, err := db.OpenColumnFamily(DefaultColumnFamilyOptions("cf_default"))
+	assert.Nil(t, err)
+
+	// write some data
+	for i := 0; i < 100; i++ {
+		err := db.Put(GetKey(i), GetValue16B())
+		assert.Nil(t, err)
+	}
+	err = cf.Sync()
+	assert.Nil(t, err)
+}
+
+func TestColumnFamily_Options(t *testing.T) {
+	opts := DefaultOptions("/tmp" + separator + "lotusdb")
+	db, err := Open(opts)
+	assert.Nil(t, err)
+	defer destroyDB(db)
+
+	cf, err := db.OpenColumnFamily(DefaultColumnFamilyOptions("cf_default"))
+	assert.Nil(t, err)
+
+	options := cf.Options()
+	assert.NotNil(t, options.CfName)
+}

@@ -11,6 +11,7 @@ import (
 	"strconv"
 	"strings"
 	"sync"
+	"sync/atomic"
 
 	"github.com/flower-corp/lotusdb/index"
 	"github.com/flower-corp/lotusdb/logfile"
@@ -47,6 +48,8 @@ type ColumnFamily struct {
 	// At least one FileLockGuard(cf/indexer/vlog dirs are all the same).
 	// And at most three FileLockGuards(cf/indexer/vlog dirs are all different).
 	dirLocks []*flock.FileLockGuard
+	// represents whether the cf is closed, 0: false, 1: true.
+	closed uint32
 }
 
 // Stat statistics info of column family.
@@ -134,16 +137,6 @@ func (db *LotusDB) OpenColumnFamily(opts ColumnFamilyOptions) (*ColumnFamily, er
 	return cf, nil
 }
 
-// Close close current colun family.
-func (cf *ColumnFamily) Close() error {
-	for _, dirLock := range cf.dirLocks {
-		if err := dirLock.Release(); err != nil {
-			return err
-		}
-	}
-	return nil
-}
-
 // Put put to current column family.
 func (cf *ColumnFamily) Put(key, value []byte) error {
 	return cf.PutWithOptions(key, value, nil)
@@ -220,6 +213,39 @@ func (cf *ColumnFamily) Stat() (*Stat, error) {
 		st.MemtableSize += int64(table.skl.Size())
 	}
 	return st, nil
+}
+
+// Close close current colun family.
+func (cf *ColumnFamily) Close() error {
+	atomic.StoreUint32(&cf.closed, 1)
+	var err error
+	for _, dirLock := range cf.dirLocks {
+		err = dirLock.Release()
+	}
+	// sync all contents.
+	err = cf.Sync()
+	return err
+}
+
+// IsClosed return whether the column family is closed.
+func (cf *ColumnFamily) IsClosed() bool {
+	return atomic.LoadUint32(&cf.closed) == 1
+}
+
+// Sync syncs the content of current colun family to disk.
+func (cf *ColumnFamily) Sync() error {
+	if err := cf.activeMem.syncWAL(); err != nil {
+		return err
+	}
+	if err := cf.indexer.Sync(); err != nil {
+		return err
+	}
+	return cf.vlog.Sync()
+}
+
+// Options returns a copy of current column family options.
+func (cf *ColumnFamily) Options() ColumnFamilyOptions {
+	return cf.opts
 }
 
 func (cf *ColumnFamily) openMemtables() error {
