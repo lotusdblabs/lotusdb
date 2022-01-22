@@ -10,15 +10,17 @@ Key features:
 
 ## Design Overview
 
+LotusDB is inspired by a paper named [SLM-DB](https://www.usenix.org/conference/fast19/presentation/kaiyrakhmet) in USENIX FAST ’19, and the [Wisckey](https://www.usenix.org/system/files/conference/fast16/fast16-papers-lu.pdf) paper also helps a lot.
+
 
 
 ## Quick Start
 
-
+**1.embedded usage:** see [examples](https://github.com/flower-corp/lotusdb/tree/main/examples).
 
 ## Documentation
 
-
+coming soon.
 
 ## Contributing
 
