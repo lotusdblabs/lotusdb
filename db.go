@@ -18,11 +18,9 @@ var (
 // You can create a custom ColumnFamily by calling method OpenColumnFamily.
 type LotusDB struct {
 	// all column families.
-	cfs map[string]*ColumnFamily
-	// global lock manager that guarantees consistency of read and write.
-	lockMgr *LockMgr
-	opts    Options
-	mu      sync.Mutex
+	cfs  map[string]*ColumnFamily
+	opts Options
+	mu   sync.Mutex
 }
 
 // Open a new LotusDB instance, actually will just open the default column family.
