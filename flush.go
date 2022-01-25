@@ -109,8 +109,9 @@ func (cf *ColumnFamily) listenAndFlush() {
 			cf.mu.Unlock()
 		case <-sig:
 			return
-			// db closed or cf closed
-			//case <-closed:
+			// cf has closed.
+		case <-cf.closedC:
+			return
 		}
 	}
 }

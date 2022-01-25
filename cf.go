@@ -49,7 +49,8 @@ type ColumnFamily struct {
 	// And at most three FileLockGuards(cf/indexer/vlog dirs are all different).
 	dirLocks []*flock.FileLockGuard
 	// represents whether the cf is closed, 0: false, 1: true.
-	closed uint32
+	closed  uint32
+	closedC chan struct{}
 }
 
 // Stat statistics info of column family.
@@ -100,6 +101,7 @@ func (db *LotusDB) OpenColumnFamily(opts ColumnFamilyOptions) (*ColumnFamily, er
 	cf := &ColumnFamily{
 		opts:     opts,
 		dirLocks: flocks,
+		closedC:  make(chan struct{}),
 		flushChn: make(chan *memtable, opts.MemtableNums-1),
 	}
 	// open active and immutable memtables.
@@ -228,6 +230,7 @@ func (cf *ColumnFamily) Stat() (*Stat, error) {
 // Close close current colun family.
 func (cf *ColumnFamily) Close() error {
 	atomic.StoreUint32(&cf.closed, 1)
+	close(cf.closedC)
 	var err error
 	for _, dirLock := range cf.dirLocks {
 		err = dirLock.Release()
