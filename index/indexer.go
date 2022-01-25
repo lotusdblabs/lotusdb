@@ -22,7 +22,6 @@ var (
 
 const (
 	indexFileSuffixName = ".index"
-	metaFileSuffixName  = ".meta"
 	separator           = string(os.PathSeparator)
 	metaHeaderSize      = 5 + 5 + 10
 )
@@ -65,8 +64,6 @@ type Indexer interface {
 	Sync() error
 
 	Close() (err error)
-
-	//Iter() (iter IndexerIter, err error)
 }
 
 // NewIndexer create a new Indexer by the given options, return an error, if any.

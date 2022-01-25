@@ -26,8 +26,6 @@ type BPTreeOptions struct {
 type BPTree struct {
 	opts BPTreeOptions
 	db   *bbolt.DB
-	// todo
-	metedatadb *bbolt.DB
 }
 
 // SetType self-explanatory.
@@ -69,26 +67,11 @@ func NewBPTree(opt BPTreeOptions) (*BPTree, error) {
 
 	// open metadatadb and db
 	path := opt.DirPath + separator + opt.GetColumnFamilyName()
-	metaDatadb, err := bbolt.Open(path+metaFileSuffixName, 0600, &bbolt.Options{
-		Timeout:         1 * time.Second,
-		NoSync:          true,
-		InitialMmapSize: 1024,
-	})
-	if err != nil {
-		return nil, err
-	}
-
 	db, err := bbolt.Open(path+indexFileSuffixName, 0600, &bbolt.Options{
 		Timeout:         1 * time.Second,
 		NoSync:          true,
 		InitialMmapSize: 1024,
 	})
-	if err != nil {
-		return nil, err
-	}
-
-	// open metadatadb and db TX
-	metaDatadbTx, err := metaDatadb.Begin(true)
 	if err != nil {
 		return nil, err
 	}
@@ -99,28 +82,15 @@ func NewBPTree(opt BPTreeOptions) (*BPTree, error) {
 	}
 
 	// cas create bucket
-	if _, err := metaDatadbTx.CreateBucketIfNotExists([]byte("meta")); err != nil {
-		return nil, err
-	}
-
 	if _, err := tx.CreateBucketIfNotExists(opt.BucketName); err != nil {
 		return nil, err
 	}
-
 	// commit operation
-	if err := metaDatadbTx.Commit(); err != nil {
-		return nil, err
-	}
-
 	if err := tx.Commit(); err != nil {
 		return nil, err
 	}
 
-	b := &BPTree{
-		metedatadb: metaDatadb,
-		db:         db,
-		opts:       opt,
-	}
+	b := &BPTree{db: db, opts: opt}
 	return b, nil
 }
 
@@ -233,24 +203,12 @@ func (b *BPTree) Get(key []byte) (*IndexerMeta, error) {
 
 // Sync executes fdatasync() against the database file handle.
 func (b *BPTree) Sync() error {
-	if err := b.db.Sync(); err != nil {
-		return err
-	}
-	if err := b.metedatadb.Sync(); err != nil {
-		return err
-	}
-	return nil
+	return b.db.Sync()
 }
 
 // Close close bolt db.
 func (b *BPTree) Close() error {
-	if err := b.db.Close(); err != nil {
-		return err
-	}
-	if err := b.metedatadb.Close(); err != nil {
-		return err
-	}
-	return nil
+	return b.db.Close()
 }
 
 func checkBPTreeOptions(opt BPTreeOptions) error {
@@ -271,59 +229,3 @@ func checkBPTreeOptions(opt BPTreeOptions) error {
 	}
 	return nil
 }
-
-// BPTreeIter bptree iterator.
-//type BPTreeIter struct {
-//	bpTree *BPTree
-//	bucket *bbolt.Bucket
-//	tx     *bbolt.Tx
-//}
-//
-//// Iter .
-//func (b *BPTree) Iter() (IndexerIter, error) {
-//	tx, err := b.db.Begin(false)
-//	if err != nil {
-//		return nil, err
-//	}
-//
-//	bucket := tx.Bucket(b.opts.BucketName)
-//	if bucket == nil {
-//		return nil, ErrBucketNotInit
-//	}
-//
-//	return &BPTreeIter{
-//		bpTree: b,
-//		bucket: bucket,
-//		tx:     tx,
-//	}, nil
-//}
-//
-//// First .
-//func (b *BPTreeIter) First() (key, value []byte) {
-//	return b.bucket.Cursor().First()
-//}
-//
-//// Last .
-//func (b *BPTreeIter) Last() (key, value []byte) {
-//	return b.bucket.Cursor().Last()
-//}
-//
-//// Seek .
-//func (b *BPTreeIter) Seek(seek []byte) (key, value []byte) {
-//	return b.bucket.Cursor().Seek(seek)
-//}
-//
-//// Next .
-//func (b *BPTreeIter) Next() (key, value []byte) {
-//	return b.bucket.Cursor().Next()
-//}
-//
-//// Prev .
-//func (b *BPTreeIter) Prev() (key, value []byte) {
-//	return b.bucket.Cursor().Prev()
-//}
-//
-//// Close .
-//func (b *BPTreeIter) Close() (err error) {
-//	return b.tx.Rollback()
-//}
