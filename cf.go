@@ -145,8 +145,6 @@ func (cf *ColumnFamily) Put(key, value []byte) error {
 // PutWithOptions put to current column family with options.
 func (cf *ColumnFamily) PutWithOptions(key, value []byte, opt *WriteOptions) error {
 	// waiting for enough memtable sapce to write.
-	cf.mu.Lock()
-	defer cf.mu.Unlock()
 	size := uint32(len(key) + len(value))
 	if err := cf.waitMemSpace(size); err != nil {
 		return err
@@ -154,6 +152,8 @@ func (cf *ColumnFamily) PutWithOptions(key, value []byte, opt *WriteOptions) err
 	if opt == nil {
 		opt = new(WriteOptions)
 	}
+	cf.mu.Lock()
+	defer cf.mu.Unlock()
 	if err := cf.activeMem.put(key, value, false, *opt); err != nil {
 		return err
 	}
@@ -162,8 +162,6 @@ func (cf *ColumnFamily) PutWithOptions(key, value []byte, opt *WriteOptions) err
 
 // Get get value by the specified key from current column family.
 func (cf *ColumnFamily) Get(key []byte) ([]byte, error) {
-	cf.mu.RLock()
-	defer cf.mu.RUnlock()
 	tables := cf.getMemtables()
 	// get from active and immutable memtables.
 	for _, mem := range tables {
@@ -172,6 +170,8 @@ func (cf *ColumnFamily) Get(key []byte) ([]byte, error) {
 		}
 	}
 
+	cf.mu.RLock()
+	defer cf.mu.RUnlock()
 	// get index from bptree.
 	indexMeta, err := cf.indexer.Get(key)
 	if err != nil {
@@ -200,11 +200,15 @@ func (cf *ColumnFamily) Delete(key []byte) error {
 
 // DeleteWithOptions delete from current column family with options.
 func (cf *ColumnFamily) DeleteWithOptions(key []byte, opt *WriteOptions) error {
-	cf.mu.Lock()
-	defer cf.mu.Unlock()
+	size := uint32(len(key))
+	if err := cf.waitMemSpace(size); err != nil {
+		return err
+	}
 	if opt == nil {
 		opt = new(WriteOptions)
 	}
+	cf.mu.Lock()
+	defer cf.mu.Unlock()
 	if err := cf.activeMem.delete(key, *opt); err != nil {
 		return err
 	}
