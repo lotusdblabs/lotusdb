@@ -313,8 +313,8 @@ func (cf *ColumnFamily) openMemtables() error {
 }
 
 func (cf *ColumnFamily) getMemtables() []*memtable {
-	cf.mu.Lock()
-	defer cf.mu.Unlock()
+	cf.mu.RLock()
+	defer cf.mu.RUnlock()
 
 	immuLen := len(cf.immuMems)
 	var tables = make([]*memtable, immuLen+1)
