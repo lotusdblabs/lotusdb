@@ -18,15 +18,9 @@
 package arenaskl
 
 import (
-	"errors"
 	"math"
 	"sync/atomic"
 	"unsafe"
-)
-
-var (
-	// ErrArenaFull allocation failed because arena is full.
-	ErrArenaFull = errors.New("allocation failed because arena is full")
 )
 
 // Align requested alignment.

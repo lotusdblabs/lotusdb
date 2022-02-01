@@ -111,7 +111,7 @@ func (it *Iterator) SeekForPrev(key []byte) (found bool) {
 // Put creates a new key/value record if it does not yet exist and positions the
 // iterator on it. If the record already exists, then Add positions the iterator
 // on the most current value and returns ErrRecordExists. If there isn't enough
-// room in the arena, then Add returns ErrArenaFull.
+// room in the arena, it will grow the arena buf size automatically.
 func (it *Iterator) Put(key []byte, val []byte) error {
 	var spl [maxHeight]splice
 	if it.seekForSplice(key, &spl) {
