@@ -90,18 +90,13 @@ func TestFull(t *testing.T) {
 	var it Iterator
 	it.Init(l)
 
-	foundArenaFull := false
 	for i := 0; i < 100; i++ {
 		err := it.Put([]byte(fmt.Sprintf("%05d", i)), newValue(i))
-		if err == ErrArenaFull {
-			foundArenaFull = true
-		}
+		require.Nil(t, err)
 	}
 
-	require.True(t, foundArenaFull)
-
 	err := it.Set([]byte("someval"))
-	require.Equal(t, ErrArenaFull, err)
+	require.Nil(t, err)
 
 	// Delete does not perform any allocation.
 	err = it.Delete()

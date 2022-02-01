@@ -81,7 +81,7 @@ func (a *Arena) Alloc(size, overflow uint32, align Align) (uint32, error) {
 	// Verify that the arena isn't already full.
 	origSize := atomic.LoadUint64(&a.n)
 	if int(origSize) > len(a.buf) {
-		return 0, ErrArenaFull
+		a.growBufSize(origSize - uint64(len(a.buf)))
 	}
 
 	// Pad the allocation with enough bytes to ensure the requested alignment.
@@ -90,8 +90,7 @@ func (a *Arena) Alloc(size, overflow uint32, align Align) (uint32, error) {
 	// Use 64-bit arithmetic to protect against overflow.
 	newSize := atomic.AddUint64(&a.n, uint64(padded))
 	if int(newSize)+int(overflow) > len(a.buf) {
-		// Doubles as a check against newSize > math.MaxUint32.
-		return 0, ErrArenaFull
+		a.growBufSize(uint64(padded + overflow))
 	}
 
 	// Return the aligned offset.
@@ -122,4 +121,10 @@ func (a *Arena) GetPointerOffset(ptr unsafe.Pointer) uint32 {
 		return 0
 	}
 	return uint32(uintptr(ptr) - uintptr(unsafe.Pointer(&a.buf[0])))
+}
+
+func (a *Arena) growBufSize(growBy uint64) {
+	newBuf := make([]byte, uint64(len(a.buf))+growBy)
+	copy(newBuf, a.buf)
+	a.buf = newBuf
 }
