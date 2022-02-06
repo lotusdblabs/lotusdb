@@ -77,9 +77,8 @@ func (db *LotusDB) OpenColumnFamily(opts ColumnFamilyOptions) (*ColumnFamily, er
 		opts.ValueLogDir = opts.DirPath
 	}
 
-	db.mu.Lock()
-	defer db.mu.Unlock()
-	if columnFamily, ok := db.cfs[opts.CfName]; ok {
+	// return directly if the column family already exists.
+	if columnFamily := db.getColumnFamily(opts.CfName); columnFamily != nil {
 		return columnFamily, nil
 	}
 	// create dir paths.
@@ -134,7 +133,9 @@ func (db *LotusDB) OpenColumnFamily(opts ColumnFamilyOptions) (*ColumnFamily, er
 	}
 	cf.vlog = valueLog
 
+	db.mu.Lock()
 	db.cfs[opts.CfName] = cf
+	db.mu.Unlock()
 	go cf.listenAndFlush()
 	return cf, nil
 }

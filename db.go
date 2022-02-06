@@ -20,7 +20,7 @@ type LotusDB struct {
 	// all column families.
 	cfs  map[string]*ColumnFamily
 	opts Options
-	mu   sync.Mutex
+	mu   sync.RWMutex
 }
 
 // Open a new LotusDB instance, actually will just open the default column family.
@@ -90,7 +90,7 @@ func (db *LotusDB) DeleteWithOptions(key []byte, opt *WriteOptions) error {
 }
 
 func (db *LotusDB) getColumnFamily(cfName string) *ColumnFamily {
-	db.mu.Lock()
-	defer db.mu.Unlock()
+	db.mu.RLock()
+	defer db.mu.RUnlock()
 	return db.cfs[cfName]
 }
