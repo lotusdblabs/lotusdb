@@ -16,7 +16,6 @@ import (
 	"github.com/flower-corp/lotusdb/index"
 	"github.com/flower-corp/lotusdb/logfile"
 	"github.com/flower-corp/lotusdb/util"
-	"github.com/flower-corp/lotusdb/vlog"
 )
 
 var (
@@ -37,7 +36,7 @@ type ColumnFamily struct {
 	// Immutable memtables, waiting to be flushed to disk.
 	immuMems []*memtable
 	// Value Log(Put value into value log according to options ValueThreshold).
-	vlog *vlog.ValueLog
+	vlog *ValueLog
 	// Store keys and meta info.
 	indexer index.Indexer
 	// When the active memtable is full, send it to the flushChn, see listenAndFlush.
@@ -127,11 +126,12 @@ func (db *LotusDB) OpenColumnFamily(opts ColumnFamilyOptions) (*ColumnFamily, er
 	if opts.ValueLogMmap {
 		ioType = logfile.MMap
 	}
-	valueLog, err := vlog.OpenValueLog(opts.ValueLogDir, opts.ValueLogFileSize, ioType)
+	valueLog, err := openValueLog(opts.ValueLogDir, opts.ValueLogFileSize, ioType)
 	if err != nil {
 		return nil, err
 	}
 	cf.vlog = valueLog
+	valueLog.cf = cf
 
 	db.mu.Lock()
 	db.cfs[opts.CfName] = cf

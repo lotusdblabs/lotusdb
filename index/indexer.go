@@ -55,7 +55,7 @@ type Indexer interface {
 
 	PutBatch(kv []*IndexerNode) (offset int, err error)
 
-	Get(k []byte) (meta *IndexerMeta, err error)
+	Get(key []byte) (meta *IndexerMeta, err error)
 
 	Delete(key []byte) error
 

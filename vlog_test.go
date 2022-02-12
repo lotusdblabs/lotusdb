@@ -1,8 +1,7 @@
-package vlog
+package lotusdb
 
 import (
 	"bytes"
-	"fmt"
 	"github.com/flower-corp/lotusdb/logfile"
 	"github.com/stretchr/testify/assert"
 	"math/rand"
@@ -10,7 +9,6 @@ import (
 	"path/filepath"
 	"reflect"
 	"testing"
-	"time"
 )
 
 func TestOpenValueLog(t *testing.T) {
@@ -31,14 +29,14 @@ func TestOpenValueLog(t *testing.T) {
 		defer func() {
 			_ = os.RemoveAll(path)
 		}()
-		vlog, err := OpenValueLog(path, 180, logfile.FileIO)
+		vlog, err := openValueLog(path, 180, logfile.FileIO)
 		assert.Nil(t, err)
 
 		_, err = vlog.Write(&logfile.LogEntry{Key: GetKey(923), Value: GetValue128B()})
 		assert.Nil(t, err)
 
 		// open again, the old active log file is close to full, so we weill create a new active log file.
-		vlog1, err := OpenValueLog(path, 180, logfile.FileIO)
+		vlog1, err := openValueLog(path, 180, logfile.FileIO)
 		assert.Nil(t, err)
 		assert.NotNil(t, vlog1)
 	})
@@ -82,9 +80,9 @@ func testOpenValueLog(t *testing.T, ioType logfile.IOType) {
 					assert.Nil(t, err)
 				}
 			}
-			got, err := OpenValueLog(tt.args.path, tt.args.blockSize, tt.args.ioType)
+			got, err := openValueLog(tt.args.path, tt.args.blockSize, tt.args.ioType)
 			if (err != nil) != tt.wantErr {
-				t.Errorf("OpenValueLog() error = %v, wantErr %v", err, tt.wantErr)
+				t.Errorf("openValueLog() error = %v, wantErr %v", err, tt.wantErr)
 				return
 			}
 			if !tt.wantErr {
@@ -113,7 +111,7 @@ func testValueLogWrite(t *testing.T, ioType logfile.IOType) {
 	defer func() {
 		_ = os.RemoveAll(path)
 	}()
-	vlog, err := OpenValueLog(path, 1024<<20, ioType)
+	vlog, err := openValueLog(path, 1024<<20, ioType)
 	assert.Nil(t, err)
 
 	type fields struct {
@@ -178,7 +176,7 @@ func TestValueLog_WriteAfterReopen(t *testing.T) {
 	defer func() {
 		_ = os.RemoveAll(path)
 	}()
-	vlog, err := OpenValueLog(path, 100, logfile.FileIO)
+	vlog, err := openValueLog(path, 100, logfile.FileIO)
 	assert.Nil(t, err)
 
 	tests := []*logfile.LogEntry{
@@ -198,7 +196,7 @@ func TestValueLog_WriteAfterReopen(t *testing.T) {
 	assert.Nil(t, err)
 
 	// reopen it.
-	vlog, err = OpenValueLog(path, 100, logfile.MMap)
+	vlog, err = openValueLog(path, 100, logfile.MMap)
 	assert.Nil(t, err)
 	pos2, err := vlog.Write(tests[1])
 	assert.Nil(t, err)
@@ -232,7 +230,7 @@ func testValueLogWriteUntilNewActiveFileOpen(t *testing.T, ioType logfile.IOType
 	defer func() {
 		_ = os.RemoveAll(path)
 	}()
-	vlog, err := OpenValueLog(path, 10<<20, ioType)
+	vlog, err := openValueLog(path, 10<<20, ioType)
 	assert.Nil(t, err)
 
 	writeCount := 100000
@@ -277,7 +275,7 @@ func testValueLogRead(t *testing.T, ioType logfile.IOType) {
 	defer func() {
 		_ = os.RemoveAll(path)
 	}()
-	vlog, err := OpenValueLog(path, 10<<20, ioType)
+	vlog, err := openValueLog(path, 10<<20, ioType)
 	assert.Nil(t, err)
 
 	type data struct {
@@ -358,7 +356,7 @@ func TestValueLog_ReadFromArchivedFile(t *testing.T) {
 	defer func() {
 		_ = os.RemoveAll(path)
 	}()
-	vlog, err := OpenValueLog(path, 10<<20, logfile.FileIO)
+	vlog, err := openValueLog(path, 10<<20, logfile.FileIO)
 	assert.Nil(t, err)
 
 	writeCount := 100000
@@ -370,7 +368,7 @@ func TestValueLog_ReadFromArchivedFile(t *testing.T) {
 	err = vlog.Close()
 	assert.Nil(t, err)
 
-	vlog1, err := OpenValueLog(path, 10<<20, logfile.FileIO)
+	vlog1, err := openValueLog(path, 10<<20, logfile.FileIO)
 	assert.Nil(t, err)
 	e, err := vlog1.Read(0, 0)
 	assert.Nil(t, err)
@@ -387,7 +385,7 @@ func TestValueLog_Sync(t *testing.T) {
 	defer func() {
 		_ = os.RemoveAll(path)
 	}()
-	vlog, err := OpenValueLog(path, 10<<20, logfile.FileIO)
+	vlog, err := openValueLog(path, 10<<20, logfile.FileIO)
 	assert.Nil(t, err)
 
 	err = vlog.Sync()
@@ -403,36 +401,9 @@ func TestValueLog_Close(t *testing.T) {
 	defer func() {
 		_ = os.RemoveAll(path)
 	}()
-	vlog, err := OpenValueLog(path, 10<<20, logfile.MMap)
+	vlog, err := openValueLog(path, 10<<20, logfile.MMap)
 	assert.Nil(t, err)
 
 	err = vlog.Close()
 	assert.Nil(t, err)
-}
-
-const alphabet = "abcdefghijklmnopqrstuvwxyz0123456789"
-
-func init() {
-	rand.Seed(time.Now().Unix())
-}
-
-// GetKey length: 32 Bytes
-func GetKey(n int) []byte {
-	return []byte("kvstore-bench-key------" + fmt.Sprintf("%09d", n))
-}
-
-func GetValue128B() []byte {
-	var str bytes.Buffer
-	for i := 0; i < 128; i++ {
-		str.WriteByte(alphabet[rand.Int()%36])
-	}
-	return []byte(str.String())
-}
-
-func GetValue4K() []byte {
-	var str bytes.Buffer
-	for i := 0; i < 4096; i++ {
-		str.WriteByte(alphabet[rand.Int()%36])
-	}
-	return []byte(str.String())
 }

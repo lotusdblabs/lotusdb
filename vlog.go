@@ -1,8 +1,9 @@
-package vlog
+package lotusdb
 
 import (
 	"errors"
 	"fmt"
+	"github.com/flower-corp/lotusdb/index"
 	"github.com/flower-corp/lotusdb/logfile"
 	"io"
 	"io/ioutil"
@@ -29,6 +30,8 @@ type (
 		opt           options
 		activeLogFile *logfile.LogFile            // current active log file for writing.
 		logFiles      map[uint32]*logfile.LogFile // all log files. Must hold the mutex before modify it.
+		cf            *ColumnFamily
+		ccl           []uint32 // ccl means compaction candidate list, which stores file ids that can be compacted.
 	}
 
 	// ValuePos value position.
@@ -44,8 +47,8 @@ type (
 	}
 )
 
-// OpenValueLog create a new value log file.
-func OpenValueLog(path string, blockSize int64, ioType logfile.IOType) (*ValueLog, error) {
+// openValueLog create a new value log file.
+func openValueLog(path string, blockSize int64, ioType logfile.IOType) (*ValueLog, error) {
 	opt := options{
 		path:      path,
 		blockSize: blockSize,
@@ -220,6 +223,63 @@ func (vlog *ValueLog) setLogFileState() error {
 			return err
 		}
 		vlog.activeLogFile = logFile
+	}
+	return nil
+}
+
+func (vlog *ValueLog) compact() error {
+	opt := vlog.opt
+	for _, fid := range vlog.ccl {
+		file, err := logfile.OpenLogFile(opt.path, fid, opt.blockSize, logfile.ValueLog, opt.ioType)
+		if err != nil {
+			return err
+		}
+		var offset int64
+		var valids []*logfile.LogEntry
+		for {
+			entry, _, err := file.ReadLogEntry(offset)
+			if err != nil {
+				if err == io.EOF || err == logfile.ErrEndOfEntry {
+					break
+				}
+				return err
+			}
+			meta, err := vlog.cf.indexer.Get(entry.Key)
+			if err != nil {
+				return err
+			}
+			// if value is stored in indexer, value in vlog must be old.
+			if len(meta.Value) != 0 {
+				continue
+			}
+			if meta.Fid != fid {
+				continue
+			}
+			if meta.Offset != offset {
+				continue
+			}
+			valids = append(valids, entry)
+		}
+
+		var nodes []*index.IndexerNode
+		// rewrite valid log entries.
+		for _, e := range valids {
+			valuePos, err := vlog.Write(e)
+			if err != nil {
+				return err
+			}
+			nodes = append(nodes, &index.IndexerNode{
+				Key:  e.Key,
+				Meta: &index.IndexerMeta{Fid: valuePos.Fid, Offset: valuePos.Offset},
+			})
+		}
+		if _, err = vlog.cf.indexer.PutBatch(nodes); err != nil {
+			return err
+		}
+		// delete older vlog file.
+		if err = file.Delete(); err != nil {
+			return err
+		}
 	}
 	return nil
 }
