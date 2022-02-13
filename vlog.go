@@ -246,15 +246,15 @@ func (vlog *valueLog) compact() error {
 			}
 			var eoff = offset
 			offset += sz
-			meta, err := vlog.cf.indexer.Get(entry.Key)
+			indexMeta, err := vlog.cf.indexer.Get(entry.Key)
 			if err != nil {
 				return err
 			}
 			// if value is stored in indexer, value in vlog must be old.
-			if len(meta.Value) != 0 {
+			if len(indexMeta.Value) != 0 {
 				continue
 			}
-			if meta.Fid == fid && meta.Offset == eoff {
+			if indexMeta.Fid == fid && indexMeta.Offset == eoff {
 				validEntries = append(validEntries, entry)
 			}
 		}

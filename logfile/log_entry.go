@@ -18,7 +18,7 @@ const (
 	TypeDelete EntryType = iota + 1
 )
 
-// LogEntry is the data will be appended in wal file.
+// LogEntry is the data will be appended in log file.
 type LogEntry struct {
 	Key       []byte
 	Value     []byte
