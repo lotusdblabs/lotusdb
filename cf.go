@@ -36,7 +36,7 @@ type ColumnFamily struct {
 	// Immutable memtables, waiting to be flushed to disk.
 	immuMems []*memtable
 	// Value Log(Put value into value log according to options ValueThreshold).
-	vlog *ValueLog
+	vlog *valueLog
 	// Store keys and meta info.
 	indexer index.Indexer
 	// When the active memtable is full, send it to the flushChn, see listenAndFlush.

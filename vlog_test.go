@@ -115,7 +115,7 @@ func testValueLogWrite(t *testing.T, ioType logfile.IOType) {
 	assert.Nil(t, err)
 
 	type fields struct {
-		vlog *ValueLog
+		vlog *valueLog
 	}
 	type args struct {
 		e *logfile.LogEntry
@@ -300,7 +300,7 @@ func testValueLogRead(t *testing.T, ioType logfile.IOType) {
 	}
 
 	type fields struct {
-		vlog *ValueLog
+		vlog *valueLog
 	}
 	type args struct {
 		fid    uint32

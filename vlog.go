@@ -23,9 +23,9 @@ var (
 )
 
 type (
-	// ValueLog value log is named after the concept in Wisckey paper(https://www.usenix.org/system/files/conference/fast16/fast16-papers-lu.pdf).
+	// valueLog value log is named after the concept in Wisckey paper(https://www.usenix.org/system/files/conference/fast16/fast16-papers-lu.pdf).
 	// Values will be stored in value log if its size exceed ValueThreshold in options.
-	ValueLog struct {
+	valueLog struct {
 		sync.RWMutex
 		opt           options
 		activeLogFile *logfile.LogFile            // current active log file for writing.
@@ -48,7 +48,7 @@ type (
 )
 
 // openValueLog create a new value log file.
-func openValueLog(path string, blockSize int64, ioType logfile.IOType) (*ValueLog, error) {
+func openValueLog(path string, blockSize int64, ioType logfile.IOType) (*valueLog, error) {
 	opt := options{
 		path:      path,
 		blockSize: blockSize,
@@ -84,7 +84,7 @@ func openValueLog(path string, blockSize int64, ioType logfile.IOType) (*ValueLo
 	if err != nil {
 		return nil, err
 	}
-	vlog := &ValueLog{
+	vlog := &valueLog{
 		opt:           opt,
 		activeLogFile: logFile,
 		logFiles:      make(map[uint32]*logfile.LogFile),
@@ -103,7 +103,7 @@ func openValueLog(path string, blockSize int64, ioType logfile.IOType) (*ValueLo
 
 // Read a VLogEntry from a specified vlog file at offset, returns an error, if any.
 // If reading from a non-active log file, and the specified file is not open, then we will open it and set it into logFiles.
-func (vlog *ValueLog) Read(fid uint32, offset int64) (*logfile.LogEntry, error) {
+func (vlog *valueLog) Read(fid uint32, offset int64) (*logfile.LogEntry, error) {
 	var logFile *logfile.LogFile
 	if fid == vlog.activeLogFile.Fid {
 		logFile = vlog.activeLogFile
@@ -135,7 +135,7 @@ func (vlog *ValueLog) Read(fid uint32, offset int64) (*logfile.LogEntry, error) 
 
 // Write new VLogEntry to value log file.
 // If the active log file is full, it will be closed and a new active file will be created to replace it.
-func (vlog *ValueLog) Write(ent *logfile.LogEntry) (*ValuePos, error) {
+func (vlog *valueLog) Write(ent *logfile.LogEntry) (*ValuePos, error) {
 	buf, eSize := logfile.EncodeEntry(ent)
 	// if active is reach to thereshold, close it and open a new one.
 	if vlog.activeLogFile.WriteAt+int64(eSize) >= vlog.opt.blockSize {
@@ -166,7 +166,7 @@ func (vlog *ValueLog) Write(ent *logfile.LogEntry) (*ValuePos, error) {
 }
 
 // Sync only for the active log file.
-func (vlog *ValueLog) Sync() error {
+func (vlog *valueLog) Sync() error {
 	if vlog.activeLogFile == nil {
 		return ErrActiveLogFileNil
 	}
@@ -177,7 +177,7 @@ func (vlog *ValueLog) Sync() error {
 }
 
 // Close only for the active log file.
-func (vlog *ValueLog) Close() error {
+func (vlog *valueLog) Close() error {
 	if vlog.activeLogFile == nil {
 		return ErrActiveLogFileNil
 	}
@@ -187,7 +187,7 @@ func (vlog *ValueLog) Close() error {
 	return vlog.activeLogFile.Close()
 }
 
-func (vlog *ValueLog) createLogFile() (*logfile.LogFile, error) {
+func (vlog *valueLog) createLogFile() (*logfile.LogFile, error) {
 	opt := vlog.opt
 	fid := vlog.activeLogFile.Fid
 	logFile, err := logfile.OpenLogFile(opt.path, fid+1, opt.blockSize, logfile.ValueLog, opt.ioType)
@@ -197,7 +197,7 @@ func (vlog *ValueLog) createLogFile() (*logfile.LogFile, error) {
 	return logFile, nil
 }
 
-func (vlog *ValueLog) setLogFileState() error {
+func (vlog *valueLog) setLogFileState() error {
 	if vlog.activeLogFile == nil {
 		return ErrActiveLogFileNil
 	}
@@ -227,7 +227,7 @@ func (vlog *ValueLog) setLogFileState() error {
 	return nil
 }
 
-func (vlog *ValueLog) compact() error {
+func (vlog *valueLog) compact() error {
 	opt := vlog.opt
 	for _, fid := range vlog.ccl {
 		file, err := logfile.OpenLogFile(opt.path, fid, opt.blockSize, logfile.ValueLog, opt.ioType)
