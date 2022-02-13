@@ -34,8 +34,8 @@ type (
 		ccl           []uint32 // ccl means compaction candidate list, which stores file ids that can be compacted.
 	}
 
-	// ValuePos value position.
-	ValuePos struct {
+	// valuePos value position.
+	valuePos struct {
 		Fid    uint32
 		Offset int64
 	}
@@ -135,7 +135,7 @@ func (vlog *valueLog) Read(fid uint32, offset int64) (*logfile.LogEntry, error) 
 
 // Write new VLogEntry to value log file.
 // If the active log file is full, it will be closed and a new active file will be created to replace it.
-func (vlog *valueLog) Write(ent *logfile.LogEntry) (*ValuePos, error) {
+func (vlog *valueLog) Write(ent *logfile.LogEntry) (*valuePos, error) {
 	buf, eSize := logfile.EncodeEntry(ent)
 	// if active is reach to thereshold, close it and open a new one.
 	if vlog.activeLogFile.WriteAt+int64(eSize) >= vlog.opt.blockSize {
@@ -159,7 +159,7 @@ func (vlog *valueLog) Write(ent *logfile.LogEntry) (*ValuePos, error) {
 	}
 
 	writeAt := atomic.LoadInt64(&vlog.activeLogFile.WriteAt)
-	return &ValuePos{
+	return &valuePos{
 		Fid:    vlog.activeLogFile.Fid,
 		Offset: writeAt - int64(eSize),
 	}, nil
@@ -235,15 +235,17 @@ func (vlog *valueLog) compact() error {
 			return err
 		}
 		var offset int64
-		var valids []*logfile.LogEntry
+		var validEntries []*logfile.LogEntry
 		for {
-			entry, _, err := file.ReadLogEntry(offset)
+			entry, sz, err := file.ReadLogEntry(offset)
 			if err != nil {
 				if err == io.EOF || err == logfile.ErrEndOfEntry {
 					break
 				}
 				return err
 			}
+			var eoff = offset
+			offset += sz
 			meta, err := vlog.cf.indexer.Get(entry.Key)
 			if err != nil {
 				return err
@@ -252,18 +254,14 @@ func (vlog *valueLog) compact() error {
 			if len(meta.Value) != 0 {
 				continue
 			}
-			if meta.Fid != fid {
-				continue
+			if meta.Fid == fid && meta.Offset == eoff {
+				validEntries = append(validEntries, entry)
 			}
-			if meta.Offset != offset {
-				continue
-			}
-			valids = append(valids, entry)
 		}
 
 		var nodes []*index.IndexerNode
 		// rewrite valid log entries.
-		for _, e := range valids {
+		for _, e := range validEntries {
 			valuePos, err := vlog.Write(e)
 			if err != nil {
 				return err

@@ -124,24 +124,24 @@ func testValueLogWrite(t *testing.T, ioType logfile.IOType) {
 		name    string
 		fields  fields
 		args    args
-		want    *ValuePos
+		want    *valuePos
 		wantErr bool
 	}{
 		// don`t run the sub test alone, because the offset is incremental, run them all at once!!!
 		{
-			"nil-entry", fields{vlog: vlog}, args{e: nil}, &ValuePos{}, false,
+			"nil-entry", fields{vlog: vlog}, args{e: nil}, &valuePos{}, false,
 		},
 		{
-			"no-key", fields{vlog: vlog}, args{e: &logfile.LogEntry{Value: []byte("lotusdb")}}, &ValuePos{Fid: 0, Offset: 0}, false,
+			"no-key", fields{vlog: vlog}, args{e: &logfile.LogEntry{Value: []byte("lotusdb")}}, &valuePos{Fid: 0, Offset: 0}, false,
 		},
 		{
-			"no-value", fields{vlog: vlog}, args{e: &logfile.LogEntry{Key: []byte("key1")}}, &ValuePos{Fid: 0, Offset: 15}, false,
+			"no-value", fields{vlog: vlog}, args{e: &logfile.LogEntry{Key: []byte("key1")}}, &valuePos{Fid: 0, Offset: 15}, false,
 		},
 		{
-			"with-key-value", fields{vlog: vlog}, args{e: &logfile.LogEntry{Key: []byte("key2"), Value: []byte("lotusdb-2")}}, &ValuePos{Fid: 0, Offset: 27}, false,
+			"with-key-value", fields{vlog: vlog}, args{e: &logfile.LogEntry{Key: []byte("key2"), Value: []byte("lotusdb-2")}}, &valuePos{Fid: 0, Offset: 27}, false,
 		},
 		{
-			"key-big-value", fields{vlog: vlog}, args{e: &logfile.LogEntry{Key: []byte("key3"), Value: GetValue4K()}}, &ValuePos{Fid: 0, Offset: 48}, false,
+			"key-big-value", fields{vlog: vlog}, args{e: &logfile.LogEntry{Key: []byte("key3"), Value: GetValue4K()}}, &valuePos{Fid: 0, Offset: 48}, false,
 		},
 	}
 	for _, tt := range tests {
@@ -186,7 +186,7 @@ func TestValueLog_WriteAfterReopen(t *testing.T) {
 			Key: []byte("key-2"), Value: []byte("val-2"),
 		},
 	}
-	var pos []*ValuePos
+	var pos []*valuePos
 
 	pos1, err := vlog.Write(tests[0])
 	assert.Nil(t, err)
@@ -234,7 +234,7 @@ func testValueLogWriteUntilNewActiveFileOpen(t *testing.T, ioType logfile.IOType
 	assert.Nil(t, err)
 
 	writeCount := 100000
-	var poses []*ValuePos
+	var poses []*valuePos
 	random := rand.Intn(writeCount - 1)
 	if random == 0 {
 		random++
@@ -280,7 +280,7 @@ func testValueLogRead(t *testing.T, ioType logfile.IOType) {
 
 	type data struct {
 		e   *logfile.LogEntry
-		pos *ValuePos
+		pos *valuePos
 	}
 	var datas []*data
 
