@@ -52,10 +52,10 @@ func (cf *ColumnFamily) listenAndFlush() {
 	for {
 		select {
 		case table := <-cf.flushChn:
-			// iterate and write data to bptree.
 			var nodes []*index.IndexerNode
 			var deletedKeys [][]byte
 			iter := table.sklIter
+			// iterate and write data to bptree and value log(if any).
 			for table.sklIter.SeekToFirst(); iter.Valid(); iter.Next() {
 				node := &index.IndexerNode{Key: iter.Key()}
 				mv := decodeMemValue(iter.Value())
@@ -69,7 +69,7 @@ func (cf *ColumnFamily) listenAndFlush() {
 						valuePos, err := cf.vlog.Write(&logfile.LogEntry{Key: key, Value: mv.value})
 						if err != nil {
 							logger.Errorf("write to value log err.%+v", err)
-							break
+							return
 						}
 						node.Meta = &index.IndexerMeta{
 							Fid:    valuePos.Fid,
