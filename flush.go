@@ -29,11 +29,12 @@ func (cf *ColumnFamily) waitMemSpace(size uint32) error {
 			ioType = logfile.MMap
 		}
 		memOpts := memOptions{
-			path:    cf.opts.DirPath,
-			fid:     cf.activeMem.logFileId() + 1,
-			fsize:   int64(cf.opts.MemtableSize),
-			ioType:  ioType,
-			memSize: cf.opts.MemtableSize,
+			path:       cf.opts.DirPath,
+			fid:        cf.activeMem.logFileId() + 1,
+			fsize:      int64(cf.opts.MemtableSize),
+			ioType:     ioType,
+			memSize:    cf.opts.MemtableSize,
+			bytesFlush: cf.opts.WalBytesFlush,
 		}
 		if table, err := openMemtable(memOpts); err != nil {
 			return err

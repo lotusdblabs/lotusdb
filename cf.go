@@ -296,10 +296,11 @@ func (cf *ColumnFamily) openMemtables() error {
 		ioType = logfile.MMap
 	}
 	memOpts := memOptions{
-		path:    cf.opts.DirPath,
-		fsize:   int64(cf.opts.MemtableSize),
-		ioType:  ioType,
-		memSize: cf.opts.MemtableSize,
+		path:       cf.opts.DirPath,
+		fsize:      int64(cf.opts.MemtableSize),
+		ioType:     ioType,
+		memSize:    cf.opts.MemtableSize,
+		bytesFlush: cf.opts.WalBytesFlush,
 	}
 	for i, fid := range fids {
 		memOpts.fid = fid

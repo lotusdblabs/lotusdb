@@ -407,6 +407,19 @@ func TestReOpenDB(t *testing.T) {
 	assert.NotNil(t, v2)
 }
 
+func TestBytesFlush(t *testing.T) {
+	opts := DefaultOptions("/tmp" + separator + "lotusdb")
+	opts.CfOpts.WalBytesFlush = 200
+	db, err := Open(opts)
+	assert.Nil(t, err)
+	defer destroyDB(db)
+
+	for i := 0; i < 10; i++ {
+		err := db.Put(GetKey(i), GetValue128B())
+		assert.Nil(t, err)
+	}
+}
+
 func destroyDB(db *LotusDB) {
 	if db != nil {
 		if err := os.RemoveAll(db.opts.DBPath); err != nil {

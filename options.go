@@ -90,6 +90,11 @@ type ColumnFamilyOptions struct {
 	// Default value is false.
 	WalMMap bool
 
+	// WalBytesFlush can be used to smooth out write I/Os over time. Users shouldn't rely on it for
+	// persistency guarantee.
+	// Default value is 0, turned off.
+	WalBytesFlush uint32
+
 	// ValueLogDir dir path to store value log file, default value is dir path.
 	ValueLogDir string
 

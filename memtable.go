@@ -19,19 +19,21 @@ type (
 	// Once a memtable is full(memtable has its threshold, see MemtableSize in options), it becomes immutable and replaced by a new memtable.
 	// A background goroutine will flush the content of memtable into indexer or vlog, after which the memtable can be deleted.
 	memtable struct {
-		sklIter *arenaskl.Iterator
-		skl     *arenaskl.Skiplist
-		wal     *logfile.LogFile
-		opts    memOptions
+		sklIter      *arenaskl.Iterator
+		skl          *arenaskl.Skiplist
+		wal          *logfile.LogFile
+		bytesWritten uint32 // number of bytes written, used for flush wal file.
+		opts         memOptions
 	}
 
 	// options held by memtable for opening new memtables.
 	memOptions struct {
-		path    string
-		fid     uint32
-		fsize   int64
-		ioType  logfile.IOType
-		memSize uint32
+		path       string
+		fid        uint32
+		fsize      int64
+		ioType     logfile.IOType
+		memSize    uint32
+		bytesFlush uint32
 	}
 
 	// in-memory values stored in memtable.
@@ -108,12 +110,22 @@ func (mt *memtable) put(key []byte, value []byte, deleted bool, opts WriteOption
 	}
 
 	// write entrty into wal first.
-	buf, _ := logfile.EncodeEntry(entry)
+	buf, sz := logfile.EncodeEntry(entry)
 	if !opts.DisableWal && mt.wal != nil {
 		if err := mt.wal.Write(buf); err != nil {
 			return err
 		}
-		if opts.Sync {
+
+		// if Sync is ture in WriteOptions or bytesWritten has reached bytesFlush, syncWal will be true.
+		var syncWal = opts.Sync
+		if mt.opts.bytesFlush > 0 {
+			writes := atomic.AddUint32(&mt.bytesWritten, uint32(sz))
+			if writes > mt.opts.bytesFlush {
+				syncWal = true
+				atomic.StoreUint32(&mt.bytesWritten, 0)
+			}
+		}
+		if syncWal {
 			if err := mt.syncWAL(); err != nil {
 				return err
 			}
