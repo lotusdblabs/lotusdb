@@ -102,7 +102,7 @@ func (b *BPTree) Put(key, value []byte) (err error) {
 		return
 	}
 	bucket := tx.Bucket(b.opts.BucketName)
-	if err = bucket.Put(key, value); err != nil {
+	if _, err = bucket.Put(key, value); err != nil {
 		_ = tx.Rollback()
 		return
 	}
@@ -135,7 +135,7 @@ func (b *BPTree) PutBatch(nodes []*IndexerNode) (offset int, err error) {
 				break itemLoop
 			}
 			meta := encodeMeta(nodes[itemIdx].Meta)
-			if err := bucket.Put(nodes[itemIdx].Key, meta); err != nil {
+			if _, err := bucket.Put(nodes[itemIdx].Key, meta); err != nil {
 				_ = tx.Rollback()
 				return offset, err
 			}
@@ -168,7 +168,7 @@ func (b *BPTree) DeleteBatch(keys [][]byte) error {
 			if itemIdx >= len(keys) {
 				break itemLoop
 			}
-			if err := bucket.Delete(keys[itemIdx]); err != nil {
+			if _, err := bucket.Delete(keys[itemIdx]); err != nil {
 				_ = tx.Rollback()
 				return err
 			}
@@ -183,7 +183,8 @@ func (b *BPTree) DeleteBatch(keys [][]byte) error {
 // Delete a specified key from indexer.
 func (b *BPTree) Delete(key []byte) error {
 	return b.db.Update(func(tx *bbolt.Tx) error {
-		return tx.Bucket(b.opts.BucketName).Delete(key)
+		_, err := tx.Bucket(b.opts.BucketName).Delete(key)
+		return err
 	})
 }
 
