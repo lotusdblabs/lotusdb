@@ -11,7 +11,7 @@ import (
 	"github.com/flower-corp/lotusdb/logger"
 )
 
-func (cf *ColumnFamily) waitMemSpace(size uint32) error {
+func (cf *ColumnFamily) waitWritesMemSpace(size uint32) error {
 	cf.mu.Lock()
 	defer cf.mu.Unlock()
 	if !cf.activeMem.isFull(size) {

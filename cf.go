@@ -149,7 +149,7 @@ func (cf *ColumnFamily) Put(key, value []byte) error {
 func (cf *ColumnFamily) PutWithOptions(key, value []byte, opt *WriteOptions) error {
 	// waiting for enough memtable sapce to write.
 	size := uint32(len(key) + len(value))
-	if err := cf.waitMemSpace(size); err != nil {
+	if err := cf.waitWritesMemSpace(size); err != nil {
 		return err
 	}
 	if opt == nil {
@@ -204,7 +204,7 @@ func (cf *ColumnFamily) Delete(key []byte) error {
 // DeleteWithOptions delete from current column family with options.
 func (cf *ColumnFamily) DeleteWithOptions(key []byte, opt *WriteOptions) error {
 	size := uint32(len(key))
-	if err := cf.waitMemSpace(size); err != nil {
+	if err := cf.waitWritesMemSpace(size); err != nil {
 		return err
 	}
 	if opt == nil {
