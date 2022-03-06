@@ -22,6 +22,8 @@ var (
 	ErrLogFileNil = errors.New("log file %d not exists")
 )
 
+const vlogDiscardName = "VLOG_DISCARD"
+
 type (
 	// valueLog value log is named after the concept in Wisckey paper(https://www.usenix.org/system/files/conference/fast16/fast16-papers-lu.pdf).
 	// Values will be stored in value log if its size exceed ValueThreshold in options.
@@ -32,6 +34,7 @@ type (
 		logFiles      map[uint32]*logfile.LogFile // all log files. Must hold the mutex before modify it.
 		cf            *ColumnFamily
 		ccl           []uint32 // ccl means compaction candidate list, which stores file ids that can be compacted.
+		discard       *Discard
 	}
 
 	// valuePos value position.
@@ -79,6 +82,11 @@ func openValueLog(path string, blockSize int64, ioType logfile.IOType) (*valueLo
 		fids = append(fids, logfile.InitialLogFileId)
 	}
 
+	// open discard file.
+	discard, err := newDiscard(path, vlogDiscardName)
+	if err != nil {
+		return nil, err
+	}
 	// open active log file only.
 	logFile, err := logfile.OpenLogFile(path, fids[len(fids)-1], opt.blockSize, logfile.ValueLog, opt.ioType)
 	if err != nil {
@@ -88,6 +96,7 @@ func openValueLog(path string, blockSize int64, ioType logfile.IOType) (*valueLo
 		opt:           opt,
 		activeLogFile: logFile,
 		logFiles:      make(map[uint32]*logfile.LogFile),
+		discard:       discard,
 	}
 
 	// load other log files when reading from it.

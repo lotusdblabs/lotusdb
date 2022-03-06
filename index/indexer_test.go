@@ -32,7 +32,7 @@ func TestEncodeMeta(t *testing.T) {
 	}
 	for _, tt := range tests {
 		t.Run(tt.name, func(t *testing.T) {
-			if got := encodeMeta(tt.args.m); !reflect.DeepEqual(got, tt.want) {
+			if got := EncodeMeta(tt.args.m); !reflect.DeepEqual(got, tt.want) {
 				t.Errorf("EncodeMeta() = %v, want %v", got, tt.want)
 			}
 		})
@@ -63,7 +63,7 @@ func TestDecodeMeta(t *testing.T) {
 	}
 	for _, tt := range tests {
 		t.Run(tt.name, func(t *testing.T) {
-			if got := decodeMeta(tt.args.buf); !reflect.DeepEqual(got, tt.want) {
+			if got := DecodeMeta(tt.args.buf); !reflect.DeepEqual(got, tt.want) {
 				t.Errorf("DecodeMeta() = %v, want %v", got, tt.want)
 			}
 		})

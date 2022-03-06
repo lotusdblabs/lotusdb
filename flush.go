@@ -76,6 +76,8 @@ func (cf *ColumnFamily) listenAndFlush() {
 							Fid:    valuePos.Fid,
 							Offset: valuePos.Offset,
 						}
+						// update vlog writes total count for gc.
+						cf.vlog.discard.incrTotal(valuePos.Fid)
 					} else {
 						node.Meta = &index.IndexerMeta{Value: mv.value}
 					}

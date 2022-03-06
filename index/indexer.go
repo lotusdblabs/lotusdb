@@ -121,7 +121,8 @@ type IndexerIter interface {
 	Close() error
 }
 
-func encodeMeta(m *IndexerMeta) []byte {
+// EncodeMeta encode IndexerMeta as byte array.
+func EncodeMeta(m *IndexerMeta) []byte {
 	header := make([]byte, metaHeaderSize)
 	var index int
 	index += binary.PutVarint(header[index:], int64(m.Fid))
@@ -136,7 +137,8 @@ func encodeMeta(m *IndexerMeta) []byte {
 	return header[:index]
 }
 
-func decodeMeta(buf []byte) *IndexerMeta {
+// DecodeMeta decode meta byte as IndexerMeta.
+func DecodeMeta(buf []byte) *IndexerMeta {
 	m := &IndexerMeta{}
 	var index int
 	fid, n := binary.Varint(buf[index:])

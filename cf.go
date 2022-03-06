@@ -107,20 +107,6 @@ func (db *LotusDB) OpenColumnFamily(opts ColumnFamilyOptions) (*ColumnFamily, er
 		return nil, err
 	}
 
-	// create bptree indexer.
-	bptreeOpt := &index.BPTreeOptions{
-		IndexType:        index.BptreeBoltDB,
-		ColumnFamilyName: opts.CfName,
-		BucketName:       []byte(opts.CfName),
-		DirPath:          opts.IndexerDir,
-		BatchSize:        opts.FlushBatchSize,
-	}
-	indexer, err := index.NewIndexer(bptreeOpt)
-	if err != nil {
-		return nil, err
-	}
-	cf.indexer = indexer
-
 	// open value log.
 	var ioType = logfile.FileIO
 	if opts.ValueLogMmap {
@@ -132,6 +118,21 @@ func (db *LotusDB) OpenColumnFamily(opts ColumnFamilyOptions) (*ColumnFamily, er
 	}
 	cf.vlog = valueLog
 	valueLog.cf = cf
+
+	// create bptree indexer.
+	bptreeOpt := &index.BPTreeOptions{
+		IndexType:        index.BptreeBoltDB,
+		ColumnFamilyName: opts.CfName,
+		BucketName:       []byte(opts.CfName),
+		DirPath:          opts.IndexerDir,
+		BatchSize:        opts.FlushBatchSize,
+		DiscardChn:       cf.vlog.discard.valChan,
+	}
+	indexer, err := index.NewIndexer(bptreeOpt)
+	if err != nil {
+		return nil, err
+	}
+	cf.indexer = indexer
 
 	db.mu.Lock()
 	db.cfs[opts.CfName] = cf

@@ -1,6 +1,7 @@
 package index
 
 import (
+	"github.com/flower-corp/lotusdb/logger"
 	"time"
 
 	"go.etcd.io/bbolt"
@@ -20,12 +21,16 @@ type BPTreeOptions struct {
 	BucketName []byte
 	// BatchSize flush batch size.
 	BatchSize int
+	// DiscardChn if values in indexer are changed, the older value will be send to the DiscardChn.
+	// Values will be handled in discard.go/listenUpdates().
+	DiscardChn chan [][]byte
 }
 
 // BPTree is a standard b+tree used to store index data.
 type BPTree struct {
-	opts BPTreeOptions
-	db   *bbolt.DB
+	opts       BPTreeOptions
+	db         *bbolt.DB
+	discardChn chan [][]byte
 }
 
 // SetType self-explanatory.
@@ -90,7 +95,7 @@ func NewBPTree(opt BPTreeOptions) (*BPTree, error) {
 		return nil, err
 	}
 
-	b := &BPTree{db: db, opts: opt}
+	b := &BPTree{db: db, opts: opt, discardChn: opt.DiscardChn}
 	return b, nil
 }
 
@@ -128,21 +133,24 @@ func (b *BPTree) PutBatch(nodes []*IndexerNode) (offset int, err error) {
 		}
 
 		bucket := tx.Bucket(b.opts.BucketName)
-
+		var oldValues [][]byte
 	itemLoop:
 		for itemIdx := offset; itemIdx < offset+b.opts.BatchSize; itemIdx++ {
 			if itemIdx >= len(nodes) {
 				break itemLoop
 			}
-			meta := encodeMeta(nodes[itemIdx].Meta)
-			if _, err := bucket.Put(nodes[itemIdx].Key, meta); err != nil {
+			meta := EncodeMeta(nodes[itemIdx].Meta)
+			if oldVal, err := bucket.Put(nodes[itemIdx].Key, meta); err != nil {
 				_ = tx.Rollback()
 				return offset, err
+			} else if len(oldVal) > 0 {
+				oldValues = append(oldValues, oldVal)
 			}
 		}
 		if err := tx.Commit(); err != nil {
 			return offset, err
 		}
+		b.sendDiscard(oldValues)
 	}
 	return len(nodes) - 1, nil
 }
@@ -162,20 +170,23 @@ func (b *BPTree) DeleteBatch(keys [][]byte) error {
 			return err
 		}
 		bucket := tx.Bucket(b.opts.BucketName)
-
+		var oldValues [][]byte
 	itemLoop:
 		for itemIdx := offset; itemIdx < offset+b.opts.BatchSize; itemIdx++ {
 			if itemIdx >= len(keys) {
 				break itemLoop
 			}
-			if _, err := bucket.Delete(keys[itemIdx]); err != nil {
+			if oldVal, err := bucket.Delete(keys[itemIdx]); err != nil {
 				_ = tx.Rollback()
 				return err
+			} else if len(oldVal) > 0 {
+				oldValues = append(oldValues, oldVal)
 			}
 		}
 		if err := tx.Commit(); err != nil {
 			return err
 		}
+		b.sendDiscard(oldValues)
 	}
 	return nil
 }
@@ -199,7 +210,7 @@ func (b *BPTree) Get(key []byte) (*IndexerMeta, error) {
 	}()
 
 	buf := tx.Bucket(b.opts.BucketName).Get(key)
-	return decodeMeta(buf), nil
+	return DecodeMeta(buf), nil
 }
 
 // Sync executes fdatasync() against the database file handle.
@@ -210,6 +221,16 @@ func (b *BPTree) Sync() error {
 // Close close bolt db.
 func (b *BPTree) Close() error {
 	return b.db.Close()
+}
+
+func (b *BPTree) sendDiscard(values [][]byte) {
+	if len(values) > 0 {
+		select {
+		case b.discardChn <- values:
+		default:
+			logger.Warn("send to discard chan fail")
+		}
+	}
 }
 
 func checkBPTreeOptions(opt BPTreeOptions) error {
