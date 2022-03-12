@@ -102,7 +102,7 @@ func TestBPTree_Put(t *testing.T) {
 func TestBPTree_PutBatch(t *testing.T) {
 	path, err := ioutil.TempDir("", "indexer")
 	assert.Nil(t, err)
-	opts := BPTreeOptions{DirPath: path, IndexType: BptreeBoltDB, ColumnFamilyName: "test", BucketName: []byte("test"), BatchSize: 200000}
+	opts := BPTreeOptions{DirPath: path, IndexType: BptreeBoltDB, ColumnFamilyName: "test", BucketName: []byte("test"), BatchSize: 200000, DiscardChn: make(chan [][]byte, 1024)}
 	tree, err := NewBPTree(opts)
 	assert.Nil(t, err)
 	defer func() {
@@ -305,7 +305,7 @@ func TestBPTree_Get(t *testing.T) {
 func TestBPTree_Delete(t *testing.T) {
 	path, err := ioutil.TempDir("", "indexer")
 	assert.Nil(t, err)
-	opts := BPTreeOptions{DirPath: path, IndexType: BptreeBoltDB, ColumnFamilyName: "test", BucketName: []byte("test"), BatchSize: 200000}
+	opts := BPTreeOptions{DirPath: path, IndexType: BptreeBoltDB, ColumnFamilyName: "test", BucketName: []byte("test"), BatchSize: 200000, DiscardChn: make(chan [][]byte, 1024)}
 	tree, err := NewBPTree(opts)
 	assert.Nil(t, err)
 	defer func() {
@@ -353,7 +353,7 @@ func TestBPTree_Delete(t *testing.T) {
 func TestBPTree_DeleteBatch(t *testing.T) {
 	path, err := ioutil.TempDir("", "indexer")
 	assert.Nil(t, err)
-	opts := BPTreeOptions{DirPath: path, IndexType: BptreeBoltDB, ColumnFamilyName: "test", BucketName: []byte("test"), BatchSize: 179933}
+	opts := BPTreeOptions{DirPath: path, IndexType: BptreeBoltDB, ColumnFamilyName: "test", BucketName: []byte("test"), BatchSize: 179933, DiscardChn: make(chan [][]byte, 1024)}
 	tree, err := NewBPTree(opts)
 	assert.Nil(t, err)
 	defer func() {
@@ -430,7 +430,7 @@ func TestBPTree_DeleteBatch(t *testing.T) {
 			for _, k := range tt.args.keys {
 				got, err := b.Get(k)
 				assert.Nil(t, err)
-				if !(len(got.Value) == 0 && (got.Fid == 0 && got.Offset == 0)) {
+				if got != nil && !(len(got.Value) == 0 && (got.Fid == 0 && got.Offset == 0)) {
 					t.Log("key = ", string(k))
 					t.Errorf("DeleteBatch() want a nil value after deleted, but got = %v", got)
 				}

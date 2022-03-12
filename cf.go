@@ -180,6 +180,8 @@ func (cf *ColumnFamily) Get(key []byte) ([]byte, error) {
 	indexMeta, err := cf.indexer.Get(key)
 	if err != nil {
 		return nil, err
+	} else if indexMeta == nil {
+		return nil, nil
 	} else if len(indexMeta.Value) != 0 {
 		return indexMeta.Value, nil
 	}

@@ -210,6 +210,9 @@ func (b *BPTree) Get(key []byte) (*IndexerMeta, error) {
 	}()
 
 	buf := tx.Bucket(b.opts.BucketName).Get(key)
+	if buf == nil {
+		return nil, nil
+	}
 	return DecodeMeta(buf), nil
 }
 
