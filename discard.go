@@ -39,8 +39,10 @@ func newDiscard(path, name string) (*Discard, error) {
 // there are 256 records at most, no need to worry about the performance.
 func (d *Discard) maxDiscardFid() (uint32, error) {
 	var maxFid uint32
-	var maxDiscard float64
+	var maxRatio float64
 	var offset int64
+	d.Lock()
+	defer d.Unlock()
 	for {
 		buf := make([]byte, discardRecordSize)
 		_, err := d.file.Read(buf, offset)
@@ -55,9 +57,9 @@ func (d *Discard) maxDiscardFid() (uint32, error) {
 		fid := binary.LittleEndian.Uint32(buf[:4])
 		totalCount := binary.LittleEndian.Uint32(buf[4:8])
 		discardCount := binary.LittleEndian.Uint32(buf[8:12])
-		cur := float64(discardCount) / float64(totalCount)
-		if cur > maxDiscard {
-			maxDiscard = cur
+		ratio := float64(discardCount) / float64(totalCount)
+		if ratio > maxRatio {
+			maxRatio = ratio
 			maxFid = fid
 		}
 	}
@@ -77,11 +79,15 @@ func (d *Discard) listenUpdates() {
 }
 
 func (d *Discard) incrTotal(fid uint32) {
-	d.incr(fid, true)
+	d.incr(fid, true, 1)
 }
 
 func (d *Discard) incrDiscard(fid uint32) {
-	d.incr(fid, false)
+	d.incr(fid, false, 1)
+}
+
+func (d *Discard) clear(fid uint32) {
+	d.incr(fid, false, -1)
 }
 
 // Discard file`s format:
@@ -89,7 +95,7 @@ func (d *Discard) incrDiscard(fid uint32) {
 // |  fid  |  total count | discard count |  |  fid  |  total count | discard count |
 // +-------+--------------+---------------+  +-------+--------------+---------------+
 // 0-------4--------------8--------------12  +-------16------------20---------------24
-func (d *Discard) incr(fid uint32, isTotal bool) {
+func (d *Discard) incr(fid uint32, isTotal bool, delta int) {
 	d.Lock()
 	defer d.Unlock()
 
@@ -100,21 +106,28 @@ func (d *Discard) incr(fid uint32, isTotal bool) {
 		return
 	}
 
-	buf := make([]byte, 4)
+	var buf []byte
 	var offset int64
-	if isTotal {
-		offset = int64(fid*discardRecordSize + 4)
+	if delta > 0 {
+		buf = make([]byte, 4)
+		if isTotal {
+			offset = int64(fid*discardRecordSize + 4)
+		} else {
+			offset = int64(fid*discardRecordSize + 8)
+		}
+
+		if _, err := d.file.Read(buf, offset); err != nil {
+			logger.Errorf("incr value in discard err:%v", err)
+			return
+		}
+
+		v := binary.LittleEndian.Uint32(buf)
+		binary.LittleEndian.PutUint32(buf, v+uint32(delta))
 	} else {
-		offset = int64(fid*discardRecordSize + 8)
+		buf = make([]byte, 8)
+		offset = int64(fid * discardRecordSize)
 	}
 
-	if _, err := d.file.Read(buf, offset); err != nil {
-		logger.Errorf("incr value in discard err:%v", err)
-		return
-	}
-
-	v := binary.LittleEndian.Uint32(buf)
-	binary.LittleEndian.PutUint32(buf, v+1)
 	if _, err := d.file.Write(buf, offset); err != nil {
 		logger.Errorf("incr value in discard err:%v", err)
 		return

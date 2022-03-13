@@ -84,6 +84,27 @@ func TestDiscard_incrTotalAndDiscard(t *testing.T) {
 	}
 }
 
+func TestDiscard_clear(t *testing.T) {
+	dir, _ := ioutil.TempDir("", "lotusdb-discard-test")
+	d, err := newDiscard(dir, vlogDiscardName)
+	assert.Nil(t, err)
+	defer func() {
+		_ = os.RemoveAll(dir)
+	}()
+
+	for i := 0; i < 1000; i++ {
+		for j := 1; j < 1000; j = j * 11 {
+			if i%2 == 0 {
+				d.incrTotal(uint32(j))
+			} else {
+				d.incrDiscard(uint32(j))
+			}
+		}
+	}
+	d.clear(1)
+	d.clear(11)
+}
+
 func BenchmarkDiscard_incrTotalAndDiscard(b *testing.B) {
 	dir, _ := ioutil.TempDir("", "lotusdb-discard-test")
 	discard, err := newDiscard(dir, vlogDiscardName)
@@ -95,10 +116,10 @@ func BenchmarkDiscard_incrTotalAndDiscard(b *testing.B) {
 	b.ReportAllocs()
 	b.ResetTimer()
 	for i := 0; i < b.N; i++ {
-		if i % 2 == 0 {
-			discard.incr(uint32(i%255), true)
+		if i%2 == 0 {
+			discard.incr(uint32(i%255), true, 1)
 		} else {
-			discard.incr(uint32(i%255), false)
+			discard.incr(uint32(i%255), false, 1)
 		}
 	}
 }

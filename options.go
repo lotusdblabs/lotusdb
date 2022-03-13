@@ -26,6 +26,7 @@ func DefaultOptions(path string) Options {
 			ValueLogFileSize:    1024 << 20,
 			ValueLogMmap:        false,
 			ValueThreshold:      0,
+			ValueLogGCRatio:     0.5,
 		},
 	}
 }
@@ -42,6 +43,7 @@ func DefaultColumnFamilyOptions(name string) ColumnFamilyOptions {
 		ValueLogFileSize:    1024 << 20,
 		ValueLogMmap:        false,
 		ValueThreshold:      0,
+		ValueLogGCRatio:     0.5,
 	}
 }
 
@@ -109,6 +111,12 @@ type ColumnFamilyOptions struct {
 	// If the threshold is zero, that means all values will be stored in value log file.
 	// Default value is 0.
 	ValueThreshold int
+
+	// ValueLogGCRatio if discarded data in value log exceeds this ratio, it can be picked up for compaction(garbage collection)
+	// And if there are many files reached the ratio, we will pick the highest one by one.
+	// The recommended ratio is 0.5, half of the file can be compacted.
+	// Default value is 0.5.
+	ValueLogGCRatio float64
 }
 
 // WriteOptions set optional params for PutWithOptions and DeleteWithOptions.
