@@ -39,7 +39,7 @@ func TestDiscard_listenUpdates(t *testing.T) {
 	// read disard file
 	dir := filepath.Join(opts.DBPath, DefaultColumnFamilyName)
 	discard, _ := newDiscard(dir, vlogDiscardName)
-	fid, ratio, err := discard.maxDiscardFid()
+	fid, ratio, err := discard.maxDiscard()
 	assert.Nil(t, err)
 	assert.Equal(t, fid, uint32(0))
 	assert.NotZero(t, ratio)

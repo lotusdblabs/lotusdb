@@ -37,7 +37,7 @@ func newDiscard(path, name string) (*Discard, error) {
 
 // iterate and find the file with most discarded data,
 // there are 256 records at most, no need to worry about the performance.
-func (d *Discard) maxDiscardFid() (uint32, float64, error) {
+func (d *Discard) maxDiscard() (uint32, float64, error) {
 	var maxFid uint32
 	var maxRatio float64
 	var offset int64

@@ -309,7 +309,7 @@ func (vlog *valueLog) compact() error {
 
 	opt := vlog.opt
 	for {
-		fid, ratio, err := vlog.discard.maxDiscardFid()
+		fid, ratio, err := vlog.discard.maxDiscard()
 		if err != nil {
 			return err
 		}
