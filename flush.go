@@ -84,19 +84,9 @@ func (cf *ColumnFamily) listenAndFlush() {
 					nodes = append(nodes, node)
 				}
 			}
-
-			if _, err := cf.indexer.PutBatch(nodes); err != nil {
-				logger.Errorf("write to indexer err.%+v", err)
-				break
-			}
-			if err := cf.indexer.DeleteBatch(deletedKeys); err != nil {
-				logger.Errorf("delete keys in indexer err.%+v", err)
-				break
-			}
-			// must fsync before delete wal.
-			if err := cf.indexer.Sync(); err != nil {
-				logger.Errorf("sync indexer err.%+v", err)
-				break
+			if err := cf.flushUpdateIndex(nodes, deletedKeys); err != nil {
+				logger.Errorf("listenAndFlush: update index err.%+v", err)
+				return
 			}
 			// delete wal after flush to indexer.
 			if err := table.deleteWal(); err != nil {
@@ -117,4 +107,21 @@ func (cf *ColumnFamily) listenAndFlush() {
 			return
 		}
 	}
+}
+
+func (cf *ColumnFamily) flushUpdateIndex(nodes []*index.IndexerNode, keys [][]byte) error {
+	cf.flushLock.Lock()
+	defer cf.flushLock.Unlock()
+	// must put and delete in batch.
+	if _, err := cf.indexer.PutBatch(nodes); err != nil {
+		return err
+	}
+	if err := cf.indexer.DeleteBatch(keys); err != nil {
+		return err
+	}
+	// must fsync before delete wal.
+	if err := cf.indexer.Sync(); err != nil {
+		return err
+	}
+	return nil
 }

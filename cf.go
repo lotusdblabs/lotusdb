@@ -40,9 +40,10 @@ type ColumnFamily struct {
 	// Store keys and meta info.
 	indexer index.Indexer
 	// When the active memtable is full, send it to the flushChn, see listenAndFlush.
-	flushChn chan *memtable
-	opts     ColumnFamilyOptions
-	mu       sync.RWMutex
+	flushChn  chan *memtable
+	flushLock sync.RWMutex // guarantee flush and compaction exclusive.
+	opts      ColumnFamilyOptions
+	mu        sync.RWMutex
 	// Prevent concurrent db using.
 	// At least one FileLockGuard(cf/indexer/vlog dirs are all the same).
 	// And at most three FileLockGuards(cf/indexer/vlog dirs are all different).
@@ -112,7 +113,14 @@ func (db *LotusDB) OpenColumnFamily(opts ColumnFamilyOptions) (*ColumnFamily, er
 	if opts.ValueLogMmap {
 		ioType = logfile.MMap
 	}
-	valueLog, err := openValueLog(opts.ValueLogDir, opts.ValueLogFileSize, ioType, opts.ValueLogGCRatio)
+	vlogOpt := vlogOptions{
+		path:       opts.ValueLogDir,
+		blockSize:  opts.ValueLogFileSize,
+		ioType:     ioType,
+		gcRatio:    opts.ValueLogGCRatio,
+		gcInterval: opts.ValueLogGCInterval,
+	}
+	valueLog, err := openValueLog(vlogOpt)
 	if err != nil {
 		return nil, err
 	}

@@ -5,13 +5,18 @@ import (
 	"fmt"
 	"github.com/flower-corp/lotusdb/index"
 	"github.com/flower-corp/lotusdb/logfile"
+	"github.com/flower-corp/lotusdb/logger"
 	"io"
 	"io/ioutil"
+	"os"
+	"os/signal"
 	"sort"
 	"strconv"
 	"strings"
 	"sync"
 	"sync/atomic"
+	"syscall"
+	"time"
 )
 
 var (
@@ -29,7 +34,7 @@ type (
 	// Values will be stored in value log if its size exceed ValueThreshold in options.
 	valueLog struct {
 		sync.RWMutex
-		opt           options
+		opt           vlogOptions
 		activeLogFile *logfile.LogFile            // current active log file for writing.
 		logFiles      map[uint32]*logfile.LogFile // all log files. Must hold the mutex before modify it.
 		cf            *ColumnFamily
@@ -42,23 +47,18 @@ type (
 		Offset int64
 	}
 
-	options struct {
-		path      string
-		blockSize int64
-		ioType    logfile.IOType
-		gcRatio   float64
+	vlogOptions struct {
+		path       string
+		blockSize  int64
+		ioType     logfile.IOType
+		gcRatio    float64
+		gcInterval time.Duration
 	}
 )
 
 // openValueLog create a new value log file.
-func openValueLog(path string, blockSize int64, ioType logfile.IOType, gcRatio float64) (*valueLog, error) {
-	opt := options{
-		path:      path,
-		blockSize: blockSize,
-		ioType:    ioType,
-		gcRatio:   gcRatio,
-	}
-	fileInfos, err := ioutil.ReadDir(path)
+func openValueLog(opt vlogOptions) (*valueLog, error) {
+	fileInfos, err := ioutil.ReadDir(opt.path)
 	if err != nil {
 		return nil, err
 	}
@@ -84,12 +84,12 @@ func openValueLog(path string, blockSize int64, ioType logfile.IOType, gcRatio f
 	}
 
 	// open discard file.
-	discard, err := newDiscard(path, vlogDiscardName)
+	discard, err := newDiscard(opt.path, vlogDiscardName)
 	if err != nil {
 		return nil, err
 	}
 	// open active log file only.
-	logFile, err := logfile.OpenLogFile(path, fids[len(fids)-1], opt.blockSize, logfile.ValueLog, opt.ioType)
+	logFile, err := logfile.OpenLogFile(opt.path, fids[len(fids)-1], opt.blockSize, logfile.ValueLog, opt.ioType)
 	if err != nil {
 		return nil, err
 	}
@@ -108,6 +108,7 @@ func openValueLog(path string, blockSize int64, ioType logfile.IOType, gcRatio f
 	if err := vlog.setLogFileState(); err != nil {
 		return nil, err
 	}
+	go vlog.handleGC()
 	return vlog, nil
 }
 
@@ -237,22 +238,34 @@ func (vlog *valueLog) setLogFileState() error {
 	return nil
 }
 
-func (vlog *valueLog) compact() error {
-	opt := vlog.opt
+func (vlog *valueLog) handleGC() {
+	if vlog.opt.gcInterval <= 0 {
+		return
+	}
+
+	quitSig := make(chan os.Signal, 1)
+	signal.Notify(quitSig, os.Interrupt, os.Kill, syscall.SIGHUP, syscall.SIGINT, syscall.SIGTERM, syscall.SIGQUIT)
+	ticker := time.NewTicker(vlog.opt.gcInterval)
+	defer ticker.Stop()
 	for {
-		fid, ratio, err := vlog.discard.maxDiscardFid()
-		if err != nil {
-			return err
+		select {
+		case <-ticker.C:
+			if err := vlog.compact(); err != nil {
+				logger.Errorf("value log compact err: %+v", err)
+			}
+		case <-quitSig:
+			return
 		}
-		if ratio < vlog.opt.gcRatio {
-			break
-		}
-		file, err := logfile.OpenLogFile(opt.path, fid, opt.blockSize, logfile.ValueLog, opt.ioType)
-		if err != nil {
-			return err
-		}
+	}
+}
+
+func (vlog *valueLog) compact() error {
+	rewrite := func(file *logfile.LogFile) error {
+		vlog.cf.flushLock.Lock()
+		defer vlog.cf.flushLock.Unlock()
 		var offset int64
 		var validEntries []*logfile.LogEntry
+
 		for {
 			entry, sz, err := file.ReadLogEntry(offset)
 			if err != nil {
@@ -271,7 +284,7 @@ func (vlog *valueLog) compact() error {
 			if len(indexMeta.Value) != 0 {
 				continue
 			}
-			if indexMeta.Fid == fid && indexMeta.Offset == eoff {
+			if indexMeta.Fid == file.Fid && indexMeta.Offset == eoff {
 				validEntries = append(validEntries, entry)
 			}
 		}
@@ -288,7 +301,27 @@ func (vlog *valueLog) compact() error {
 				Meta: &index.IndexerMeta{Fid: valuePos.Fid, Offset: valuePos.Offset},
 			})
 		}
-		if _, err = vlog.cf.indexer.PutBatch(nodes); err != nil {
+		if _, err := vlog.cf.indexer.PutBatch(nodes); err != nil {
+			return err
+		}
+		return nil
+	}
+
+	opt := vlog.opt
+	for {
+		fid, ratio, err := vlog.discard.maxDiscardFid()
+		if err != nil {
+			return err
+		}
+		if ratio < vlog.opt.gcRatio {
+			break
+		}
+		file, err := logfile.OpenLogFile(opt.path, fid, opt.blockSize, logfile.ValueLog, opt.ioType)
+		if err != nil {
+			return err
+		}
+		if err = rewrite(file); err != nil {
+			logger.Warnf("compact rewrite err: %+v", err)
 			return err
 		}
 		// delete older vlog file.

@@ -27,6 +27,7 @@ func DefaultOptions(path string) Options {
 			ValueLogMmap:        false,
 			ValueThreshold:      0,
 			ValueLogGCRatio:     0.5,
+			ValueLogGCInterval:  time.Minute * 10,
 		},
 	}
 }
@@ -44,6 +45,7 @@ func DefaultColumnFamilyOptions(name string) ColumnFamilyOptions {
 		ValueLogMmap:        false,
 		ValueThreshold:      0,
 		ValueLogGCRatio:     0.5,
+		ValueLogGCInterval:  time.Minute * 10,
 	}
 }
 
@@ -116,6 +118,11 @@ type ColumnFamilyOptions struct {
 	// The recommended ratio is 0.5, half of the file can be compacted.
 	// Default value is 0.5.
 	ValueLogGCRatio float64
+
+	// ValueLogGCInterval a backgroud groutine will check and do gc periodically according to the interval.
+	// If you don`t want value log file be compacted, set it a Zero time.
+	// Default value is 10 minutes.
+	ValueLogGCInterval time.Duration
 }
 
 // WriteOptions set optional params for PutWithOptions and DeleteWithOptions.
