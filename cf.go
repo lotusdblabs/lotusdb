@@ -112,7 +112,7 @@ func (db *LotusDB) OpenColumnFamily(opts ColumnFamilyOptions) (*ColumnFamily, er
 	if opts.ValueLogMmap {
 		ioType = logfile.MMap
 	}
-	valueLog, err := openValueLog(opts.ValueLogDir, opts.ValueLogFileSize, ioType)
+	valueLog, err := openValueLog(opts.ValueLogDir, opts.ValueLogFileSize, ioType, opts.ValueLogGCRatio)
 	if err != nil {
 		return nil, err
 	}

@@ -33,7 +33,6 @@ type (
 		activeLogFile *logfile.LogFile            // current active log file for writing.
 		logFiles      map[uint32]*logfile.LogFile // all log files. Must hold the mutex before modify it.
 		cf            *ColumnFamily
-		ccl           []uint32 // ccl means compaction candidate list, which stores file ids that can be compacted.
 		discard       *Discard
 	}
 
@@ -47,15 +46,17 @@ type (
 		path      string
 		blockSize int64
 		ioType    logfile.IOType
+		gcRatio   float64
 	}
 )
 
 // openValueLog create a new value log file.
-func openValueLog(path string, blockSize int64, ioType logfile.IOType) (*valueLog, error) {
+func openValueLog(path string, blockSize int64, ioType logfile.IOType, gcRatio float64) (*valueLog, error) {
 	opt := options{
 		path:      path,
 		blockSize: blockSize,
 		ioType:    ioType,
+		gcRatio:   gcRatio,
 	}
 	fileInfos, err := ioutil.ReadDir(path)
 	if err != nil {
@@ -238,7 +239,14 @@ func (vlog *valueLog) setLogFileState() error {
 
 func (vlog *valueLog) compact() error {
 	opt := vlog.opt
-	for _, fid := range vlog.ccl {
+	for {
+		fid, ratio, err := vlog.discard.maxDiscardFid()
+		if err != nil {
+			return err
+		}
+		if ratio < vlog.opt.gcRatio {
+			break
+		}
 		file, err := logfile.OpenLogFile(opt.path, fid, opt.blockSize, logfile.ValueLog, opt.ioType)
 		if err != nil {
 			return err
