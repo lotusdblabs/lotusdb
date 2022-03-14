@@ -20,6 +20,12 @@ var (
 
 	// ErrEndOfEntry end of entry in log file.
 	ErrEndOfEntry = errors.New("logfile: end of entry in log file")
+
+	// ErrUnsupportedIoType unsupported io type, only mmap and fileIO now.
+	ErrUnsupportedIoType = errors.New("unsupported io type")
+
+	// ErrUnsupportedLogFileType unsupported log file type, only WAL and ValueLog now.
+	ErrUnsupportedLogFileType = errors.New("unsupported log file type")
 )
 
 const (
@@ -69,7 +75,10 @@ type LogFile struct {
 // fsize must be a postitive number.And we will create io selector according to ioType.
 func OpenLogFile(path string, fid uint32, fsize int64, ftype FileType, ioType IOType) (lf *LogFile, err error) {
 	lf = &LogFile{Fid: fid}
-	fileName := lf.getLogFileName(path, fid, ftype)
+	fileName, err := lf.getLogFileName(path, fid, ftype)
+	if err != nil {
+		return nil, err
+	}
 
 	var selector ioselector.IOSelector
 	switch ioType {
@@ -82,7 +91,7 @@ func OpenLogFile(path string, fid uint32, fsize int64, ftype FileType, ioType IO
 			return
 		}
 	default:
-		panic(fmt.Sprintf("unsupported io type : %d", ioType))
+		return nil, ErrUnsupportedIoType
 	}
 
 	lf.IoSelector = selector
@@ -182,14 +191,15 @@ func (lf *LogFile) readBytes(offset, n int64) (buf []byte, err error) {
 	return
 }
 
-func (lf *LogFile) getLogFileName(path string, fid uint32, ftype FileType) string {
+func (lf *LogFile) getLogFileName(path string, fid uint32, ftype FileType) (name string, err error) {
 	fname := path + PathSeparator + fmt.Sprintf("%09d", fid)
 	switch ftype {
 	case WAL:
-		return fname + WalSuffixName
+		name = fname + WalSuffixName
 	case ValueLog:
-		return fname + VLogSuffixName
+		name = fname + VLogSuffixName
 	default:
-		panic(fmt.Sprintf("unsupported log file type: %d", ftype))
+		err = ErrUnsupportedLogFileType
 	}
+	return
 }

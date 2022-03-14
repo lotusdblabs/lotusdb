@@ -264,9 +264,9 @@ func (vlog *valueLog) compact() error {
 	rewrite := func(file *logfile.LogFile) error {
 		vlog.cf.flushLock.Lock()
 		defer vlog.cf.flushLock.Unlock()
+
 		var offset int64
 		var validEntries []*logfile.LogEntry
-
 		for {
 			entry, sz, err := file.ReadLogEntry(offset)
 			if err != nil {
@@ -281,7 +281,10 @@ func (vlog *valueLog) compact() error {
 			if err != nil {
 				return err
 			}
-			// if value is stored in indexer, value in vlog must be old.
+			if indexMeta == nil {
+				continue
+			}
+			// if value is already stored in indexer, the value in vlog must be old.
 			if len(indexMeta.Value) != 0 {
 				continue
 			}
