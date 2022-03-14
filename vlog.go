@@ -108,7 +108,7 @@ func openValueLog(opt vlogOptions) (*valueLog, error) {
 	if err := vlog.setLogFileState(); err != nil {
 		return nil, err
 	}
-	go vlog.handleGC()
+	go vlog.handleCompaction()
 	return vlog, nil
 }
 
@@ -238,7 +238,7 @@ func (vlog *valueLog) setLogFileState() error {
 	return nil
 }
 
-func (vlog *valueLog) handleGC() {
+func (vlog *valueLog) handleCompaction() {
 	if vlog.opt.gcInterval <= 0 {
 		return
 	}
@@ -251,9 +251,10 @@ func (vlog *valueLog) handleGC() {
 		select {
 		case <-ticker.C:
 			if err := vlog.compact(); err != nil {
-				logger.Errorf("value log compact err: %+v", err)
+				logger.Errorf("value log compaction err: %+v", err)
 			}
 		case <-quitSig:
+		case <-vlog.cf.closedC:
 			return
 		}
 	}

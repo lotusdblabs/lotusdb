@@ -100,9 +100,8 @@ func (cf *ColumnFamily) listenAndFlush() {
 				cf.immuMems = cf.immuMems[:0]
 			}
 			cf.mu.Unlock()
+		// cf has closed or force quit.
 		case <-sig:
-			return
-			// cf has closed.
 		case <-cf.closedC:
 			return
 		}
