@@ -67,17 +67,16 @@ func (cf *ColumnFamily) listenAndFlush() {
 					deletedKeys = append(deletedKeys, key)
 				} else {
 					if len(mv.value) >= cf.opts.ValueThreshold {
-						valuePos, err := cf.vlog.Write(&logfile.LogEntry{Key: key, Value: mv.value})
+						valuePos, esize, err := cf.vlog.Write(&logfile.LogEntry{Key: key, Value: mv.value})
 						if err != nil {
 							logger.Errorf("write to value log err.%+v", err)
 							return
 						}
 						node.Meta = &index.IndexerMeta{
-							Fid:    valuePos.Fid,
-							Offset: valuePos.Offset,
+							Fid:       valuePos.Fid,
+							Offset:    valuePos.Offset,
+							EntrySize: esize,
 						}
-						// update vlog writes total count for gc.
-						cf.vlog.discard.incrTotal(valuePos.Fid)
 					} else {
 						node.Meta = &index.IndexerMeta{Value: mv.value}
 					}

@@ -146,34 +146,34 @@ func (vlog *valueLog) Read(fid uint32, offset int64) (*logfile.LogEntry, error) 
 
 // Write new VLogEntry to value log file.
 // If the active log file is full, it will be closed and a new active file will be created to replace it.
-func (vlog *valueLog) Write(ent *logfile.LogEntry) (*valuePos, error) {
+func (vlog *valueLog) Write(ent *logfile.LogEntry) (*valuePos, int, error) {
 	buf, eSize := logfile.EncodeEntry(ent)
 	// if active is reach to thereshold, close it and open a new one.
 	if vlog.activeLogFile.WriteAt+int64(eSize) >= vlog.opt.blockSize {
 		vlog.Lock()
 		if err := vlog.Sync(); err != nil {
-			return nil, err
+			return nil, 0, err
 		}
 		vlog.logFiles[vlog.activeLogFile.Fid] = vlog.activeLogFile
 
 		logFile, err := vlog.createLogFile()
 		if err != nil {
 			vlog.Unlock()
-			return nil, err
+			return nil, 0, err
 		}
 		vlog.activeLogFile = logFile
 		vlog.Unlock()
 	}
 	err := vlog.activeLogFile.Write(buf)
 	if err != nil {
-		return nil, err
+		return nil, 0, err
 	}
 
 	writeAt := atomic.LoadInt64(&vlog.activeLogFile.WriteAt)
 	return &valuePos{
 		Fid:    vlog.activeLogFile.Fid,
 		Offset: writeAt - int64(eSize),
-	}, nil
+	}, eSize, nil
 }
 
 // Sync only for the active log file.
@@ -296,7 +296,7 @@ func (vlog *valueLog) compact() error {
 		var nodes []*index.IndexerNode
 		// rewrite valid log entries.
 		for _, e := range validEntries {
-			valuePos, err := vlog.Write(e)
+			valuePos, _, err := vlog.Write(e)
 			if err != nil {
 				return err
 			}

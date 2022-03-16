@@ -18,16 +18,16 @@ func TestEncodeMeta(t *testing.T) {
 		want []byte
 	}{
 		{
-			"nil", args{m: &IndexerMeta{Value: nil, Fid: 0, Offset: 98}}, []byte{0, 196, 1},
+			"nil", args{m: &IndexerMeta{Value: nil, Fid: 0, Offset: 98, EntrySize: 0}}, []byte{0, 196, 1, 0},
 		},
 		{
-			"0", args{m: &IndexerMeta{Value: []byte(""), Fid: 0, Offset: 0}}, []byte{0, 0},
+			"0", args{m: &IndexerMeta{Value: []byte(""), Fid: 0, Offset: 0, EntrySize: 0}}, []byte{0, 0, 0},
 		},
 		{
-			"1", args{m: &IndexerMeta{Value: []byte("1"), Fid: 0, Offset: 0}}, []byte{0, 0, 49},
+			"1", args{m: &IndexerMeta{Value: []byte("1"), Fid: 0, Offset: 0, EntrySize: 10}}, []byte{0, 0, 20, 49},
 		},
 		{
-			"many", args{m: &IndexerMeta{Value: []byte("lotusdb"), Fid: 0, Offset: 0}}, []byte{0, 0, 108, 111, 116, 117, 115, 100, 98},
+			"many", args{m: &IndexerMeta{Value: []byte("lotusdb"), Fid: 0, Offset: 0, EntrySize: 169}}, []byte{0, 0, 210, 2, 108, 111, 116, 117, 115, 100, 98},
 		},
 	}
 	for _, tt := range tests {
@@ -49,16 +49,16 @@ func TestDecodeMeta(t *testing.T) {
 		want *IndexerMeta
 	}{
 		{
-			"nil", args{buf: []byte{0, 196, 1}}, &IndexerMeta{Value: []byte(""), Fid: 0, Offset: 98},
+			"nil", args{buf: []byte{0, 196, 1, 0}}, &IndexerMeta{Value: []byte(""), Fid: 0, Offset: 98, EntrySize: 0},
 		},
 		{
-			"0", args{buf: []byte{0, 0}}, &IndexerMeta{Value: []byte(""), Fid: 0, Offset: 0},
+			"0", args{buf: []byte{0, 0, 0}}, &IndexerMeta{Value: []byte(""), Fid: 0, Offset: 0, EntrySize: 0},
 		},
 		{
-			"1", args{buf: []byte{0, 0, 48}}, &IndexerMeta{Value: []byte("0"), Fid: 0, Offset: 0},
+			"1", args{buf: []byte{0, 0, 20, 49}}, &IndexerMeta{Value: []byte("1"), Fid: 0, Offset: 0, EntrySize: 10},
 		},
 		{
-			"many", args{buf: []byte{0, 0, 108, 111, 116, 117, 115, 100, 98}}, &IndexerMeta{Value: []byte("lotusdb"), Fid: 0, Offset: 0},
+			"many", args{buf: []byte{0, 0, 210, 2, 108, 111, 116, 117, 115, 100, 98}}, &IndexerMeta{Value: []byte("lotusdb"), Fid: 0, Offset: 0, EntrySize: 169},
 		},
 	}
 	for _, tt := range tests {

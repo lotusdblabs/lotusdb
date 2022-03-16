@@ -32,7 +32,7 @@ func TestOpenValueLog(t *testing.T) {
 		vlog, err := openValueLogForTest(path, 180, logfile.FileIO, 0.5)
 		assert.Nil(t, err)
 
-		_, err = vlog.Write(&logfile.LogEntry{Key: GetKey(923), Value: GetValue128B()})
+		_, _, err = vlog.Write(&logfile.LogEntry{Key: GetKey(923), Value: GetValue128B()})
 		assert.Nil(t, err)
 
 		// open again, the old active log file is close to full, so we weill create a new active log file.
@@ -147,7 +147,7 @@ func testValueLogWrite(t *testing.T, ioType logfile.IOType) {
 	for _, tt := range tests {
 		t.Run(tt.name, func(t *testing.T) {
 			vlog := tt.fields.vlog
-			got, err := vlog.Write(tt.args.e)
+			got, _, err := vlog.Write(tt.args.e)
 			if (err != nil) != tt.wantErr {
 				t.Errorf("Write() error = %v, wantErr %v", err, tt.wantErr)
 				return
@@ -188,7 +188,7 @@ func TestValueLog_WriteAfterReopen(t *testing.T) {
 	}
 	var pos []*valuePos
 
-	pos1, err := vlog.Write(tests[0])
+	pos1, _, err := vlog.Write(tests[0])
 	assert.Nil(t, err)
 	pos = append(pos, pos1)
 
@@ -198,7 +198,7 @@ func TestValueLog_WriteAfterReopen(t *testing.T) {
 	// reopen it.
 	vlog, err = openValueLogForTest(path, 100, logfile.MMap, 0.5)
 	assert.Nil(t, err)
-	pos2, err := vlog.Write(tests[1])
+	pos2, _, err := vlog.Write(tests[1])
 	assert.Nil(t, err)
 	pos = append(pos, pos2)
 
@@ -240,7 +240,7 @@ func testValueLogWriteUntilNewActiveFileOpen(t *testing.T, ioType logfile.IOType
 		random++
 	}
 	for i := 0; i <= writeCount; i++ {
-		pos, err := vlog.Write(&logfile.LogEntry{Key: GetKey(i), Value: GetValue128B()})
+		pos, _, err := vlog.Write(&logfile.LogEntry{Key: GetKey(i), Value: GetValue128B()})
 		assert.Nil(t, err)
 		if i == 0 || i == writeCount || i == random {
 			poses = append(poses, pos)
@@ -292,7 +292,7 @@ func testValueLogRead(t *testing.T, ioType logfile.IOType) {
 	}
 	for i := 0; i <= writeCount; i++ {
 		v := GetValue128B()
-		pos, err := vlog.Write(&logfile.LogEntry{Key: GetKey(i), Value: v})
+		pos, _, err := vlog.Write(&logfile.LogEntry{Key: GetKey(i), Value: v})
 		assert.Nil(t, err)
 		if i == 0 || i == writeCount || i == random {
 			datas = append(datas, &data{e: &logfile.LogEntry{Key: GetKey(i), Value: v}, pos: pos})
@@ -361,7 +361,7 @@ func TestValueLog_ReadFromArchivedFile(t *testing.T) {
 
 	writeCount := 100000
 	for i := 0; i <= writeCount; i++ {
-		_, err := vlog.Write(&logfile.LogEntry{Key: GetKey(i), Value: GetValue128B()})
+		_, _, err := vlog.Write(&logfile.LogEntry{Key: GetKey(i), Value: GetValue128B()})
 		assert.Nil(t, err)
 	}
 	// close and reopen it.

@@ -44,9 +44,10 @@ type IndexerNode struct {
 // If value exists, it means both key and value will be stored in indexer.
 // If not, we will store some info(Fid, Size, Offset) to find the value in value log.
 type IndexerMeta struct {
-	Value  []byte
-	Fid    uint32
-	Offset int64
+	Value     []byte
+	Fid       uint32
+	Offset    int64
+	EntrySize int
 }
 
 // Indexer index data are stored in indexer.
@@ -127,6 +128,7 @@ func EncodeMeta(m *IndexerMeta) []byte {
 	var index int
 	index += binary.PutVarint(header[index:], int64(m.Fid))
 	index += binary.PutVarint(header[index:], m.Offset)
+	index += binary.PutVarint(header[index:], int64(m.EntrySize))
 
 	if m.Value != nil {
 		buf := make([]byte, index+len(m.Value))
@@ -147,6 +149,10 @@ func DecodeMeta(buf []byte) *IndexerMeta {
 
 	offset, n := binary.Varint(buf[index:])
 	m.Offset = offset
+	index += n
+
+	esize, n := binary.Varint(buf[index:])
+	m.EntrySize = int(esize)
 	index += n
 
 	m.Value = buf[index:]
