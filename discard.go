@@ -2,6 +2,7 @@ package lotusdb
 
 import (
 	"encoding/binary"
+	"errors"
 	"io"
 	"path/filepath"
 	"sync"
@@ -14,33 +15,65 @@ import (
 
 const discardRecordSize = 12
 
+// ErrDiscardNoSpace no enough space for discard file.
+var ErrDiscardNoSpace = errors.New("not enough space can be allocated for the discard file")
+
+// Discard is used to record total size and discarded size in a log file.
+// Mainly for value log compaction.
 type Discard struct {
 	sync.Mutex
-	valChan chan [][]byte
-	file    ioselector.IOSelector
+	valChan  chan [][]byte
+	file     ioselector.IOSelector
+	freeList []int64          // contains file offset that can be allocated
+	location map[uint32]int64 // offset of each fid
 }
 
 func newDiscard(path, name string) (*Discard, error) {
 	fname := filepath.Join(path, name)
-	file, err := ioselector.NewMMapSelector(fname, 1<<12)
+	fsize := 1 << 12
+	file, err := ioselector.NewMMapSelector(fname, int64(fsize))
 	if err != nil {
 		return nil, err
 	}
 
+	var freeList []int64
+	var offset int64
+	location := make(map[uint32]int64)
+	for {
+		// read fid and total is enough.
+		buf := make([]byte, 8)
+		if _, err := file.Read(buf, offset); err != nil {
+			if err == io.EOF || err == logfile.ErrEndOfEntry {
+				break
+			}
+			return nil, err
+		}
+		fid := binary.LittleEndian.Uint32(buf[:4])
+		total := binary.LittleEndian.Uint32(buf[4:8])
+		if fid == 0 && total == 0 {
+			freeList = append(freeList, offset)
+		} else {
+			location[fid] = offset
+		}
+		offset += discardRecordSize
+	}
+
 	d := &Discard{
-		valChan: make(chan [][]byte, 1024),
-		file:    file,
+		valChan:  make(chan [][]byte, 1024),
+		file:     file,
+		freeList: freeList,
+		location: location,
 	}
 	go d.listenUpdates()
 	return d, nil
 }
 
+// CCL means compaction cnadidate list.
 // iterate and find the file with most discarded data,
 // there are 256 records at most, no need to worry about the performance.
-func (d *Discard) maxDiscard() (uint32, float64, error) {
-	var maxFid uint32
-	var maxRatio float64
+func (d *Discard) getCCL(activeFid uint32, ratio float64) ([]uint32, error) {
 	var offset int64
+	var ccl []uint32
 	d.Lock()
 	defer d.Unlock()
 	for {
@@ -50,72 +83,95 @@ func (d *Discard) maxDiscard() (uint32, float64, error) {
 			if err == io.EOF || err == logfile.ErrEndOfEntry {
 				break
 			}
-			return 0, 0, err
+			return nil, err
 		}
 		offset += discardRecordSize
 
 		fid := binary.LittleEndian.Uint32(buf[:4])
-		totalCount := binary.LittleEndian.Uint32(buf[4:8])
-		discardCount := binary.LittleEndian.Uint32(buf[8:12])
-		ratio := float64(discardCount) / float64(totalCount)
-		if ratio > maxRatio {
-			maxRatio = ratio
-			maxFid = fid
+		total := binary.LittleEndian.Uint32(buf[4:8])
+		discard := binary.LittleEndian.Uint32(buf[8:12])
+		var curRatio float64
+		if total != 0 && discard != 0 {
+			curRatio = float64(discard) / float64(total)
+		}
+		if curRatio > ratio && fid != activeFid {
+			ccl = append(ccl, fid)
 		}
 	}
-	return maxFid, maxRatio, nil
+	return ccl, nil
 }
 
 func (d *Discard) listenUpdates() {
 	for {
 		select {
 		case oldVal := <-d.valChan:
+			couts := make(map[uint32]int)
 			for _, buf := range oldVal {
 				meta := index.DecodeMeta(buf)
-				d.incrDiscard(meta.Fid)
+				couts[meta.Fid] += meta.EntrySize
+			}
+			for fid, size := range couts {
+				d.incrDiscard(fid, size)
 			}
 		}
 	}
 }
 
-func (d *Discard) incrTotal(fid uint32) {
-	d.incr(fid, true, 1)
-}
-
-func (d *Discard) incrDiscard(fid uint32) {
-	d.incr(fid, false, 1)
-}
-
-func (d *Discard) clear(fid uint32) {
-	d.incr(fid, false, -1)
-}
-
-// Discard file`s format:
-// +-------+--------------+---------------+  +-------+--------------+---------------+
-// |  fid  |  total count | discard count |  |  fid  |  total count | discard count |
-// +-------+--------------+---------------+  +-------+--------------+---------------+
-// 0-------4--------------8--------------12  +-------16------------20---------------24
-func (d *Discard) incr(fid uint32, isTotal bool, delta int) {
+func (d *Discard) setTotal(fid uint32, totalSize int) {
 	d.Lock()
 	defer d.Unlock()
 
-	fileid := make([]byte, 4)
-	binary.LittleEndian.PutUint32(fileid, fid)
-	if _, err := d.file.Write(fileid, int64(fid*discardRecordSize)); err != nil {
+	if _, ok := d.location[fid]; ok {
+		return
+	}
+	offset, err := d.alloc(fid)
+	if err != nil {
+		logger.Errorf("discard file allocate err: %+v", err)
+		return
+	}
+
+	buf := make([]byte, 8)
+	binary.LittleEndian.PutUint32(buf[:4], fid)
+	binary.LittleEndian.PutUint32(buf[4:8], uint32(totalSize))
+	if _, err = d.file.Write(buf, offset); err != nil {
 		logger.Errorf("incr value in discard err:%v", err)
+		return
+	}
+}
+
+func (d *Discard) clear(fid uint32) {
+	d.incr(fid, -1)
+	d.Lock()
+	if offset, ok := d.location[fid]; ok {
+		d.freeList = append(d.freeList, offset)
+		delete(d.location, fid)
+	}
+	d.Unlock()
+}
+
+func (d *Discard) incrDiscard(fid uint32, delta int) {
+	d.incr(fid, delta)
+}
+
+// format of discard file` record:
+// +-------+--------------+----------------+  +-------+--------------+----------------+
+// |  fid  |  total size  | discarded size |  |  fid  |  total size  | discarded size |
+// +-------+--------------+----------------+  +-------+--------------+----------------+
+// 0-------4--------------8---------------12  12------16------------20----------------24
+func (d *Discard) incr(fid uint32, delta int) {
+	d.Lock()
+	defer d.Unlock()
+
+	offset, err := d.alloc(fid)
+	if err != nil {
+		logger.Errorf("discard file allocate err: %+v", err)
 		return
 	}
 
 	var buf []byte
-	var offset int64
 	if delta > 0 {
 		buf = make([]byte, 4)
-		if isTotal {
-			offset = int64(fid*discardRecordSize + 4)
-		} else {
-			offset = int64(fid*discardRecordSize + 8)
-		}
-
+		offset += 8
 		if _, err := d.file.Read(buf, offset); err != nil {
 			logger.Errorf("incr value in discard err:%v", err)
 			return
@@ -124,12 +180,26 @@ func (d *Discard) incr(fid uint32, isTotal bool, delta int) {
 		v := binary.LittleEndian.Uint32(buf)
 		binary.LittleEndian.PutUint32(buf, v+uint32(delta))
 	} else {
-		buf = make([]byte, 8)
-		offset = int64(fid * discardRecordSize)
+		buf = make([]byte, discardRecordSize)
 	}
 
 	if _, err := d.file.Write(buf, offset); err != nil {
 		logger.Errorf("incr value in discard err:%v", err)
 		return
 	}
+}
+
+// must hold the lock before invoking
+func (d *Discard) alloc(fid uint32) (int64, error) {
+	if offset, ok := d.location[fid]; ok {
+		return offset, nil
+	}
+	if len(d.freeList) == 0 {
+		return 0, ErrDiscardNoSpace
+	}
+
+	offset := d.freeList[len(d.freeList)-1]
+	d.freeList = d.freeList[:len(d.freeList)-1]
+	d.location[fid] = offset
+	return offset, nil
 }

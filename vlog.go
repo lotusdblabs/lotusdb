@@ -312,14 +312,12 @@ func (vlog *valueLog) compact() error {
 	}
 
 	opt := vlog.opt
-	for {
-		fid, ratio, err := vlog.discard.maxDiscard()
-		if err != nil {
-			return err
-		}
-		if ratio < vlog.opt.gcRatio {
-			break
-		}
+	ccl, err := vlog.discard.getCCL(1, 1)
+	if err != nil {
+		return err
+	}
+
+	for _, fid := range ccl {
 		file, err := logfile.OpenLogFile(opt.path, fid, opt.blockSize, logfile.ValueLog, opt.ioType)
 		if err != nil {
 			return err

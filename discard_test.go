@@ -2,7 +2,6 @@ package lotusdb
 
 import (
 	"github.com/stretchr/testify/assert"
-	"io/ioutil"
 	"os"
 	"path/filepath"
 	"testing"
@@ -35,92 +34,43 @@ func TestDiscard_listenUpdates(t *testing.T) {
 		err := db.Put(GetKey(i), GetValue128B())
 		assert.Nil(t, err)
 	}
-
-	// read disard file
-	dir := filepath.Join(opts.DBPath, DefaultColumnFamilyName)
-	discard, _ := newDiscard(dir, vlogDiscardName)
-	fid, ratio, err := discard.maxDiscard()
-	assert.Nil(t, err)
-	assert.Equal(t, fid, uint32(0))
-	assert.NotZero(t, ratio)
 }
 
-func TestDiscard_incrTotalAndDiscard(t *testing.T) {
-	dir, _ := ioutil.TempDir("", "lotusdb-discard-test")
-	discard, err := newDiscard(dir, vlogDiscardName)
-	assert.Nil(t, err)
-	defer func() {
-		_ = os.RemoveAll(dir)
-	}()
+func TestDiscard_newDiscard(t *testing.T) {
+	t.Run("init", func(t *testing.T) {
+		path := filepath.Join("/tmp", "lotusdb-discard")
+		os.MkdirAll(path, os.ModePerm)
+		defer os.RemoveAll(path)
+		dis, err := newDiscard(path, vlogDiscardName)
+		assert.Nil(t, err)
 
-	type args struct {
-		fid uint32
-	}
-	tests := []struct {
-		name string
-		d    *Discard
-		args args
-	}{
-		{
-			"total-fid-0", discard, args{fid: 0},
-		},
-		{
-			"discard-fid-0", discard, args{fid: 0},
-		},
-		{
-			"total-fid-1", discard, args{fid: 1},
-		},
-		{
-			"discard-fid-1", discard, args{fid: 1},
-		},
-	}
-	for i, tt := range tests {
-		t.Run(tt.name, func(t *testing.T) {
-			if i%2 == 0 {
-				tt.d.incrTotal(tt.args.fid)
-			} else {
-				tt.d.incrDiscard(tt.args.fid)
-			}
-		})
-	}
-}
+		assert.Equal(t, len(dis.freeList), 341)
+		assert.Equal(t, len(dis.location), 0)
+	})
 
-func TestDiscard_clear(t *testing.T) {
-	dir, _ := ioutil.TempDir("", "lotusdb-discard-test")
-	d, err := newDiscard(dir, vlogDiscardName)
-	assert.Nil(t, err)
-	defer func() {
-		_ = os.RemoveAll(dir)
-	}()
+	t.Run("with-data", func(t *testing.T) {
+		path := filepath.Join("/tmp", "lotusdb-discard")
+		os.MkdirAll(path, os.ModePerm)
+		defer os.RemoveAll(path)
+		dis, err := newDiscard(path, vlogDiscardName)
+		assert.Nil(t, err)
 
-	for i := 0; i < 1000; i++ {
-		for j := 1; j < 1000; j = j * 11 {
-			if i%2 == 0 {
-				d.incrTotal(uint32(j))
-			} else {
-				d.incrDiscard(uint32(j))
-			}
+		for i := 1; i < 300; i = i*5 {
+			dis.setTotal(uint32(i), 223)
+			dis.incrDiscard(uint32(i), i * 10)
 		}
-	}
-	d.clear(1)
-	d.clear(11)
+
+		assert.Equal(t, len(dis.freeList), 337)
+		assert.Equal(t, len(dis.location), 4)
+
+		// reopen
+		dis2, err := newDiscard(path, vlogDiscardName)
+		assert.Nil(t, err)
+		assert.Equal(t, len(dis2.freeList), 337)
+		assert.Equal(t, len(dis2.location), 4)
+	})
 }
 
-func BenchmarkDiscard_incrTotalAndDiscard(b *testing.B) {
-	dir, _ := ioutil.TempDir("", "lotusdb-discard-test")
-	discard, err := newDiscard(dir, vlogDiscardName)
-	assert.Nil(b, err)
-	defer func() {
-		_ = os.RemoveAll(dir)
-	}()
+func TestDiscard_setToal(t *testing.T) {
 
-	b.ReportAllocs()
-	b.ResetTimer()
-	for i := 0; i < b.N; i++ {
-		if i%2 == 0 {
-			discard.incr(uint32(i%255), true, 1)
-		} else {
-			discard.incr(uint32(i%255), false, 1)
-		}
-	}
 }
