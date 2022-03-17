@@ -2,6 +2,7 @@ package index
 
 import (
 	"github.com/flower-corp/lotusdb/logger"
+	"strings"
 	"time"
 
 	"go.etcd.io/bbolt"
@@ -71,7 +72,7 @@ func NewBPTree(opt BPTreeOptions) (*BPTree, error) {
 	}
 
 	// open metadatadb and db
-	path := opt.DirPath + separator + opt.GetColumnFamilyName()
+	path := opt.DirPath + separator + strings.ToUpper(opt.GetColumnFamilyName())
 	db, err := bbolt.Open(path+indexFileSuffixName, 0600, &bbolt.Options{
 		Timeout:         1 * time.Second,
 		NoSync:          true,

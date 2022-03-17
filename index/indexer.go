@@ -21,7 +21,7 @@ var (
 )
 
 const (
-	indexFileSuffixName = ".index"
+	indexFileSuffixName = ".INDEX"
 	separator           = string(os.PathSeparator)
 	metaHeaderSize      = 5 + 5 + 10
 )

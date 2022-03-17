@@ -105,12 +105,12 @@ func (d *Discard) listenUpdates() {
 	for {
 		select {
 		case oldVal := <-d.valChan:
-			couts := make(map[uint32]int)
+			counts := make(map[uint32]int)
 			for _, buf := range oldVal {
 				meta := index.DecodeMeta(buf)
-				couts[meta.Fid] += meta.EntrySize
+				counts[meta.Fid] += meta.EntrySize
 			}
-			for fid, size := range couts {
+			for fid, size := range counts {
 				d.incrDiscard(fid, size)
 			}
 		}
