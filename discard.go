@@ -5,6 +5,7 @@ import (
 	"errors"
 	"io"
 	"path/filepath"
+	"sort"
 	"sync"
 
 	"github.com/flower-corp/lotusdb/index"
@@ -98,6 +99,11 @@ func (d *Discard) getCCL(activeFid uint32, ratio float64) ([]uint32, error) {
 			ccl = append(ccl, fid)
 		}
 	}
+
+	// sort in ascending order, guarantee the older file will compact firstly.
+	sort.Slice(ccl, func(i, j int) bool {
+		return ccl[i] < ccl[j]
+	})
 	return ccl, nil
 }
 
