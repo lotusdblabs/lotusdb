@@ -243,6 +243,16 @@ func (vlog *valueLog) setLogFileState() error {
 	return nil
 }
 
+func (vlog *valueLog) getActiveFid() uint32 {
+	var fid uint32
+	vlog.Lock()
+	if vlog.activeLogFile != nil {
+		fid = vlog.activeLogFile.Fid
+	}
+	vlog.Unlock()
+	return fid
+}
+
 func (vlog *valueLog) handleCompaction() {
 	if vlog.opt.gcInterval <= 0 {
 		return
@@ -301,23 +311,29 @@ func (vlog *valueLog) compact() error {
 		var nodes []*index.IndexerNode
 		// rewrite valid log entries.
 		for _, e := range validEntries {
-			valuePos, _, err := vlog.Write(e)
+			valuePos, esize, err := vlog.Write(e)
 			if err != nil {
 				return err
 			}
 			nodes = append(nodes, &index.IndexerNode{
-				Key:  e.Key,
-				Meta: &index.IndexerMeta{Fid: valuePos.Fid, Offset: valuePos.Offset},
+				Key: e.Key,
+				Meta: &index.IndexerMeta{
+					Fid:       valuePos.Fid,
+					Offset:    valuePos.Offset,
+					EntrySize: esize,
+				},
 			})
 		}
-		if _, err := vlog.cf.indexer.PutBatch(nodes); err != nil {
+		putOpts := index.PutOptions{SendDiscard: false}
+		if _, err := vlog.cf.indexer.PutBatch(nodes, putOpts); err != nil {
 			return err
 		}
 		return nil
 	}
 
 	opt := vlog.opt
-	ccl, err := vlog.discard.getCCL(1, 1)
+	activeFid := vlog.getActiveFid()
+	ccl, err := vlog.discard.getCCL(activeFid, opt.gcRatio)
 	if err != nil {
 		return err
 	}
@@ -331,6 +347,8 @@ func (vlog *valueLog) compact() error {
 			logger.Warnf("compact rewrite err: %+v", err)
 			return err
 		}
+		// clear discard state.
+		vlog.discard.clear(fid)
 		// delete older vlog file.
 		if err = file.Delete(); err != nil {
 			return err

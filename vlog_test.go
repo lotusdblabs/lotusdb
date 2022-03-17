@@ -9,6 +9,7 @@ import (
 	"path/filepath"
 	"reflect"
 	"testing"
+	"time"
 )
 
 func TestOpenValueLog(t *testing.T) {
@@ -416,4 +417,72 @@ func openValueLogForTest(path string, blockSize int64, ioType logfile.IOType, gc
 		gcRatio:   gcRatio,
 	}
 	return openValueLog(opts)
+}
+
+func TestValueLog_Compaction(t *testing.T) {
+	opts := DefaultOptions("/tmp" + separator + "lotusdb")
+	opts.CfOpts.ValueLogFileSize = 16 * 1024 * 1024
+	opts.CfOpts.MemtableSize = 32 << 20
+	opts.CfOpts.ValueLogGCRatio = 0.5
+	opts.CfOpts.ValueLogGCInterval = time.Second * 7
+
+	t.Run("delete", func(t *testing.T) {
+		db, err := Open(opts)
+		assert.Nil(t, err)
+		defer destroyDB(db)
+
+		// write enough data that can trigger flush operation.
+		var writeCount = 600000
+		for i := 0; i <= writeCount; i++ {
+			err := db.Put(GetKey(i), GetValue128B())
+			assert.Nil(t, err)
+		}
+		for i := 100; i < writeCount/2; i++ {
+			err := db.Delete(GetKey(i))
+			assert.Nil(t, err)
+		}
+		// flush again
+		for i := writeCount * 2; i <= writeCount*4; i++ {
+			err := db.Put(GetKey(i), GetValue128B())
+			assert.Nil(t, err)
+		}
+		time.Sleep(time.Second * 2)
+	})
+
+	t.Run("rewrite", func(t *testing.T) {
+		db, err := Open(opts)
+		assert.Nil(t, err)
+		defer destroyDB(db)
+
+		// write enough data that can trigger flush operation.
+		var writeCount = 600000
+		for i := 0; i <= writeCount; i++ {
+			err := db.Put(GetKey(i), GetValue128B())
+			assert.Nil(t, err)
+		}
+		type kv struct {
+			key   []byte
+			value []byte
+		}
+		var kvs []*kv
+		for i := 100; i < writeCount/2; i++ {
+			k := GetKey(i)
+			v := GetValue128B()
+			err := db.Put(k, v)
+			assert.Nil(t, err)
+			kvs = append(kvs, &kv{key: k, value: v})
+		}
+		// flush again
+		for i := writeCount * 2; i <= writeCount*4; i++ {
+			err := db.Put(GetKey(i), GetValue128B())
+			assert.Nil(t, err)
+		}
+		time.Sleep(time.Second * 2)
+
+		for _, kv := range kvs {
+			v, err := db.Get(kv.key)
+			assert.Nil(t, err)
+			assert.Equal(t, v, kv.value)
+		}
+	})
 }

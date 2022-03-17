@@ -111,11 +111,14 @@ func (cf *ColumnFamily) flushUpdateIndex(nodes []*index.IndexerNode, keys [][]by
 	cf.flushLock.Lock()
 	defer cf.flushLock.Unlock()
 	// must put and delete in batch.
-	if _, err := cf.indexer.PutBatch(nodes); err != nil {
+	putOpts := index.PutOptions{SendDiscard: true}
+	if _, err := cf.indexer.PutBatch(nodes, putOpts); err != nil {
 		return err
 	}
-	if err := cf.indexer.DeleteBatch(keys); err != nil {
-		return err
+	if len(keys) > 0 {
+		if err := cf.indexer.DeleteBatch(keys); err != nil {
+			return err
+		}
 	}
 	// must fsync before delete wal.
 	if err := cf.indexer.Sync(); err != nil {

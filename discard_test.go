@@ -19,21 +19,27 @@ func TestDiscard_listenUpdates(t *testing.T) {
 		err := db.Put(GetKey(i), GetValue128B())
 		assert.Nil(t, err)
 	}
-
-	// delete or rewrite some keys.
-	db.Put(GetKey(11), []byte("1"))
-	db.Put(GetKey(4423), []byte("1"))
-	db.Put(GetKey(99803), []byte("1"))
-	db.Delete(GetKey(5803))
-	db.Delete(GetKey(103))
-	db.Put(GetKey(8888), []byte("1"))
-	db.Put(GetKey(43664), []byte("1"))
-
+	// delete or rewrite some.
+	for i := 0; i < writeCount/2; i=i+100 {
+		if i % 2 == 0 {
+			err := db.Put(GetKey(i), GetValue128B())
+			assert.Nil(t, err)
+		} else {
+			err := db.Delete(GetKey(i))
+			assert.Nil(t, err)
+		}
+	}
 	// write more to flush again.
 	for i := writeCount; i <= writeCount+300000; i++ {
 		err := db.Put(GetKey(i), GetValue128B())
 		assert.Nil(t, err)
 	}
+
+	// check the disacrd file.
+	cf := db.getColumnFamily(DefaultColumnFamilyName)
+	ccl, err := cf.vlog.discard.getCCL(10, 0.0000001)
+	assert.Nil(t, err)
+	assert.Equal(t, len(ccl), 1)
 }
 
 func TestDiscard_newDiscard(t *testing.T) {

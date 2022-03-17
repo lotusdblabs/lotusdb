@@ -171,7 +171,7 @@ func TestBPTree_PutBatch(t *testing.T) {
 	for _, tt := range tests {
 		t.Run(tt.name, func(t *testing.T) {
 			b := tt.fields.tree
-			gotOffset, err := b.PutBatch(tt.args.nodes)
+			gotOffset, err := b.PutBatch(tt.args.nodes, PutOptions{})
 			if (err != nil) != tt.wantErr {
 				t.Errorf("PutBatch() error = %v, wantErr %v", err, tt.wantErr)
 				return
@@ -368,7 +368,7 @@ func TestBPTree_DeleteBatch(t *testing.T) {
 			Meta: &IndexerMeta{Value: GetValue16B()},
 		})
 	}
-	_, err = tree.PutBatch(nodes)
+	_, err = tree.PutBatch(nodes, PutOptions{})
 	assert.Nil(t, err)
 
 	getKeys := func(nums int) [][]byte {

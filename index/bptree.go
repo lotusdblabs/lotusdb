@@ -119,7 +119,7 @@ func (b *BPTree) Put(key, value []byte) (err error) {
 // The offset marks the transaction write position of the current batch.
 // If this function fails during execution, we can write again from the offset position.
 // If offset == len(kv) - 1 , all writes are successful.
-func (b *BPTree) PutBatch(nodes []*IndexerNode) (offset int, err error) {
+func (b *BPTree) PutBatch(nodes []*IndexerNode, opts PutOptions) (offset int, err error) {
 	batchLoopNum := len(nodes) / b.opts.BatchSize
 	if len(nodes)%b.opts.BatchSize > 0 {
 		batchLoopNum++
@@ -135,23 +135,24 @@ func (b *BPTree) PutBatch(nodes []*IndexerNode) (offset int, err error) {
 
 		bucket := tx.Bucket(b.opts.BucketName)
 		var oldValues [][]byte
-	itemLoop:
 		for itemIdx := offset; itemIdx < offset+b.opts.BatchSize; itemIdx++ {
 			if itemIdx >= len(nodes) {
-				break itemLoop
+				break
 			}
 			meta := EncodeMeta(nodes[itemIdx].Meta)
 			if oldVal, err := bucket.Put(nodes[itemIdx].Key, meta); err != nil {
 				_ = tx.Rollback()
 				return offset, err
-			} else if len(oldVal) > 0 {
+			} else if len(oldVal) > 0 && opts.SendDiscard {
 				oldValues = append(oldValues, oldVal)
 			}
 		}
 		if err := tx.Commit(); err != nil {
 			return offset, err
 		}
-		b.sendDiscard(oldValues)
+		if opts.SendDiscard {
+			b.sendDiscard(oldValues)
+		}
 	}
 	return len(nodes) - 1, nil
 }
@@ -172,10 +173,9 @@ func (b *BPTree) DeleteBatch(keys [][]byte) error {
 		}
 		bucket := tx.Bucket(b.opts.BucketName)
 		var oldValues [][]byte
-	itemLoop:
 		for itemIdx := offset; itemIdx < offset+b.opts.BatchSize; itemIdx++ {
 			if itemIdx >= len(keys) {
-				break itemLoop
+				break
 			}
 			if oldVal, err := bucket.Delete(keys[itemIdx]); err != nil {
 				_ = tx.Rollback()

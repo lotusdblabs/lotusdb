@@ -50,11 +50,16 @@ type IndexerMeta struct {
 	EntrySize int
 }
 
+// PutOptions options for put or put batch.
+type PutOptions struct {
+	SendDiscard bool
+}
+
 // Indexer index data are stored in indexer.
 type Indexer interface {
 	Put(key []byte, value []byte) (err error)
 
-	PutBatch(kv []*IndexerNode) (offset int, err error)
+	PutBatch(kv []*IndexerNode, opts PutOptions) (offset int, err error)
 
 	Get(key []byte) (meta *IndexerMeta, err error)
 
