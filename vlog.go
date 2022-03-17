@@ -88,11 +88,15 @@ func openValueLog(opt vlogOptions) (*valueLog, error) {
 	if err != nil {
 		return nil, err
 	}
+
 	// open active log file only.
 	logFile, err := logfile.OpenLogFile(opt.path, fids[len(fids)-1], opt.blockSize, logfile.ValueLog, opt.ioType)
+	// set total size in discard file, skip it if exist.
+	discard.setTotal(fids[len(fids)-1], uint32(opt.blockSize))
 	if err != nil {
 		return nil, err
 	}
+
 	vlog := &valueLog{
 		opt:           opt,
 		activeLogFile: logFile,
@@ -205,6 +209,7 @@ func (vlog *valueLog) createLogFile() (*logfile.LogFile, error) {
 	if err != nil {
 		return nil, err
 	}
+	vlog.discard.setTotal(fid+1, uint32(opt.blockSize))
 	return logFile, nil
 }
 

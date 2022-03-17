@@ -70,7 +70,7 @@ func newDiscard(path, name string) (*Discard, error) {
 
 // CCL means compaction cnadidate list.
 // iterate and find the file with most discarded data,
-// there are 256 records at most, no need to worry about the performance.
+// there are 341 records at most, no need to worry about the performance.
 func (d *Discard) getCCL(activeFid uint32, ratio float64) ([]uint32, error) {
 	var offset int64
 	var ccl []uint32
@@ -94,7 +94,7 @@ func (d *Discard) getCCL(activeFid uint32, ratio float64) ([]uint32, error) {
 		if total != 0 && discard != 0 {
 			curRatio = float64(discard) / float64(total)
 		}
-		if curRatio > ratio && fid != activeFid {
+		if curRatio >= ratio && fid != activeFid {
 			ccl = append(ccl, fid)
 		}
 	}
@@ -117,7 +117,7 @@ func (d *Discard) listenUpdates() {
 	}
 }
 
-func (d *Discard) setTotal(fid uint32, totalSize int) {
+func (d *Discard) setTotal(fid uint32, totalSize uint32) {
 	d.Lock()
 	defer d.Unlock()
 
@@ -132,9 +132,9 @@ func (d *Discard) setTotal(fid uint32, totalSize int) {
 
 	buf := make([]byte, 8)
 	binary.LittleEndian.PutUint32(buf[:4], fid)
-	binary.LittleEndian.PutUint32(buf[4:8], uint32(totalSize))
+	binary.LittleEndian.PutUint32(buf[4:8], totalSize)
 	if _, err = d.file.Write(buf, offset); err != nil {
-		logger.Errorf("incr value in discard err:%v", err)
+		logger.Errorf("incr value in discard err: %v", err)
 		return
 	}
 }
@@ -150,7 +150,9 @@ func (d *Discard) clear(fid uint32) {
 }
 
 func (d *Discard) incrDiscard(fid uint32, delta int) {
-	d.incr(fid, delta)
+	if delta > 0 {
+		d.incr(fid, delta)
+	}
 }
 
 // format of discard file` record:
