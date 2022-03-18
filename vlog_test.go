@@ -466,8 +466,7 @@ func TestValueLog_Compaction(t *testing.T) {
 		}
 		var kvs []*kv
 		for i := 100; i < writeCount/2; i++ {
-			k := GetKey(i)
-			v := GetValue128B()
+			k, v := GetKey(i), GetValue128B()
 			err := db.Put(k, v)
 			assert.Nil(t, err)
 			kvs = append(kvs, &kv{key: k, value: v})

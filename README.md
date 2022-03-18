@@ -16,11 +16,20 @@ LotusDB is inspired by a paper named [SLM-DB](https://www.usenix.org/conference/
 
 ## Quick Start
 
-**1.embedded usage:** see [examples](https://github.com/flower-corp/lotusdb/tree/main/examples).
+**1. embedded usage:** see [examples](https://github.com/flower-corp/lotusdb/tree/main/examples).
 
 ## Documentation
 
 coming soon.
+
+## Community
+
+Welcome to join the [Discussions](https://github.com/flower-corp/lotusdb/discussions) to connect with LotusDB team members and other users.
+
+If you are a Chinese user, you are also welcome to join our WeChat group, scan the QR code and you will be invited:
+
+| <img src="https://i.loli.net/2021/05/06/tGTH7SXg8w95slA.jpg" width="200px" align="left"/> |
+| ------------------------------------------------------------ |
 
 ## Contributing
 
