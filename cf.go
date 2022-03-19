@@ -24,6 +24,9 @@ var (
 
 	// ErrWaitMemSpaceTimeout wait enough memtable space for writing timeout.
 	ErrWaitMemSpaceTimeout = errors.New("wait enough memtable space for writing timeout, retry later")
+
+	// ErrInvalidVLogGCRatio invalid value log gc ratio.
+	ErrInvalidVLogGCRatio = errors.New("invalid value log gc ratio")
 )
 
 // ColumnFamily is a namespace of keys and values.
@@ -75,6 +78,9 @@ func (db *LotusDB) OpenColumnFamily(opts ColumnFamilyOptions) (*ColumnFamily, er
 	}
 	if opts.ValueLogDir == "" {
 		opts.ValueLogDir = opts.DirPath
+	}
+	if opts.ValueLogGCRatio >= 1.0 || opts.ValueLogGCRatio <= 0.0 {
+		return nil, ErrInvalidVLogGCRatio
 	}
 
 	// return directly if the column family already exists.
