@@ -5,11 +5,14 @@ The format is based on [Keep a Changelog](http://keepachangelog.com/en/1.0.0/).
 
 ## [1.0.0] - 2022-02-11
 
-### **🚀**Added
+### 🚀 Features
 
-- Basic operations: Put/Get/Delete
-- Basic test cases.
-- Examples.
-- Simple cmd @nanfeng
-- Codecov`s travis.yaml file
+- Basic operations：Put(WithOptions)/Delete(WithOptions)/Get
+- Expiration of each key
+
+- Column Family
+- Value log compaction automatically by user`s options
+
+- File r/w support FileIO and MMap
+- Simple client/server tools
 

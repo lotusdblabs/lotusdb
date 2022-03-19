@@ -21,7 +21,7 @@ var ErrDiscardNoSpace = errors.New("not enough space can be allocated for the di
 
 // Discard is used to record total size and discarded size in a log file.
 // Mainly for value log compaction.
-type Discard struct {
+type discard struct {
 	sync.Mutex
 	valChan  chan [][]byte
 	file     ioselector.IOSelector
@@ -29,7 +29,7 @@ type Discard struct {
 	location map[uint32]int64 // offset of each fid
 }
 
-func newDiscard(path, name string) (*Discard, error) {
+func newDiscard(path, name string) (*discard, error) {
 	fname := filepath.Join(path, name)
 	fsize := 1 << 12
 	file, err := ioselector.NewMMapSelector(fname, int64(fsize))
@@ -59,7 +59,7 @@ func newDiscard(path, name string) (*Discard, error) {
 		offset += discardRecordSize
 	}
 
-	d := &Discard{
+	d := &discard{
 		valChan:  make(chan [][]byte, 1024),
 		file:     file,
 		freeList: freeList,
@@ -72,7 +72,7 @@ func newDiscard(path, name string) (*Discard, error) {
 // CCL means compaction cnadidate list.
 // iterate and find the file with most discarded data,
 // there are 341 records at most, no need to worry about the performance.
-func (d *Discard) getCCL(activeFid uint32, ratio float64) ([]uint32, error) {
+func (d *discard) getCCL(activeFid uint32, ratio float64) ([]uint32, error) {
 	var offset int64
 	var ccl []uint32
 	d.Lock()
@@ -107,7 +107,7 @@ func (d *Discard) getCCL(activeFid uint32, ratio float64) ([]uint32, error) {
 	return ccl, nil
 }
 
-func (d *Discard) listenUpdates() {
+func (d *discard) listenUpdates() {
 	for {
 		select {
 		case oldVal := <-d.valChan:
@@ -123,7 +123,7 @@ func (d *Discard) listenUpdates() {
 	}
 }
 
-func (d *Discard) setTotal(fid uint32, totalSize uint32) {
+func (d *discard) setTotal(fid uint32, totalSize uint32) {
 	d.Lock()
 	defer d.Unlock()
 
@@ -145,7 +145,7 @@ func (d *Discard) setTotal(fid uint32, totalSize uint32) {
 	}
 }
 
-func (d *Discard) clear(fid uint32) {
+func (d *discard) clear(fid uint32) {
 	d.incr(fid, -1)
 	d.Lock()
 	if offset, ok := d.location[fid]; ok {
@@ -155,7 +155,7 @@ func (d *Discard) clear(fid uint32) {
 	d.Unlock()
 }
 
-func (d *Discard) incrDiscard(fid uint32, delta int) {
+func (d *discard) incrDiscard(fid uint32, delta int) {
 	if delta > 0 {
 		d.incr(fid, delta)
 	}
@@ -166,7 +166,7 @@ func (d *Discard) incrDiscard(fid uint32, delta int) {
 // |  fid  |  total size  | discarded size |  |  fid  |  total size  | discarded size |
 // +-------+--------------+----------------+  +-------+--------------+----------------+
 // 0-------4--------------8---------------12  12------16------------20----------------24
-func (d *Discard) incr(fid uint32, delta int) {
+func (d *discard) incr(fid uint32, delta int) {
 	d.Lock()
 	defer d.Unlock()
 
@@ -198,7 +198,7 @@ func (d *Discard) incr(fid uint32, delta int) {
 }
 
 // must hold the lock before invoking
-func (d *Discard) alloc(fid uint32) (int64, error) {
+func (d *discard) alloc(fid uint32) (int64, error) {
 	if offset, ok := d.location[fid]; ok {
 		return offset, nil
 	}

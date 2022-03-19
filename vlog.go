@@ -38,7 +38,7 @@ type (
 		activeLogFile *logfile.LogFile            // current active log file for writing.
 		logFiles      map[uint32]*logfile.LogFile // all log files. Must hold the mutex before modify it.
 		cf            *ColumnFamily
-		discard       *Discard
+		discard       *discard
 	}
 
 	// valuePos value position.
@@ -326,6 +326,9 @@ func (vlog *valueLog) compact() error {
 		}
 		putOpts := index.PutOptions{SendDiscard: false}
 		if _, err := vlog.cf.indexer.PutBatch(nodes, putOpts); err != nil {
+			return err
+		}
+		if err := vlog.cf.indexer.Sync(); err != nil {
 			return err
 		}
 		return nil

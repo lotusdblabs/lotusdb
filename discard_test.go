@@ -20,8 +20,8 @@ func TestDiscard_listenUpdates(t *testing.T) {
 		assert.Nil(t, err)
 	}
 	// delete or rewrite some.
-	for i := 0; i < writeCount/2; i=i+100 {
-		if i % 2 == 0 {
+	for i := 0; i < writeCount/2; i = i + 100 {
+		if i%2 == 0 {
 			err := db.Put(GetKey(i), GetValue128B())
 			assert.Nil(t, err)
 		} else {
@@ -90,7 +90,7 @@ func TestDiscard_setTotal(t *testing.T) {
 	}
 	tests := []struct {
 		name string
-		dis  *Discard
+		dis  *discard
 		args args
 	}{
 		{
@@ -130,7 +130,7 @@ func TestDiscard_clear(t *testing.T) {
 	}
 	tests := []struct {
 		name string
-		dis  *Discard
+		dis  *discard
 		args args
 	}{
 		{

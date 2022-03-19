@@ -119,7 +119,7 @@ type ColumnFamilyOptions struct {
 	// Default value is 0.5.
 	ValueLogGCRatio float64
 
-	// ValueLogGCInterval a backgroud groutine will check and do gc periodically according to the interval.
+	// ValueLogGCInterval a background groutine will check and do gc periodically according to the interval.
 	// If you don`t want value log file be compacted, set it a Zero time.
 	// Default value is 10 minutes.
 	ValueLogGCInterval time.Duration

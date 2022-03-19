@@ -1,4 +1,5 @@
 # LotusDB
+
 LotusDB is a fast k/v database compatible with LSM tree and B+ tree.
 
 Key features:
