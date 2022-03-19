@@ -27,8 +27,8 @@ var (
 )
 
 // ColumnFamily is a namespace of keys and values.
-// Each key-value pair in LotusDB is associated with exactly one Column Family.
-// If there is no Column Family specified, key-value pair is associated with Column Family "cf_default".
+// Each key/value pair in LotusDB is associated with exactly one Column Family.
+// If no Column Family is specified, key-value pair is associated with Column Family "cf_default".
 // Column Families provide a way to logically partition the database.
 type ColumnFamily struct {
 	// Active memtable for writing.
