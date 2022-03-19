@@ -8,7 +8,10 @@ import (
 	"go.etcd.io/bbolt"
 )
 
-const defaultBatchSize = 100000
+const (
+	defaultBatchSize = 100000
+	fillPercent      = 0.9
+)
 
 // BPTreeOptions options for creating a new bptree.
 type BPTreeOptions struct {
@@ -134,6 +137,7 @@ func (b *BPTree) PutBatch(nodes []*IndexerNode, opts PutOptions) (offset int, er
 		}
 
 		bucket := tx.Bucket(b.opts.BucketName)
+		bucket.FillPercent = fillPercent
 		var oldValues [][]byte
 		for itemIdx := offset; itemIdx < offset+b.opts.BatchSize; itemIdx++ {
 			if itemIdx >= len(nodes) {
@@ -172,6 +176,7 @@ func (b *BPTree) DeleteBatch(keys [][]byte) error {
 			return err
 		}
 		bucket := tx.Bucket(b.opts.BucketName)
+		bucket.FillPercent = fillPercent
 		var oldValues [][]byte
 		for itemIdx := offset; itemIdx < offset+b.opts.BatchSize; itemIdx++ {
 			if itemIdx >= len(keys) {
