@@ -20,7 +20,7 @@ LotusDB is inspired by a paper named [SLM-DB](https://www.usenix.org/conference/
 
 ## Documentation
 
-coming soon.
+see [wiki](https://github.com/flower-corp/lotusdb/wiki/LotusDB-wiki).
 
 ## Community
 
