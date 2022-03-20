@@ -151,10 +151,11 @@ func (vlog *valueLog) Read(fid uint32, offset int64) (*logfile.LogEntry, error) 
 // Write new VLogEntry to value log file.
 // If the active log file is full, it will be closed and a new active file will be created to replace it.
 func (vlog *valueLog) Write(ent *logfile.LogEntry) (*valuePos, int, error) {
+	vlog.Lock()
+	defer vlog.Unlock()
 	buf, eSize := logfile.EncodeEntry(ent)
 	// if active is reach to thereshold, close it and open a new one.
 	if vlog.activeLogFile.WriteAt+int64(eSize) >= vlog.opt.blockSize {
-		vlog.Lock()
 		if err := vlog.Sync(); err != nil {
 			return nil, 0, err
 		}
@@ -162,12 +163,11 @@ func (vlog *valueLog) Write(ent *logfile.LogEntry) (*valuePos, int, error) {
 
 		logFile, err := vlog.createLogFile()
 		if err != nil {
-			vlog.Unlock()
 			return nil, 0, err
 		}
 		vlog.activeLogFile = logFile
-		vlog.Unlock()
 	}
+
 	err := vlog.activeLogFile.Write(buf)
 	if err != nil {
 		return nil, 0, err
@@ -253,6 +253,12 @@ func (vlog *valueLog) getActiveFid() uint32 {
 	return fid
 }
 
+func (vlog *valueLog) getLogFile(fid uint32) *logfile.LogFile {
+	vlog.Lock()
+	defer vlog.Unlock()
+	return vlog.logFiles[fid]
+}
+
 func (vlog *valueLog) handleCompaction() {
 	if vlog.opt.gcInterval <= 0 {
 		return
@@ -282,6 +288,7 @@ func (vlog *valueLog) compact() error {
 
 		var offset int64
 		var validEntries []*logfile.LogEntry
+		ts := time.Now().Unix()
 		for {
 			entry, sz, err := file.ReadLogEntry(offset)
 			if err != nil {
@@ -309,8 +316,14 @@ func (vlog *valueLog) compact() error {
 		}
 
 		var nodes []*index.IndexerNode
+		var deletedKeys [][]byte
 		// rewrite valid log entries.
 		for _, e := range validEntries {
+			if e.ExpiredAt != 0 && e.ExpiredAt <= ts {
+				deletedKeys = append(deletedKeys, e.Key)
+				continue
+			}
+
 			valuePos, esize, err := vlog.Write(e)
 			if err != nil {
 				return err
@@ -324,9 +337,14 @@ func (vlog *valueLog) compact() error {
 				},
 			})
 		}
-		putOpts := index.PutOptions{SendDiscard: false}
-		if _, err := vlog.cf.indexer.PutBatch(nodes, putOpts); err != nil {
+		writeOpts := index.WriteOptions{SendDiscard: false}
+		if _, err := vlog.cf.indexer.PutBatch(nodes, writeOpts); err != nil {
 			return err
+		}
+		if len(deletedKeys) > 0 {
+			if err := vlog.cf.indexer.DeleteBatch(deletedKeys, writeOpts); err != nil {
+				return err
+			}
 		}
 		if err := vlog.cf.indexer.Sync(); err != nil {
 			return err
@@ -342,18 +360,29 @@ func (vlog *valueLog) compact() error {
 	}
 
 	for _, fid := range ccl {
-		file, err := logfile.OpenLogFile(opt.path, fid, opt.blockSize, logfile.ValueLog, opt.ioType)
-		if err != nil {
-			return err
+		lf := vlog.getLogFile(fid)
+		if lf == nil {
+			file, err := logfile.OpenLogFile(opt.path, fid, opt.blockSize, logfile.ValueLog, opt.ioType)
+			if err != nil {
+				return err
+			}
+			lf = file
 		}
-		if err = rewrite(file); err != nil {
+
+		if err = rewrite(lf); err != nil {
 			logger.Warnf("compact rewrite err: %+v", err)
 			return err
 		}
 		// clear discard state.
 		vlog.discard.clear(fid)
+
 		// delete older vlog file.
-		if err = file.Delete(); err != nil {
+		vlog.Lock()
+		if _, ok := vlog.logFiles[fid]; ok {
+			delete(vlog.logFiles, fid)
+		}
+		vlog.Unlock()
+		if err = lf.Delete(); err != nil {
 			return err
 		}
 	}

@@ -50,8 +50,8 @@ type IndexerMeta struct {
 	EntrySize int
 }
 
-// PutOptions options for put or put batch.
-type PutOptions struct {
+// WriteOptions options for updates batch.
+type WriteOptions struct {
 	SendDiscard bool
 }
 
@@ -59,13 +59,13 @@ type PutOptions struct {
 type Indexer interface {
 	Put(key []byte, value []byte) (err error)
 
-	PutBatch(kv []*IndexerNode, opts PutOptions) (offset int, err error)
+	PutBatch(kv []*IndexerNode, opts WriteOptions) (offset int, err error)
 
 	Get(key []byte) (meta *IndexerMeta, err error)
 
 	Delete(key []byte) error
 
-	DeleteBatch(keys [][]byte) error
+	DeleteBatch(keys [][]byte, opts WriteOptions) error
 
 	Sync() error
 

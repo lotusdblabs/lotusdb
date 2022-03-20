@@ -12,6 +12,7 @@ import (
 	"strings"
 	"sync"
 	"sync/atomic"
+	"time"
 
 	"github.com/flower-corp/lotusdb/index"
 	"github.com/flower-corp/lotusdb/logfile"
@@ -194,10 +195,9 @@ func (cf *ColumnFamily) Get(key []byte) ([]byte, error) {
 	indexMeta, err := cf.indexer.Get(key)
 	if err != nil {
 		return nil, err
-	} else if indexMeta == nil {
+	}
+	if indexMeta == nil {
 		return nil, nil
-	} else if len(indexMeta.Value) != 0 {
-		return indexMeta.Value, nil
 	}
 
 	// get value from value log.
@@ -205,6 +205,9 @@ func (cf *ColumnFamily) Get(key []byte) ([]byte, error) {
 		ent, err := cf.vlog.Read(indexMeta.Fid, indexMeta.Offset)
 		if err != nil {
 			return nil, err
+		}
+		if ent.ExpiredAt != 0 && ent.ExpiredAt <= time.Now().Unix() {
+			return nil, nil
 		}
 		if len(ent.Value) != 0 {
 			return ent.Value, nil

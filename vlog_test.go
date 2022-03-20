@@ -4,6 +4,7 @@ import (
 	"bytes"
 	"github.com/flower-corp/lotusdb/logfile"
 	"github.com/stretchr/testify/assert"
+	"io/ioutil"
 	"math/rand"
 	"os"
 	"path/filepath"
@@ -419,69 +420,115 @@ func openValueLogForTest(path string, blockSize int64, ioType logfile.IOType, gc
 	return openValueLog(opts)
 }
 
-func TestValueLog_Compaction(t *testing.T) {
+func TestValueLog_Compaction_Normal(t *testing.T) {
 	opts := DefaultOptions("/tmp" + separator + "lotusdb")
 	opts.CfOpts.ValueLogFileSize = 16 * 1024 * 1024
 	opts.CfOpts.MemtableSize = 32 << 20
 	opts.CfOpts.ValueLogGCRatio = 0.5
 	opts.CfOpts.ValueLogGCInterval = time.Second * 7
 
-	t.Run("delete", func(t *testing.T) {
-		db, err := Open(opts)
+	db, err := Open(opts)
+	assert.Nil(t, err)
+	defer destroyDB(db)
+
+	// write enough data that can trigger flush operation.
+	var writeCount = 600000
+	for i := 0; i <= writeCount; i++ {
+		err := db.Put(GetKey(i), GetValue128B())
 		assert.Nil(t, err)
-		defer destroyDB(db)
-
-		// write enough data that can trigger flush operation.
-		var writeCount = 600000
-		for i := 0; i <= writeCount; i++ {
-			err := db.Put(GetKey(i), GetValue128B())
-			assert.Nil(t, err)
-		}
-		for i := 100; i < writeCount/2; i++ {
-			err := db.Delete(GetKey(i))
-			assert.Nil(t, err)
-		}
-		// flush again
-		for i := writeCount * 2; i <= writeCount*4; i++ {
-			err := db.Put(GetKey(i), GetValue128B())
-			assert.Nil(t, err)
-		}
-		time.Sleep(time.Second * 2)
-	})
-
-	t.Run("rewrite", func(t *testing.T) {
-		db, err := Open(opts)
+	}
+	for i := 100; i < writeCount/2; i++ {
+		err := db.Delete(GetKey(i))
 		assert.Nil(t, err)
-		defer destroyDB(db)
+	}
+	// flush again
+	for i := writeCount * 2; i <= writeCount*4; i++ {
+		err := db.Put(GetKey(i), GetValue128B())
+		assert.Nil(t, err)
+	}
+	time.Sleep(time.Second * 2)
+}
 
-		// write enough data that can trigger flush operation.
-		var writeCount = 600000
-		for i := 0; i <= writeCount; i++ {
-			err := db.Put(GetKey(i), GetValue128B())
-			assert.Nil(t, err)
-		}
-		type kv struct {
-			key   []byte
-			value []byte
-		}
-		var kvs []*kv
-		for i := 100; i < writeCount/2; i++ {
-			k, v := GetKey(i), GetValue128B()
-			err := db.Put(k, v)
-			assert.Nil(t, err)
-			kvs = append(kvs, &kv{key: k, value: v})
-		}
-		// flush again
-		for i := writeCount * 2; i <= writeCount*4; i++ {
-			err := db.Put(GetKey(i), GetValue128B())
-			assert.Nil(t, err)
-		}
-		time.Sleep(time.Second * 2)
+//func TestValueLog_Compaction_While_Writing(t *testing.T) {
+//	testCompacction(t, false, true)
+//}
+//
+//func TestValueLog_Compaction_While_Reading(t *testing.T) {
+//	testCompacction(t, true, false)
+//}
+//
+//func TestValueLog_Compaction_Rewrite(t *testing.T) {
+//	testCompacction(t, false, false)
+//}
 
-		for _, kv := range kvs {
-			v, err := db.Get(kv.key)
-			assert.Nil(t, err)
-			assert.Equal(t, v, kv.value)
-		}
-	})
+func testCompacction(t *testing.T, reading, writing bool) {
+	path, _ := ioutil.TempDir("", "lotusdb")
+	opts := DefaultOptions(path)
+	opts.CfOpts.ValueLogFileSize = 16 * 1024 * 1024
+	opts.CfOpts.MemtableSize = 32 << 20
+	opts.CfOpts.ValueLogGCRatio = 0.5
+	opts.CfOpts.ValueLogGCInterval = time.Second * 7
+
+	db, err := Open(opts)
+	assert.Nil(t, err)
+	defer destroyDB(db)
+
+	// write enough data that can trigger flush operation.
+	var writeCount = 600000
+	for i := 0; i <= writeCount; i++ {
+		err := db.Put(GetKey(i), GetValue128B())
+		assert.Nil(t, err)
+	}
+	type kv struct {
+		key   []byte
+		value []byte
+	}
+	var kvs []*kv
+	for i := 100; i < writeCount/2; i++ {
+		k, v := GetKey(i), GetValue128B()
+		err := db.Put(k, v)
+		assert.Nil(t, err)
+		kvs = append(kvs, &kv{key: k, value: v})
+	}
+
+	if reading {
+		go func() {
+			time.Sleep(time.Second)
+			rand.Seed(time.Now().UnixNano())
+			for {
+				k := GetKey(rand.Intn(writeCount / 2))
+				_, err := db.Get(k)
+				if err != nil {
+					t.Log("read data err.", err)
+				}
+			}
+		}()
+	}
+
+	if writing {
+		go func() {
+			time.Sleep(time.Second)
+			count := writeCount * 5
+			for {
+				err := db.Put(GetKey(count), GetValue128B())
+				count++
+				if err != nil {
+					t.Log("write data err.", err)
+				}
+			}
+		}()
+	}
+
+	// flush again
+	for i := writeCount * 2; i <= writeCount*4; i++ {
+		err := db.Put(GetKey(i), GetValue128B())
+		assert.Nil(t, err)
+	}
+	time.Sleep(time.Second * 2)
+
+	for _, kv := range kvs {
+		v, err := db.Get(kv.key)
+		assert.Nil(t, err)
+		assert.Equal(t, v, kv.value)
+	}
 }

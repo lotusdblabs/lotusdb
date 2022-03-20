@@ -55,33 +55,47 @@ func (cf *ColumnFamily) listenAndFlush() {
 		case table := <-cf.flushChn:
 			var nodes []*index.IndexerNode
 			var deletedKeys [][]byte
-			iter := table.sklIter
-			// iterate and write data to bptree and value log(if any).
-			for table.sklIter.SeekToFirst(); iter.Valid(); iter.Next() {
-				node := &index.IndexerNode{Key: iter.Key()}
-				mv := decodeMemValue(iter.Value())
-				key := iter.Key()
 
-				// delete invalid keys from indexer.
-				if mv.typ == byte(logfile.TypeDelete) || (mv.expiredAt != 0 && mv.expiredAt <= time.Now().Unix()) {
-					deletedKeys = append(deletedKeys, key)
-				} else {
-					if len(mv.value) >= cf.opts.ValueThreshold {
-						valuePos, esize, err := cf.vlog.Write(&logfile.LogEntry{Key: key, Value: mv.value})
-						if err != nil {
-							logger.Errorf("write to value log err.%+v", err)
-							return
-						}
-						node.Meta = &index.IndexerMeta{
-							Fid:       valuePos.Fid,
-							Offset:    valuePos.Offset,
-							EntrySize: esize,
-						}
+			iterateTable := func() error {
+				table.Lock()
+				defer table.Unlock()
+				iter := table.sklIter
+				// iterate and write data to bptree and value log(if any).
+				for iter.SeekToFirst(); iter.Valid(); iter.Next() {
+					key := iter.Key()
+					node := &index.IndexerNode{Key: key}
+					mv := decodeMemValue(iter.Value())
+
+					// delete invalid keys from indexer.
+					if mv.typ == byte(logfile.TypeDelete) || (mv.expiredAt != 0 && mv.expiredAt <= time.Now().Unix()) {
+						deletedKeys = append(deletedKeys, key)
 					} else {
-						node.Meta = &index.IndexerMeta{Value: mv.value}
+						if len(mv.value) >= cf.opts.ValueThreshold {
+							valuePos, esize, err := cf.vlog.Write(&logfile.LogEntry{
+								Key:       key,
+								Value:     mv.value,
+								ExpiredAt: mv.expiredAt,
+							})
+							if err != nil {
+								return err
+							}
+							node.Meta = &index.IndexerMeta{
+								Fid:       valuePos.Fid,
+								Offset:    valuePos.Offset,
+								EntrySize: esize,
+							}
+						} else {
+							node.Meta = &index.IndexerMeta{Value: mv.value}
+						}
+						nodes = append(nodes, node)
 					}
-					nodes = append(nodes, node)
 				}
+				return nil
+			}
+
+			if err := iterateTable(); err != nil {
+				logger.Errorf("listenAndFlush: handle iterate table err.%+v", err)
+				return
 			}
 			if err := cf.flushUpdateIndex(nodes, deletedKeys); err != nil {
 				logger.Errorf("listenAndFlush: update index err.%+v", err)
@@ -111,12 +125,12 @@ func (cf *ColumnFamily) flushUpdateIndex(nodes []*index.IndexerNode, keys [][]by
 	cf.flushLock.Lock()
 	defer cf.flushLock.Unlock()
 	// must put and delete in batch.
-	putOpts := index.PutOptions{SendDiscard: true}
-	if _, err := cf.indexer.PutBatch(nodes, putOpts); err != nil {
+	writeOpts := index.WriteOptions{SendDiscard: true}
+	if _, err := cf.indexer.PutBatch(nodes, writeOpts); err != nil {
 		return err
 	}
 	if len(keys) > 0 {
-		if err := cf.indexer.DeleteBatch(keys); err != nil {
+		if err := cf.indexer.DeleteBatch(keys, writeOpts); err != nil {
 			return err
 		}
 	}

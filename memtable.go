@@ -6,6 +6,7 @@ import (
 	"github.com/flower-corp/lotusdb/logfile"
 	"github.com/flower-corp/lotusdb/logger"
 	"io"
+	"sync"
 	"sync/atomic"
 	"time"
 )
@@ -19,6 +20,7 @@ type (
 	// Once a memtable is full(memtable has its threshold, see MemtableSize in options), it becomes immutable and replaced by a new memtable.
 	// A background goroutine will flush the content of memtable into indexer or vlog, after which the memtable can be deleted.
 	memtable struct {
+		sync.RWMutex
 		sklIter      *arenaskl.Iterator
 		skl          *arenaskl.Skiplist
 		wal          *logfile.LogFile
@@ -144,6 +146,8 @@ func (mt *memtable) put(key []byte, value []byte, deleted bool, opts WriteOption
 // get value from memtable.
 // if the specified key is marked as deleted or expired, a true bool value is returned.
 func (mt *memtable) get(key []byte) (bool, []byte) {
+	mt.Lock()
+	defer mt.Unlock()
 	if found := mt.sklIter.Seek(key); !found {
 		return false, nil
 	}
