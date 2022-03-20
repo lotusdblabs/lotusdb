@@ -206,19 +206,12 @@ func TestLotusDB_Get(t *testing.T) {
 	}
 }
 
-func TestLotusDB_GetKVFromIndexer(t *testing.T) {
-	// set the threshold bigger that value will be stored only in indexer.
-	testGetKV(t, 64<<20)
-}
-
 func TestLotusDB_GetKeyFromIndexerAndValFromVLog(t *testing.T) {
-	// set the threshold smaller that value will be stored in value log.
-	testGetKV(t, 0)
+	testGetKV(t)
 }
 
-func testGetKV(t *testing.T, valueThreshold int) {
+func testGetKV(t *testing.T) {
 	opts := DefaultOptions("/tmp" + separator + "lotusdb")
-	opts.CfOpts.ValueThreshold = valueThreshold
 	db, err := Open(opts)
 	assert.Nil(t, err)
 	defer destroyDB(db)

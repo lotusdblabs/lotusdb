@@ -25,7 +25,6 @@ func DefaultOptions(path string) Options {
 			WalMMap:             false,
 			ValueLogFileSize:    1024 << 20,
 			ValueLogMmap:        false,
-			ValueThreshold:      0,
 			ValueLogGCRatio:     0.5,
 			ValueLogGCInterval:  time.Minute * 10,
 		},
@@ -43,7 +42,6 @@ func DefaultColumnFamilyOptions(name string) ColumnFamilyOptions {
 		WalMMap:             false,
 		ValueLogFileSize:    1024 << 20,
 		ValueLogMmap:        false,
-		ValueThreshold:      0,
 		ValueLogGCRatio:     0.5,
 		ValueLogGCInterval:  time.Minute * 10,
 	}
@@ -79,6 +77,7 @@ type ColumnFamilyOptions struct {
 
 	// MemSpaceWaitTimeout represents timeout for waiting enough memtable space to write.
 	// In this scenario will wait: memtable has reached the maximum nums, and has no time to be flushed into disk.
+	// Default value is 100ms.
 	MemSpaceWaitTimeout time.Duration
 
 	// IndexerDir dir path to store index meta data, default value is dir path.
@@ -107,11 +106,6 @@ type ColumnFamilyOptions struct {
 
 	// ValueLogMmap similar to WalMMap, default value is false.
 	ValueLogMmap bool
-
-	// ValueThreshold sets the threshold used to decide whether a value is stored directly in the Index(B+Tree right now) or separately in value log file.
-	// If the threshold is zero, that means all values will be stored in value log file.
-	// Default value is 0.
-	ValueThreshold int
 
 	// ValueLogGCRatio if discarded data in value log exceeds this ratio, it can be picked up for compaction(garbage collection)
 	// And if there are many files reached the ratio, we will pick the highest one by one.
@@ -145,7 +139,7 @@ type WriteOptions struct {
 	// Default value is false.
 	DisableWal bool
 
-	// ExpiredAt time to live for the specified key, a time.Unix value.
+	// ExpiredAt time to live for the specified key, must be a time.Unix value.
 	// It will be ignored if it`s not a positive number.
 	// Default value is 0.
 	ExpiredAt int64

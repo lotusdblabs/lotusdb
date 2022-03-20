@@ -70,22 +70,18 @@ func (cf *ColumnFamily) listenAndFlush() {
 					if mv.typ == byte(logfile.TypeDelete) || (mv.expiredAt != 0 && mv.expiredAt <= time.Now().Unix()) {
 						deletedKeys = append(deletedKeys, key)
 					} else {
-						if len(mv.value) >= cf.opts.ValueThreshold {
-							valuePos, esize, err := cf.vlog.Write(&logfile.LogEntry{
-								Key:       key,
-								Value:     mv.value,
-								ExpiredAt: mv.expiredAt,
-							})
-							if err != nil {
-								return err
-							}
-							node.Meta = &index.IndexerMeta{
-								Fid:       valuePos.Fid,
-								Offset:    valuePos.Offset,
-								EntrySize: esize,
-							}
-						} else {
-							node.Meta = &index.IndexerMeta{Value: mv.value}
+						valuePos, esize, err := cf.vlog.Write(&logfile.LogEntry{
+							Key:       key,
+							Value:     mv.value,
+							ExpiredAt: mv.expiredAt,
+						})
+						if err != nil {
+							return err
+						}
+						node.Meta = &index.IndexerMeta{
+							Fid:       valuePos.Fid,
+							Offset:    valuePos.Offset,
+							EntrySize: esize,
 						}
 						nodes = append(nodes, node)
 					}
