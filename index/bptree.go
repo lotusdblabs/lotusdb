@@ -80,6 +80,7 @@ func NewBPTree(opt BPTreeOptions) (*BPTree, error) {
 		Timeout:         1 * time.Second,
 		NoSync:          true,
 		InitialMmapSize: 1024,
+		FreelistType:    bbolt.FreelistMapType,
 	})
 	if err != nil {
 		return nil, err
