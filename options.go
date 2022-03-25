@@ -16,18 +16,7 @@ const (
 func DefaultOptions(path string) Options {
 	return Options{
 		DBPath: path,
-		CfOpts: ColumnFamilyOptions{
-			CfName:              DefaultColumnFamilyName,
-			MemtableSize:        64 << 20,
-			MemtableNums:        5,
-			MemSpaceWaitTimeout: time.Millisecond * 100,
-			FlushBatchSize:      100000,
-			WalMMap:             false,
-			ValueLogFileSize:    1024 << 20,
-			ValueLogMmap:        false,
-			ValueLogGCRatio:     0.5,
-			ValueLogGCInterval:  time.Minute * 10,
-		},
+		CfOpts: DefaultColumnFamilyOptions(DefaultColumnFamilyName),
 	}
 }
 
