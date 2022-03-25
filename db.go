@@ -9,8 +9,8 @@ import (
 )
 
 var (
-	// ErrDefaultCfNil default comumn family is nil.
-	ErrDefaultCfNil = errors.New("default comumn family is nil")
+	// ErrDefaultCfNil default column family is nil.
+	ErrDefaultCfNil = errors.New("default column family is nil")
 )
 
 // LotusDB provide basic opetions for a persistent kv store.
