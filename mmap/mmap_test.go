@@ -3,11 +3,13 @@ package mmap
 import (
 	"github.com/stretchr/testify/assert"
 	"os"
+	"path/filepath"
 	"testing"
 )
 
 func TestMmap(t *testing.T) {
-	fd, err := os.OpenFile("/tmp"+string(os.PathSeparator)+"mmap.txt", os.O_CREATE|os.O_RDWR, 0644)
+	path := filepath.Join("/tmp", "mmap.txt")
+	fd, err := os.OpenFile(path, os.O_CREATE|os.O_RDWR, 0644)
 	assert.Nil(t, err)
 	defer func() {
 		if fd != nil {
@@ -50,7 +52,8 @@ func TestMmap(t *testing.T) {
 }
 
 func TestMunmap(t *testing.T) {
-	fd, err := os.OpenFile("/tmp"+string(os.PathSeparator)+"mmap.txt", os.O_CREATE|os.O_RDWR, 0644)
+	path := filepath.Join("/tmp", "mmap.txt")
+	fd, err := os.OpenFile(path, os.O_CREATE|os.O_RDWR, 0644)
 	assert.Nil(t, err)
 	defer func() {
 		if fd != nil {
@@ -66,7 +69,8 @@ func TestMunmap(t *testing.T) {
 }
 
 func TestMsync(t *testing.T) {
-	fd, err := os.OpenFile("/tmp"+string(os.PathSeparator)+"mmap.txt", os.O_CREATE|os.O_RDWR, 0644)
+	path := filepath.Join("/tmp", "mmap.txt")
+	fd, err := os.OpenFile(path, os.O_CREATE|os.O_RDWR, 0644)
 	assert.Nil(t, err)
 	defer func() {
 		if fd != nil {
@@ -82,7 +86,8 @@ func TestMsync(t *testing.T) {
 }
 
 func TestMadvise(t *testing.T) {
-	fd, err := os.OpenFile("/tmp"+string(os.PathSeparator)+"mmap.txt", os.O_CREATE|os.O_RDWR, 0644)
+	path := filepath.Join("/tmp", "mmap.txt")
+	fd, err := os.OpenFile(path, os.O_CREATE|os.O_RDWR, 0644)
 	assert.Nil(t, err)
 	defer func() {
 		if fd != nil {
