@@ -110,7 +110,10 @@ func (d *discard) getCCL(activeFid uint32, ratio float64) ([]uint32, error) {
 func (d *discard) listenUpdates() {
 	for {
 		select {
-		case oldVal := <-d.valChan:
+		case oldVal, ok := <-d.valChan:
+			if !ok {
+				return
+			}
 			counts := make(map[uint32]int)
 			for _, buf := range oldVal {
 				meta := index.DecodeMeta(buf)
