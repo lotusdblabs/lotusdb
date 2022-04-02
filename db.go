@@ -13,7 +13,7 @@ var (
 	ErrDefaultCfNil = errors.New("default column family is nil")
 )
 
-// LotusDB provide basic opetions for a persistent kv store.
+// LotusDB provide basic operations for a persistent kv store.
 // It`s methods(Put Get Delete) are self explanatory, and executed in default ColumnFamily.
 // You can create a custom ColumnFamily by calling method OpenColumnFamily.
 type LotusDB struct {
