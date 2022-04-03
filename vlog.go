@@ -361,7 +361,7 @@ func (vlog *valueLog) compact() error {
 
 	for _, fid := range ccl {
 		lf := vlog.getLogFile(fid)
-		if lf == nil {
+		if lf == nil || lf.IoSelector == nil {
 			file, err := logfile.OpenLogFile(opt.path, fid, opt.blockSize, logfile.ValueLog, opt.ioType)
 			if err != nil {
 				return err
