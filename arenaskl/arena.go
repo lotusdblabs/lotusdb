@@ -98,6 +98,11 @@ func (a *Arena) GetBytes(offset uint32, size uint32) []byte {
 	if offset == 0 {
 		return nil
 	}
+
+	if offset >= a.Cap() || offset+size >= a.Cap() {
+		return nil
+	}
+
 	return a.buf[offset : offset+size]
 }
 
