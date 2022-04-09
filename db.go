@@ -52,6 +52,16 @@ func (db *LotusDB) Close() error {
 	return nil
 }
 
+// Sync syncs the content of all column families to disk.
+func (db *LotusDB) Sync() error {
+	for _, cf := range db.cfs {
+		if err := cf.Sync(); err != nil {
+			return err
+		}
+	}
+	return nil
+}
+
 // Put put to default column family.
 func (db *LotusDB) Put(key, value []byte) error {
 	return db.PutWithOptions(key, value, nil)

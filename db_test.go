@@ -352,7 +352,7 @@ func TestLotusDB_DeleteAfterFlush(t *testing.T) {
 	}
 }
 
-func TestLotusDB_Close(t *testing.T) {
+func TestLotusDB_SyncAndClose(t *testing.T) {
 	opts := DefaultOptions("/tmp" + separator + "lotusdb")
 	db, err := Open(opts)
 	assert.Nil(t, err)
@@ -365,6 +365,8 @@ func TestLotusDB_Close(t *testing.T) {
 		assert.Nil(t, err)
 	}
 
+	err = db.Sync()
+	assert.Nil(t, err)
 	err = db.Close()
 	assert.Nil(t, err)
 }

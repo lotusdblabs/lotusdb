@@ -269,7 +269,7 @@ func (cf *ColumnFamily) IsClosed() bool {
 	return atomic.LoadUint32(&cf.closed) == 1
 }
 
-// Sync syncs the content of current colun family to disk.
+// Sync syncs the content of current column family to disk.
 func (cf *ColumnFamily) Sync() error {
 	if err := cf.activeMem.syncWAL(); err != nil {
 		return err
