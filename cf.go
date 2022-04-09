@@ -28,6 +28,9 @@ var (
 
 	// ErrInvalidVLogGCRatio invalid value log gc ratio.
 	ErrInvalidVLogGCRatio = errors.New("invalid value log gc ratio")
+
+	// ErrValueTooBig value is too big.
+	ErrValueTooBig = errors.New("value is too big to fit into memtable")
 )
 
 // ColumnFamily is a namespace of keys and values.

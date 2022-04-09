@@ -100,10 +100,7 @@ func openMemtable(opts memOptions) (*memtable, error) {
 
 // put new writes to memtable.
 func (mt *memtable) put(key []byte, value []byte, deleted bool, opts WriteOptions) error {
-	entry := &logfile.LogEntry{
-		Key:   key,
-		Value: value,
-	}
+	entry := &logfile.LogEntry{Key: key, Value: value}
 	if opts.ExpiredAt > 0 {
 		entry.ExpiredAt = opts.ExpiredAt
 	}
@@ -111,8 +108,11 @@ func (mt *memtable) put(key []byte, value []byte, deleted bool, opts WriteOption
 		entry.Type = logfile.TypeDelete
 	}
 
-	// write entrty into wal first.
 	buf, sz := logfile.EncodeEntry(entry)
+	if uint32(sz)+paddedSize >= mt.skl.Size() {
+		return ErrValueTooBig
+	}
+	// write entrty into wal first.
 	if !opts.DisableWal && mt.wal != nil {
 		if err := mt.wal.Write(buf); err != nil {
 			return err
