@@ -112,7 +112,7 @@ func (mt *memtable) put(key []byte, value []byte, deleted bool, opts WriteOption
 	if uint32(sz)+paddedSize >= mt.skl.Size() {
 		return ErrValueTooBig
 	}
-	// write entrty into wal first.
+	// write entry into wal first.
 	if !opts.DisableWal && mt.wal != nil {
 		if err := mt.wal.Write(buf); err != nil {
 			return err
