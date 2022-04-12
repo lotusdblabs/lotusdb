@@ -109,7 +109,7 @@ func (mt *memtable) put(key []byte, value []byte, deleted bool, opts WriteOption
 	}
 
 	buf, sz := logfile.EncodeEntry(entry)
-	if uint32(sz)+paddedSize >= mt.skl.Size() {
+	if uint32(sz)+paddedSize >= mt.skl.Arena().Cap() {
 		return ErrValueTooBig
 	}
 	// write entry into wal first.
