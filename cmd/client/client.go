@@ -3,11 +3,12 @@ package main
 import (
 	"errors"
 	"fmt"
-	"github.com/peterh/liner"
 	"net"
 	"os"
 	"strings"
 	"time"
+
+	"github.com/peterh/liner"
 )
 
 const cmdHistoryPath = "/tmp/lotusdb-cli"
@@ -17,6 +18,7 @@ var commandList = [][]string{
 	{"PUT", "key value", "STRING"},
 	{"GET", "key", "STRING"},
 	{"DELETE", "key", "STRING"},
+	{"HELP", "cmd", "STRING"},
 }
 
 var commandSet map[string]bool
@@ -72,7 +74,7 @@ func main() {
 				fmt.Println("bye")
 				break
 			} else if cmd == "help" {
-				// print help.todo
+				usage()
 			} else {
 				cmd = strings.TrimSpace(cmd)
 				if err = handleCmd(cmd); err != nil {
@@ -126,4 +128,19 @@ func sendCmd(cmd string) (string, error) {
 	}
 
 	return string(buf[:n]), nil
+}
+
+func usage() {
+
+	// todo: we need a client version?
+	helpList := map[string]string{
+		"PUT":    "PUT key value  summary: Set the string value of a key",
+		"GET":    "GET key        summary: Get the value of a key",
+		"DELETE": "DELETE key     summary: Delete the key",
+		"HELP":   "HELP           summary: To get help about LotusDB client commands",
+	}
+
+	for _, val := range helpList {
+		fmt.Println(val)
+	}
 }
