@@ -21,6 +21,14 @@ var commandList = [][]string{
 	{"HELP", "cmd", "STRING"},
 }
 
+// commands help list
+var helpList = map[string]string{
+	"PUT":    "PUT key value  summary: Set the string value of a key",
+	"GET":    "GET key        summary: Get the value of a key",
+	"DELETE": "DELETE key     summary: Delete the key",
+	"HELP":   "HELP           summary: To get help about LotusDB client commands",
+}
+
 var commandSet map[string]bool
 
 var (
@@ -133,12 +141,6 @@ func sendCmd(cmd string) (string, error) {
 func usage() {
 
 	// todo: we need a client version?
-	helpList := map[string]string{
-		"PUT":    "PUT key value  summary: Set the string value of a key",
-		"GET":    "GET key        summary: Get the value of a key",
-		"DELETE": "DELETE key     summary: Delete the key",
-		"HELP":   "HELP           summary: To get help about LotusDB client commands",
-	}
 
 	for _, val := range helpList {
 		fmt.Println(val)
