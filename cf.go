@@ -251,7 +251,7 @@ func (cf *ColumnFamily) Stat() (*Stat, error) {
 	return st, nil
 }
 
-// Close close current colun family.
+// Close close current column family.
 func (cf *ColumnFamily) Close() error {
 	atomic.StoreUint32(&cf.closed, 1)
 	close(cf.closedC)
@@ -259,7 +259,7 @@ func (cf *ColumnFamily) Close() error {
 	for _, dirLock := range cf.dirLocks {
 		err = dirLock.Release()
 	}
-	// sync all contents.
+	// commits the current contents of the file to stable storage
 	err = cf.Sync()
 	return err
 }
