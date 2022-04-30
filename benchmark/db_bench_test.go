@@ -2,9 +2,10 @@ package benchmark
 
 import (
 	"fmt"
+	"testing"
+
 	"github.com/flower-corp/lotusdb"
 	"github.com/stretchr/testify/assert"
-	"testing"
 )
 
 // Simple Benchmark for LotusDB
@@ -41,11 +42,29 @@ func BenchmarkLotusDB_Put(b *testing.B) {
 	}
 }
 
+func BenchmarkLotusDB_Put_4k(b *testing.B) {
+	b.ResetTimer()
+	b.ReportAllocs()
+	for i := 0; i < b.N; i++ {
+		err := db.Put(getKey(i), getValue4K())
+		assert.Nil(b, err)
+	}
+}
+
 func BenchmarkLotusDB_Get(b *testing.B) {
 	b.ResetTimer()
 	b.ReportAllocs()
 	for i := 0; i < b.N; i++ {
 		_, err := db.Get(getKey(i))
+		assert.Nil(b, err)
+	}
+}
+
+func BenchmarkLotusDB_Delete(b *testing.B) {
+	b.ResetTimer()
+	b.ReportAllocs()
+	for i := 0; i < b.N; i++ {
+		err := db.Delete(getKey(i))
 		assert.Nil(b, err)
 	}
 }

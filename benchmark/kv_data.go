@@ -24,7 +24,7 @@ func getValue128B() []byte {
 	for i := 0; i < 128; i++ {
 		str.WriteByte(alphabet[rand.Int()%36])
 	}
-	return []byte(str.String())
+	return str.Bytes()
 }
 
 // GetValue4K .
@@ -33,5 +33,5 @@ func getValue4K() []byte {
 	for i := 0; i < 4096; i++ {
 		str.WriteByte(alphabet[rand.Int()%36])
 	}
-	return []byte(str.String())
+	return str.Bytes()
 }
