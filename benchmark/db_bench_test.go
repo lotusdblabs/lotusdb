@@ -19,17 +19,15 @@ func init() {
 	if err != nil {
 		panic(fmt.Sprintf("open lotusdb err.%+v", err))
 	}
+	initData(db)
 }
 
-func initData(b *testing.B, db *lotusdb.LotusDB) {
+func initData(db *lotusdb.LotusDB) {
 	for i := 0; i < 500000; i++ {
 		err := db.Put(getKey(i), getValue128B())
-		assert.Nil(b, err)
-	}
-
-	for i := 500000; i < 1000000; i++ {
-		err := db.Put(getKey(i), getValue4K())
-		assert.Nil(b, err)
+		if err != nil {
+			panic(err)
+		}
 	}
 }
 

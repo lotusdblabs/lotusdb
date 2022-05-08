@@ -21,7 +21,7 @@ func getKey(n int) []byte {
 // GetValue128B .
 func getValue128B() []byte {
 	var str bytes.Buffer
-	for i := 0; i < 128; i++ {
+	for i := 0; i < 512; i++ {
 		str.WriteByte(alphabet[rand.Int()%36])
 	}
 	return str.Bytes()
