@@ -24,18 +24,27 @@ func init() {
 
 func initData(db *lotusdb.LotusDB) {
 	for i := 0; i < 500000; i++ {
-		err := db.Put(getKey(i), getValue128B())
+		err := db.Put(getKey(i), getValue512B())
 		if err != nil {
 			panic(err)
 		}
 	}
 }
 
-func BenchmarkLotusDB_Put(b *testing.B) {
+func BenchmarkLotusDB_Put128B(b *testing.B) {
 	b.ResetTimer()
 	b.ReportAllocs()
 	for i := 0; i < b.N; i++ {
 		err := db.Put(getKey(i), getValue128B())
+		assert.Nil(b, err)
+	}
+}
+
+func BenchmarkLotusDB_Put512B(b *testing.B) {
+	b.ResetTimer()
+	b.ReportAllocs()
+	for i := 0; i < b.N; i++ {
+		err := db.Put(getKey(i), getValue512B())
 		assert.Nil(b, err)
 	}
 }
