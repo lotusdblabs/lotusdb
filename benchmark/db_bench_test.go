@@ -14,7 +14,7 @@ var db *lotusdb.LotusDB
 
 func init() {
 	var err error
-	options := lotusdb.DefaultOptions("/tmp/lotusdb")
+	options := lotusdb.DefaultOptions("/tmp/lotusdb2benchmark")
 	db, err = lotusdb.Open(options)
 	if err != nil {
 		panic(fmt.Sprintf("open lotusdb err.%+v", err))
