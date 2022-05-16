@@ -17,7 +17,9 @@ func TestPathExist(t *testing.T) {
 	assert.Nil(t, err)
 	defer func() {
 		err := os.RemoveAll(filepath.Join("/tmp", "path"))
-		t.Log(err)
+		if err != nil {
+			t.Log(err)
+		}
 	}()
 
 	existedFile, err := filepath.Abs(filepath.Join("/tmp", "path", "lotusdb-file1"))
