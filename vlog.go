@@ -193,13 +193,22 @@ func (vlog *valueLog) Sync() error {
 
 // Close only for the active log file.
 func (vlog *valueLog) Close() error {
-	if vlog.activeLogFile == nil {
-		return ErrActiveLogFileNil
+	// close discard channel
+	vlog.discard.closeChan()
+
+	var vlogErr error
+	// close archived log files.
+	for _, lf := range vlog.logFiles {
+		if err := lf.Close(); err != nil {
+			vlogErr = err
+		}
 	}
 
-	vlog.activeLogFile.Lock()
-	defer vlog.activeLogFile.Unlock()
-	return vlog.activeLogFile.Close()
+	// close active log file.
+	if err := vlog.activeLogFile.Close(); err != nil {
+		vlogErr = err
+	}
+	return vlogErr
 }
 
 func (vlog *valueLog) createLogFile() (*logfile.LogFile, error) {

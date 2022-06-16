@@ -2,6 +2,7 @@ package benchmark
 
 import (
 	"fmt"
+	"path/filepath"
 	"testing"
 
 	"github.com/flower-corp/lotusdb"
@@ -14,7 +15,8 @@ var db *lotusdb.LotusDB
 
 func init() {
 	var err error
-	options := lotusdb.DefaultOptions("/tmp/lotusdb2benchmark")
+	path := filepath.Join("/tmp", "lotusdb-bench")
+	options := lotusdb.DefaultOptions(path)
 	db, err = lotusdb.Open(options)
 	if err != nil {
 		panic(fmt.Sprintf("open lotusdb err.%+v", err))

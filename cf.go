@@ -56,8 +56,9 @@ type ColumnFamily struct {
 	// And at most three FileLockGuards(cf/indexer/vlog dirs are all different).
 	dirLocks []*flock.FileLockGuard
 	// represents whether the cf is closed, 0: false, 1: true.
-	closed  uint32
-	closedC chan struct{}
+	closed    uint32
+	closedC   chan struct{}
+	closeOnce *sync.Once // guarantee the closedC channel is only be closed once.
 }
 
 // Stat statistics info of column family.
@@ -108,10 +109,11 @@ func (db *LotusDB) OpenColumnFamily(opts ColumnFamilyOptions) (*ColumnFamily, er
 	}
 
 	cf := &ColumnFamily{
-		opts:     opts,
-		dirLocks: flocks,
-		closedC:  make(chan struct{}),
-		flushChn: make(chan *memtable, opts.MemtableNums-1),
+		opts:      opts,
+		dirLocks:  flocks,
+		closedC:   make(chan struct{}),
+		closeOnce: new(sync.Once),
+		flushChn:  make(chan *memtable, opts.MemtableNums-1),
 	}
 	// open active and immutable memtables.
 	if err := cf.openMemtables(); err != nil {
@@ -253,14 +255,43 @@ func (cf *ColumnFamily) Stat() (*Stat, error) {
 
 // Close close current column family.
 func (cf *ColumnFamily) Close() error {
+	cf.mu.Lock()
+	defer cf.mu.Unlock()
 	atomic.StoreUint32(&cf.closed, 1)
-	close(cf.closedC)
+	cf.closeOnce.Do(func() { close(cf.closedC) })
+
 	var err error
-	for _, dirLock := range cf.dirLocks {
-		err = dirLock.Release()
-	}
 	// commits the current contents of the file to stable storage
-	err = cf.Sync()
+	if syncErr := cf.Sync(); syncErr != nil {
+		err = syncErr
+	}
+
+	// close all write ahead log files
+	if walErr := cf.activeMem.closeWAL(); walErr != nil {
+		err = walErr
+	}
+	for _, mem := range cf.immuMems {
+		if walErr := mem.closeWAL(); walErr != nil {
+			err = walErr
+		}
+	}
+
+	// close index data file
+	if idxErr := cf.indexer.Close(); idxErr != nil {
+		err = idxErr
+	}
+
+	// close value log files
+	if vlogErr := cf.vlog.Close(); vlogErr != nil {
+		err = vlogErr
+	}
+
+	// release file locks
+	for _, dirLock := range cf.dirLocks {
+		if lockErr := dirLock.Release(); lockErr != nil {
+			err = lockErr
+		}
+	}
 	return err
 }
 

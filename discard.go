@@ -23,6 +23,7 @@ var ErrDiscardNoSpace = errors.New("not enough space can be allocated for the di
 // Mainly for value log compaction.
 type discard struct {
 	sync.Mutex
+	once     *sync.Once
 	valChan  chan [][]byte
 	file     ioselector.IOSelector
 	freeList []int64          // contains file offset that can be allocated
@@ -60,6 +61,7 @@ func newDiscard(path, name string) (*discard, error) {
 	}
 
 	d := &discard{
+		once:     new(sync.Once),
 		valChan:  make(chan [][]byte, 1024),
 		file:     file,
 		freeList: freeList,
@@ -112,6 +114,9 @@ func (d *discard) listenUpdates() {
 		select {
 		case oldVal, ok := <-d.valChan:
 			if !ok {
+				if err := d.file.Close(); err != nil {
+					logger.Errorf("close discard file err: %v", err)
+				}
 				return
 			}
 			counts := make(map[uint32]int)
@@ -124,6 +129,10 @@ func (d *discard) listenUpdates() {
 			}
 		}
 	}
+}
+
+func (d *discard) closeChan() {
+	d.once.Do(func() { close(d.valChan) })
 }
 
 func (d *discard) setTotal(fid uint32, totalSize uint32) {

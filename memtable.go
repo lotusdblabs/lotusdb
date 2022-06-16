@@ -175,6 +175,12 @@ func (mt *memtable) syncWAL() error {
 	return mt.wal.Sync()
 }
 
+func (mt *memtable) closeWAL() error {
+	mt.wal.RLock()
+	defer mt.wal.RUnlock()
+	return mt.wal.Close()
+}
+
 func (mt *memtable) isFull(delta uint32) bool {
 	if mt.skl.Size()+delta+paddedSize >= mt.opts.memSize {
 		return true

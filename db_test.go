@@ -417,6 +417,7 @@ func TestBytesFlush(t *testing.T) {
 
 func destroyDB(db *LotusDB) {
 	if db != nil {
+		_ = db.Close()
 		if err := os.RemoveAll(db.opts.DBPath); err != nil {
 			logger.Errorf("remove db path err.%v", err)
 		}
