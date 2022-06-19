@@ -1,7 +1,6 @@
 package lotusdb
 
 import (
-	"os"
 	"reflect"
 	"testing"
 	"time"
@@ -23,10 +22,8 @@ func openTestColumnFamily(t *testing.T, db *LotusDB) *ColumnFamily {
 }
 
 func TestLotusDB_OpenColumnFamily(t *testing.T) {
-	opts := DefaultOptions(t.TempDir())
-	db := newTestDB(t, opts)
-
-	opencf := func(opts ColumnFamilyOptions) {
+	opencf := func(t *testing.T, opts ColumnFamilyOptions) {
+		db := newTestDB(t, DefaultOptions(t.TempDir()))
 		cf, err := db.OpenColumnFamily(opts)
 		assert.Nil(t, err)
 		assert.NotNil(t, cf)
@@ -34,31 +31,20 @@ func TestLotusDB_OpenColumnFamily(t *testing.T) {
 
 	t.Run("default", func(t *testing.T) {
 		cfopt := DefaultColumnFamilyOptions("cf-1")
-		opencf(cfopt)
+		opencf(t, cfopt)
 	})
 
 	t.Run("spec-dir", func(t *testing.T) {
 		cfopt := DefaultColumnFamilyOptions("cf-2")
-		dir, _ := os.MkdirTemp("", "lotusdb-opencf2")
-		defer func() {
-			_ = os.RemoveAll(dir)
-		}()
-		cfopt.DirPath = dir
-		opencf(cfopt)
+		cfopt.DirPath = t.TempDir()
+		opencf(t, cfopt)
 	})
 
 	t.Run("spec-val-dir", func(t *testing.T) {
 		cfopt := DefaultColumnFamilyOptions("cf-1")
-		dir, _ := os.MkdirTemp("", "lotusdb")
-		valDir, _ := os.MkdirTemp("", "lotus-val")
-		defer func() {
-			_ = os.RemoveAll(dir)
-			_ = os.RemoveAll(valDir)
-		}()
-
-		cfopt.DirPath = dir
-		cfopt.ValueLogDir = valDir
-		opencf(cfopt)
+		cfopt.DirPath = t.TempDir()
+		cfopt.ValueLogDir = t.TempDir()
+		opencf(t, cfopt)
 	})
 }
 

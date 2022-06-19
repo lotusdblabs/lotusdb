@@ -4,7 +4,6 @@ import (
 	"os"
 	"testing"
 
-	"github.com/flower-corp/lotusdb/logger"
 	"github.com/stretchr/testify/assert"
 )
 

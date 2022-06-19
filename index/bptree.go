@@ -1,9 +1,10 @@
 package index
 
 import (
-	"github.com/flower-corp/lotusdb/logger"
 	"strings"
 	"time"
+
+	"github.com/flower-corp/lotusdb/logger"
 
 	"go.etcd.io/bbolt"
 )
@@ -88,15 +89,18 @@ func NewBPTree(opt BPTreeOptions) (*BPTree, error) {
 
 	tx, err := db.Begin(true)
 	if err != nil {
+		_ = db.Close()
 		return nil, err
 	}
 
 	// cas create bucket
 	if _, err := tx.CreateBucketIfNotExists(opt.BucketName); err != nil {
+		_ = db.Close()
 		return nil, err
 	}
 	// commit operation
 	if err := tx.Commit(); err != nil {
+		_ = db.Close()
 		return nil, err
 	}
 
