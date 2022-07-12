@@ -14,7 +14,6 @@ import (
 	"time"
 
 	"github.com/flower-corp/lotusdb/flock"
-
 	"github.com/flower-corp/lotusdb/index"
 	"github.com/flower-corp/lotusdb/logfile"
 	"github.com/flower-corp/lotusdb/util"
