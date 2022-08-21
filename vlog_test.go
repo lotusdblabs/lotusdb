@@ -165,14 +165,8 @@ func testValueLogWrite(t *testing.T, ioType logfile.IOType) {
 }
 
 func TestValueLog_WriteAfterReopen(t *testing.T) {
-	path, err := filepath.Abs(filepath.Join("/tmp", "vlog-test"))
-	assert.Nil(t, err)
-	err = os.MkdirAll(path, os.ModePerm)
-	assert.Nil(t, err)
+	path := t.TempDir()
 
-	defer func() {
-		_ = os.RemoveAll(path)
-	}()
 	vlog, err := openValueLogForTest(path, 100, logfile.FileIO, 0.5)
 	assert.Nil(t, err)
 
@@ -195,6 +189,10 @@ func TestValueLog_WriteAfterReopen(t *testing.T) {
 	// reopen it.
 	vlog, err = openValueLogForTest(path, 100, logfile.MMap, 0.5)
 	assert.Nil(t, err)
+	t.Cleanup(func() {
+		assert.NoError(t, vlog.Close())
+	})
+
 	pos2, _, err := vlog.Write(tests[1])
 	assert.Nil(t, err)
 	pos = append(pos, pos2)
