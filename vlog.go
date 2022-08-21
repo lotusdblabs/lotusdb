@@ -202,10 +202,11 @@ func (vlog *valueLog) Sync() error {
 
 // Close only for the active log file.
 func (vlog *valueLog) Close() error {
-	// close discard channel
-	vlog.discard.closeChan()
-
 	var vlogErr error
+
+	// close discard channel and file
+	vlogErr = vlog.discard.close()
+
 	// close archived log files.
 	for _, lf := range vlog.logFiles {
 		if err := lf.Close(); err != nil {

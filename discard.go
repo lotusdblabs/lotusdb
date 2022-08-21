@@ -110,29 +110,26 @@ func (d *discard) getCCL(activeFid uint32, ratio float64) ([]uint32, error) {
 }
 
 func (d *discard) listenUpdates() {
-	for {
-		select {
-		case oldVal, ok := <-d.valChan:
-			if !ok {
-				if err := d.file.Close(); err != nil {
-					logger.Errorf("close discard file err: %v", err)
-				}
-				return
-			}
-			counts := make(map[uint32]int)
-			for _, buf := range oldVal {
-				meta := index.DecodeMeta(buf)
-				counts[meta.Fid] += meta.EntrySize
-			}
-			for fid, size := range counts {
-				d.incrDiscard(fid, size)
-			}
+	for oldVal := range d.valChan {
+		counts := make(map[uint32]int)
+		for _, buf := range oldVal {
+			meta := index.DecodeMeta(buf)
+			counts[meta.Fid] += meta.EntrySize
+		}
+		for fid, size := range counts {
+			d.incrDiscard(fid, size)
 		}
 	}
 }
 
-func (d *discard) closeChan() {
+func (d *discard) close() error {
 	d.once.Do(func() { close(d.valChan) })
+
+	if d.file == nil {
+		return nil
+	}
+
+	return d.file.Close()
 }
 
 func (d *discard) setTotal(fid uint32, totalSize uint32) {

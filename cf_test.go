@@ -2,7 +2,6 @@ package lotusdb
 
 import (
 	"os"
-	"path/filepath"
 	"reflect"
 	"testing"
 	"time"
@@ -10,13 +9,22 @@ import (
 	"github.com/stretchr/testify/assert"
 )
 
+func openTestColumnFamily(t *testing.T, db *LotusDB) *ColumnFamily {
+	cf, err := db.OpenColumnFamily(DefaultColumnFamilyOptions(DefaultColumnFamilyName))
+	assert.NoError(t, err)
+
+	t.Cleanup(func() {
+		if !cf.IsClosed() {
+			assert.NoError(t, cf.Close())
+		}
+	})
+
+	return cf
+}
+
 func TestLotusDB_OpenColumnFamily(t *testing.T) {
-	path, err := filepath.Abs(filepath.Join("/tmp", "lotusdb-opencf"))
-	assert.Nil(t, err)
-	opts := DefaultOptions(path)
-	db, err := Open(opts)
-	assert.Nil(t, err)
-	defer destroyDB(db)
+	opts := DefaultOptions(t.TempDir())
+	db := newTestDB(t, opts)
 
 	opencf := func(opts ColumnFamilyOptions) {
 		cf, err := db.OpenColumnFamily(opts)
@@ -55,13 +63,9 @@ func TestLotusDB_OpenColumnFamily(t *testing.T) {
 }
 
 func TestColumnFamily_Put(t *testing.T) {
-	opts := DefaultOptions("/tmp" + separator + "lotusdb")
-	db, err := Open(opts)
-	assert.Nil(t, err)
-	defer destroyDB(db)
-
-	cf, err := db.OpenColumnFamily(DefaultColumnFamilyOptions("cf_default"))
-	assert.Nil(t, err)
+	opts := DefaultOptions(t.TempDir())
+	db := newTestDB(t, opts)
+	cf := openTestColumnFamily(t, db)
 
 	type fields struct {
 		cf *ColumnFamily
@@ -103,13 +107,9 @@ func TestColumnFamily_Put(t *testing.T) {
 }
 
 func TestColumnFamily_PutWithOptions(t *testing.T) {
-	opts := DefaultOptions("/tmp" + separator + "lotusdb")
-	db, err := Open(opts)
-	assert.Nil(t, err)
-	defer destroyDB(db)
-
-	cf, err := db.OpenColumnFamily(DefaultColumnFamilyOptions("cf_default"))
-	assert.Nil(t, err)
+	opts := DefaultOptions(t.TempDir())
+	db := newTestDB(t, opts)
+	cf := openTestColumnFamily(t, db)
 
 	type fields struct {
 		cf *ColumnFamily
@@ -149,13 +149,9 @@ func TestColumnFamily_PutWithOptions(t *testing.T) {
 }
 
 func TestColumnFamily_Get(t *testing.T) {
-	opts := DefaultOptions("/tmp" + separator + "lotusdb")
-	db, err := Open(opts)
-	assert.Nil(t, err)
-	defer destroyDB(db)
-
-	cf, err := db.OpenColumnFamily(DefaultColumnFamilyOptions("cf_default"))
-	assert.Nil(t, err)
+	opts := DefaultOptions(t.TempDir())
+	db := newTestDB(t, opts)
+	cf := openTestColumnFamily(t, db)
 
 	// write some data for getting
 	for i := 0; i < 100; i++ {
@@ -206,13 +202,9 @@ func TestColumnFamily_Get(t *testing.T) {
 }
 
 func TestColumnFamily_Stat(t *testing.T) {
-	opts := DefaultOptions("/tmp" + separator + "lotusdb")
-	db, err := Open(opts)
-	assert.Nil(t, err)
-	defer destroyDB(db)
-
-	cf, err := db.OpenColumnFamily(DefaultColumnFamilyOptions("cf_default"))
-	assert.Nil(t, err)
+	opts := DefaultOptions(t.TempDir())
+	db := newTestDB(t, opts)
+	cf := openTestColumnFamily(t, db)
 
 	// write some data
 	for i := 0; i < 100; i++ {
@@ -226,18 +218,14 @@ func TestColumnFamily_Stat(t *testing.T) {
 }
 
 func TestColumnFamily_IsClosed(t *testing.T) {
-	opts := DefaultOptions("/tmp" + separator + "lotusdb")
-	db, err := Open(opts)
-	assert.Nil(t, err)
-	defer destroyDB(db)
-
-	cf, err := db.OpenColumnFamily(DefaultColumnFamilyOptions("cf_default"))
-	assert.Nil(t, err)
+	opts := DefaultOptions(t.TempDir())
+	db := newTestDB(t, opts)
+	cf := openTestColumnFamily(t, db)
 
 	c1 := cf.IsClosed()
 	assert.False(t, c1)
 
-	err = cf.Close()
+	err := cf.Close()
 	assert.Nil(t, err)
 
 	c2 := cf.IsClosed()
@@ -245,31 +233,23 @@ func TestColumnFamily_IsClosed(t *testing.T) {
 }
 
 func TestColumnFamily_Sync(t *testing.T) {
-	opts := DefaultOptions("/tmp" + separator + "lotusdb")
-	db, err := Open(opts)
-	assert.Nil(t, err)
-	defer destroyDB(db)
-
-	cf, err := db.OpenColumnFamily(DefaultColumnFamilyOptions("cf_default"))
-	assert.Nil(t, err)
+	opts := DefaultOptions(t.TempDir())
+	db := newTestDB(t, opts)
+	cf := openTestColumnFamily(t, db)
 
 	// write some data
 	for i := 0; i < 100; i++ {
 		err := db.Put(GetKey(i), GetValue16B())
 		assert.Nil(t, err)
 	}
-	err = cf.Sync()
+	err := cf.Sync()
 	assert.Nil(t, err)
 }
 
 func TestColumnFamily_Options(t *testing.T) {
-	opts := DefaultOptions("/tmp" + separator + "lotusdb")
-	db, err := Open(opts)
-	assert.Nil(t, err)
-	defer destroyDB(db)
-
-	cf, err := db.OpenColumnFamily(DefaultColumnFamilyOptions("cf_default"))
-	assert.Nil(t, err)
+	opts := DefaultOptions(t.TempDir())
+	db := newTestDB(t, opts)
+	cf := openTestColumnFamily(t, db)
 
 	options := cf.Options()
 	assert.NotNil(t, options.CfName)
