@@ -386,15 +386,7 @@ func TestValueLog_Sync(t *testing.T) {
 }
 
 func TestValueLog_Close(t *testing.T) {
-	path, err := filepath.Abs(filepath.Join("/tmp", "vlog-test"))
-	assert.Nil(t, err)
-	err = os.MkdirAll(path, os.ModePerm)
-	assert.Nil(t, err)
-
-	defer func() {
-		_ = os.RemoveAll(path)
-	}()
-	vlog, err := openValueLogForTest(path, 10<<20, logfile.MMap, 0.5)
+	vlog, err := openValueLogForTest(t.TempDir(), 10<<20, logfile.MMap, 0.5)
 	assert.Nil(t, err)
 
 	err = vlog.Close()
