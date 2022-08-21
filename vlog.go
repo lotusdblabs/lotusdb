@@ -103,6 +103,7 @@ func openValueLog(opt vlogOptions) (*valueLog, error) {
 	// set total size in discard file, skip it if exist.
 	discard.setTotal(fids[len(fids)-1], uint32(opt.blockSize))
 	if err != nil {
+		_ = discard.close()
 		return nil, err
 	}
 
@@ -119,6 +120,7 @@ func openValueLog(opt vlogOptions) (*valueLog, error) {
 	}
 
 	if err := vlog.setLogFileState(); err != nil {
+		_ = discard.close()
 		return nil, err
 	}
 	go vlog.handleCompaction()

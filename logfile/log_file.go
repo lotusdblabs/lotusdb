@@ -176,6 +176,10 @@ func (lf *LogFile) Sync() error {
 
 // Close current log file.
 func (lf *LogFile) Close() error {
+	if lf.IoSelector == nil {
+		return nil
+	}
+
 	return lf.IoSelector.Close()
 }
 

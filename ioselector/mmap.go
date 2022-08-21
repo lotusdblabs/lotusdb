@@ -1,7 +1,9 @@
 package ioselector
 
 import (
+	"errors"
 	"io"
+	"io/fs"
 	"os"
 
 	"github.com/flower-corp/lotusdb/mmap"
@@ -80,7 +82,7 @@ func (lm *MMapSelector) Delete() error {
 	if err := lm.fd.Truncate(0); err != nil {
 		return err
 	}
-	if err := lm.fd.Close(); err != nil {
+	if err := lm.fd.Close(); err != nil && !errors.Is(err, fs.ErrClosed) {
 		return err
 	}
 	return os.Remove(lm.fd.Name())

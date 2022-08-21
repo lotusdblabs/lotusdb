@@ -3,8 +3,6 @@ package lotusdb
 import (
 	"bytes"
 	"math/rand"
-	"os"
-	"path/filepath"
 	"reflect"
 	"testing"
 	"time"
@@ -23,16 +21,13 @@ func TestOpenValueLog(t *testing.T) {
 	})
 
 	t.Run("set file state", func(t *testing.T) {
-		path, err := filepath.Abs(filepath.Join("/tmp", "vlog-test"))
-		assert.Nil(t, err)
-		err = os.MkdirAll(path, os.ModePerm)
-		assert.Nil(t, err)
+		path := t.TempDir()
 
-		defer func() {
-			_ = os.RemoveAll(path)
-		}()
 		vlog, err := openValueLogForTest(path, 180, logfile.FileIO, 0.5)
 		assert.Nil(t, err)
+		t.Cleanup(func() {
+			assert.NoError(t, vlog.Close())
+		})
 
 		_, _, err = vlog.Write(&logfile.LogEntry{Key: GetKey(923), Value: GetValue128B()})
 		assert.Nil(t, err)
@@ -41,18 +36,15 @@ func TestOpenValueLog(t *testing.T) {
 		vlog1, err := openValueLogForTest(path, 180, logfile.FileIO, 0.5)
 		assert.Nil(t, err)
 		assert.NotNil(t, vlog1)
+		t.Cleanup(func() {
+			assert.NoError(t, vlog1.Close())
+		})
 	})
 }
 
 func testOpenValueLog(t *testing.T, ioType logfile.IOType) {
-	path, err := filepath.Abs(filepath.Join("/tmp", "vlog-test"))
-	assert.Nil(t, err)
-	err = os.MkdirAll(path, os.ModePerm)
-	assert.Nil(t, err)
+	path := t.TempDir()
 
-	defer func() {
-		_ = os.RemoveAll(path)
-	}()
 	type args struct {
 		path      string
 		blockSize int64
@@ -78,8 +70,11 @@ func testOpenValueLog(t *testing.T, ioType logfile.IOType) {
 		t.Run(tt.name, func(t *testing.T) {
 			if tt.hasFiles {
 				for i := 1; i <= 5; i++ {
-					_, err := logfile.OpenLogFile(path, uint32(i), 100, logfile.ValueLog, ioType)
+					f, err := logfile.OpenLogFile(path, uint32(i), 100, logfile.ValueLog, ioType)
 					assert.Nil(t, err)
+					t.Cleanup(func() {
+						assert.NoError(t, f.Close())
+					})
 				}
 			}
 			got, err := openValueLogForTest(tt.args.path, tt.args.blockSize, tt.args.ioType, 0.5)
@@ -89,6 +84,9 @@ func testOpenValueLog(t *testing.T, ioType logfile.IOType) {
 			}
 			if !tt.wantErr {
 				assert.NotNil(t, got)
+				t.Cleanup(func() {
+					assert.NoError(t, got.Close())
+				})
 			}
 		})
 	}
@@ -217,16 +215,11 @@ func TestValueLog_WriteUntilNewActiveFileOpen(t *testing.T) {
 }
 
 func testValueLogWriteUntilNewActiveFileOpen(t *testing.T, ioType logfile.IOType) {
-	path, err := filepath.Abs(filepath.Join("/tmp", "vlog-test"))
+	vlog, err := openValueLogForTest(t.TempDir(), 10<<20, ioType, 0.5)
 	assert.Nil(t, err)
-	err = os.MkdirAll(path, os.ModePerm)
-	assert.Nil(t, err)
-
-	defer func() {
-		_ = os.RemoveAll(path)
-	}()
-	vlog, err := openValueLogForTest(path, 10<<20, ioType, 0.5)
-	assert.Nil(t, err)
+	t.Cleanup(func() {
+		assert.NoError(t, vlog.Close())
+	})
 
 	writeCount := 100000
 	var poses []*valuePos
@@ -262,16 +255,11 @@ func TestValueLog_Read(t *testing.T) {
 }
 
 func testValueLogRead(t *testing.T, ioType logfile.IOType) {
-	path, err := filepath.Abs(filepath.Join("/tmp", "vlog-test"))
+	vlog, err := openValueLogForTest(t.TempDir(), 10<<20, ioType, 0.5)
 	assert.Nil(t, err)
-	err = os.MkdirAll(path, os.ModePerm)
-	assert.Nil(t, err)
-
-	defer func() {
-		_ = os.RemoveAll(path)
-	}()
-	vlog, err := openValueLogForTest(path, 10<<20, ioType, 0.5)
-	assert.Nil(t, err)
+	t.Cleanup(func() {
+		assert.NoError(t, vlog.Close())
+	})
 
 	type data struct {
 		e   *logfile.LogEntry
@@ -370,16 +358,11 @@ func TestValueLog_ReadFromArchivedFile(t *testing.T) {
 }
 
 func TestValueLog_Sync(t *testing.T) {
-	path, err := filepath.Abs(filepath.Join("/tmp", "vlog-test"))
+	vlog, err := openValueLogForTest(t.TempDir(), 10<<20, logfile.FileIO, 0.5)
 	assert.Nil(t, err)
-	err = os.MkdirAll(path, os.ModePerm)
-	assert.Nil(t, err)
-
-	defer func() {
-		_ = os.RemoveAll(path)
-	}()
-	vlog, err := openValueLogForTest(path, 10<<20, logfile.FileIO, 0.5)
-	assert.Nil(t, err)
+	t.Cleanup(func() {
+		assert.NoError(t, vlog.Close())
+	})
 
 	err = vlog.Sync()
 	assert.Nil(t, err)
@@ -404,15 +387,13 @@ func openValueLogForTest(path string, blockSize int64, ioType logfile.IOType, gc
 }
 
 func TestValueLog_Compaction_Normal(t *testing.T) {
-	opts := DefaultOptions("/tmp" + separator + "lotusdb")
+	opts := DefaultOptions(t.TempDir())
 	opts.CfOpts.ValueLogFileSize = 16 * 1024 * 1024
 	opts.CfOpts.MemtableSize = 32 << 20
 	opts.CfOpts.ValueLogGCRatio = 0.5
 	opts.CfOpts.ValueLogGCInterval = time.Second * 7
 
-	db, err := Open(opts)
-	assert.Nil(t, err)
-	defer destroyDB(db)
+	db := newTestDB(t, opts)
 
 	// write enough data that can trigger flush operation.
 	var writeCount = 600000
@@ -445,16 +426,13 @@ func TestValueLog_Compaction_Normal(t *testing.T) {
 //}
 
 func testCompacction(t *testing.T, reading, writing bool) {
-	path, _ := os.MkdirTemp("", "lotusdb")
-	opts := DefaultOptions(path)
+	opts := DefaultOptions(t.TempDir())
 	opts.CfOpts.ValueLogFileSize = 16 * 1024 * 1024
 	opts.CfOpts.MemtableSize = 32 << 20
 	opts.CfOpts.ValueLogGCRatio = 0.5
 	opts.CfOpts.ValueLogGCInterval = time.Second * 7
 
-	db, err := Open(opts)
-	assert.Nil(t, err)
-	defer destroyDB(db)
+	db := newTestDB(t, opts)
 
 	// write enough data that can trigger flush operation.
 	var writeCount = 600000

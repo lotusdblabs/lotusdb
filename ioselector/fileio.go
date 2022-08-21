@@ -1,6 +1,10 @@
 package ioselector
 
-import "os"
+import (
+	"errors"
+	"io/fs"
+	"os"
+)
 
 // FileIOSelector represents using standard file I/O.
 type FileIOSelector struct {
@@ -41,7 +45,7 @@ func (fio *FileIOSelector) Close() error {
 
 // Delete file descriptor if we don`t use it anymore.
 func (fio *FileIOSelector) Delete() error {
-	if err := fio.fd.Close(); err != nil {
+	if err := fio.fd.Close(); err != nil && !errors.Is(err, fs.ErrClosed) {
 		return err
 	}
 	return os.Remove(fio.fd.Name())

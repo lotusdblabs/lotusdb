@@ -413,21 +413,6 @@ func newTestDB(t *testing.T, opts Options) *LotusDB {
 	return db
 }
 
-func destroyDB(db *LotusDB) {
-	if db != nil {
-		_ = db.Close()
-		if err := os.RemoveAll(db.opts.DBPath); err != nil {
-			logger.Errorf("remove db path err.%v", err)
-		}
-		if err := os.RemoveAll(db.opts.CfOpts.IndexerDir); err != nil {
-			logger.Errorf("remove indexer path err.%v", err)
-		}
-		if err := os.RemoveAll(db.opts.CfOpts.ValueLogDir); err != nil {
-			logger.Errorf("remove vlog path err.%v", err)
-		}
-	}
-}
-
 const alphabet = "abcdefghijklmnopqrstuvwxyz0123456789"
 
 func init() {
