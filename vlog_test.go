@@ -343,14 +343,8 @@ func testValueLogRead(t *testing.T, ioType logfile.IOType) {
 }
 
 func TestValueLog_ReadFromArchivedFile(t *testing.T) {
-	path, err := filepath.Abs(filepath.Join("/tmp", "vlog-test"))
-	assert.Nil(t, err)
-	err = os.MkdirAll(path, os.ModePerm)
-	assert.Nil(t, err)
+	path := t.TempDir()
 
-	defer func() {
-		_ = os.RemoveAll(path)
-	}()
 	vlog, err := openValueLogForTest(path, 10<<20, logfile.FileIO, 0.5)
 	assert.Nil(t, err)
 
@@ -365,6 +359,10 @@ func TestValueLog_ReadFromArchivedFile(t *testing.T) {
 
 	vlog1, err := openValueLogForTest(path, 10<<20, logfile.FileIO, 0.5)
 	assert.Nil(t, err)
+	t.Cleanup(func() {
+		assert.NoError(t, vlog1.Close())
+	})
+
 	e, err := vlog1.Read(0, 0)
 	assert.Nil(t, err)
 	assert.True(t, len(e.Key) > 0)
