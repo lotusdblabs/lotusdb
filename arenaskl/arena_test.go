@@ -19,6 +19,7 @@ package arenaskl
 
 import (
 	"math"
+	"os"
 	"testing"
 
 	"github.com/stretchr/testify/require"
@@ -27,6 +28,10 @@ import (
 // TestArenaSizeOverflow tests that large allocations do not cause Arena's
 // internal size accounting to overflow and produce incorrect results.
 func TestArenaSizeOverflow(t *testing.T) {
+	if os.Getenv("CI") == "true" {
+		t.Skip("CI runners may run out of memory")
+	}
+
 	a := NewArena(math.MaxUint32)
 
 	// Allocating under the limit throws no error.
