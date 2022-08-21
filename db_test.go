@@ -3,47 +3,42 @@ package lotusdb
 import (
 	"bytes"
 	"fmt"
-	"github.com/flower-corp/lotusdb/logger"
 	"math/rand"
 	"os"
 	"reflect"
 	"testing"
 	"time"
 
+	"github.com/flower-corp/lotusdb/logger"
+
 	"github.com/stretchr/testify/assert"
 )
 
 func TestOpen(t *testing.T) {
-	opendb := func(opts Options) {
-		db, err := Open(opts)
-		defer destroyDB(db)
-		assert.Nil(t, err)
-	}
+	opts := DefaultOptions(t.TempDir())
 
-	opts := DefaultOptions("/tmp" + separator + "lotusdb")
 	t.Run("default", func(t *testing.T) {
-		opendb(opts)
+		newTestDB(t, opts)
 	})
 
 	t.Run("spec-dir", func(t *testing.T) {
-		dir := "/tmp" + separator + "new-dir"
+		dir := t.TempDir()
 		opts.CfOpts.IndexerDir = dir
 		opts.CfOpts.ValueLogDir = dir
-		opendb(opts)
-		_ = os.RemoveAll(dir)
+
+		newTestDB(t, opts)
 	})
 
 	t.Run("no-cf-name", func(t *testing.T) {
 		opts.CfOpts.CfName = ""
-		opendb(opts)
+
+		newTestDB(t, opts)
 	})
 }
 
 func TestLotusDB_Put(t *testing.T) {
-	opts := DefaultOptions("/tmp" + separator + "lotusdb")
-	db, err := Open(opts)
-	assert.Nil(t, err)
-	defer destroyDB(db)
+	opts := DefaultOptions(t.TempDir())
+	db := newTestDB(t, opts)
 
 	type fields struct {
 		db *LotusDB
@@ -84,10 +79,8 @@ func TestLotusDB_Put(t *testing.T) {
 }
 
 func TestLotusDB_PutWithOptions(t *testing.T) {
-	opts := DefaultOptions("/tmp" + separator + "lotusdb")
-	db, err := Open(opts)
-	assert.Nil(t, err)
-	defer destroyDB(db)
+	opts := DefaultOptions(t.TempDir())
+	db := newTestDB(t, opts)
 
 	type fields struct {
 		db *LotusDB
@@ -129,14 +122,12 @@ func TestLotusDB_PutWithOptions(t *testing.T) {
 // We will put data until the active memtable is full and be flushed.
 // Then a new active memtable will be created.
 func TestLotusDB_PutUntilMemtableFlush(t *testing.T) {
-	opts := DefaultOptions("/tmp" + separator + "lotusdb")
+	opts := DefaultOptions(t.TempDir())
 	// if you change the default memtable size, change the writeCount too.
 	// make sure the written data size is greater than memtable size.
 	opts.CfOpts.MemtableSize = 64 << 20
 	writeCount := 600000
-	db, err := Open(opts)
-	assert.Nil(t, err)
-	defer destroyDB(db)
+	db := newTestDB(t, opts)
 
 	for i := 0; i <= writeCount; i++ {
 		err := db.Put(GetKey(i), GetValue128B())
@@ -153,10 +144,8 @@ func TestLotusDB_PutUntilMemtableFlush(t *testing.T) {
 }
 
 func TestLotusDB_Get(t *testing.T) {
-	opts := DefaultOptions("/tmp" + separator + "lotusdb")
-	db, err := Open(opts)
-	assert.Nil(t, err)
-	defer destroyDB(db)
+	opts := DefaultOptions(t.TempDir())
+	db := newTestDB(t, opts)
 
 	// write some data for getting
 	for i := 0; i < 100; i++ {
@@ -211,10 +200,8 @@ func TestLotusDB_GetKeyFromIndexerAndValFromVLog(t *testing.T) {
 }
 
 func testGetKV(t *testing.T) {
-	opts := DefaultOptions("/tmp" + separator + "lotusdb")
-	db, err := Open(opts)
-	assert.Nil(t, err)
-	defer destroyDB(db)
+	opts := DefaultOptions(t.TempDir())
+	db := newTestDB(t, opts)
 
 	var writeCount = 600000
 	for i := 0; i <= writeCount; i++ {
@@ -238,10 +225,8 @@ func testGetKV(t *testing.T) {
 }
 
 func TestLotusDB_Delete(t *testing.T) {
-	opts := DefaultOptions("/tmp" + separator + "lotusdb")
-	db, err := Open(opts)
-	assert.Nil(t, err)
-	defer destroyDB(db)
+	opts := DefaultOptions(t.TempDir())
+	db := newTestDB(t, opts)
 
 	var writeCount = 100
 	// write some data.
@@ -299,10 +284,8 @@ func TestLotusDB_Delete(t *testing.T) {
 }
 
 func TestLotusDB_DeleteAfterFlush(t *testing.T) {
-	opts := DefaultOptions("/tmp" + separator + "lotusdb")
-	db, err := Open(opts)
-	assert.Nil(t, err)
-	defer destroyDB(db)
+	opts := DefaultOptions(t.TempDir())
+	db := newTestDB(t, opts)
 
 	// write enough data that can trigger flush operation.
 	var writeCount = 600000
@@ -353,10 +336,8 @@ func TestLotusDB_DeleteAfterFlush(t *testing.T) {
 }
 
 func TestLotusDB_SyncAndClose(t *testing.T) {
-	opts := DefaultOptions("/tmp" + separator + "lotusdb")
-	db, err := Open(opts)
-	assert.Nil(t, err)
-	defer destroyDB(db)
+	opts := DefaultOptions(t.TempDir())
+	db := newTestDB(t, opts)
 
 	// write some data.
 	var writeCount = 600000
@@ -365,7 +346,7 @@ func TestLotusDB_SyncAndClose(t *testing.T) {
 		assert.Nil(t, err)
 	}
 
-	err = db.Sync()
+	err := db.Sync()
 	assert.Nil(t, err)
 	err = db.Close()
 	assert.Nil(t, err)
@@ -373,10 +354,8 @@ func TestLotusDB_SyncAndClose(t *testing.T) {
 
 // write some data and reopen it.
 func TestReOpenDB(t *testing.T) {
-	opts := DefaultOptions("/tmp" + separator + "lotusdb")
-	db, err := Open(opts)
-	assert.Nil(t, err)
-	defer destroyDB(db)
+	opts := DefaultOptions(t.TempDir())
+	db := newTestDB(t, opts)
 
 	// write some data.
 	var writeCount = 600000
@@ -385,12 +364,15 @@ func TestReOpenDB(t *testing.T) {
 		assert.Nil(t, err)
 	}
 
-	err = db.Close()
+	err := db.Close()
 	assert.Nil(t, err)
 
 	// reopen db.
 	db2, err := Open(opts)
 	assert.Nil(t, err)
+	t.Cleanup(func() {
+		assert.NoError(t, db2.Close())
+	})
 
 	// make sure all writes are valid.
 	v1, err := db2.Get(GetKey(0))
@@ -403,16 +385,32 @@ func TestReOpenDB(t *testing.T) {
 }
 
 func TestBytesFlush(t *testing.T) {
-	opts := DefaultOptions("/tmp" + separator + "lotusdb")
+	opts := DefaultOptions(t.TempDir())
 	opts.CfOpts.WalBytesFlush = 200
-	db, err := Open(opts)
-	assert.Nil(t, err)
-	defer destroyDB(db)
+	db := newTestDB(t, opts)
 
 	for i := 0; i < 10; i++ {
 		err := db.Put(GetKey(i), GetValue128B())
 		assert.Nil(t, err)
 	}
+}
+
+func newTestDB(t *testing.T, opts Options) *LotusDB {
+	db, err := Open(opts)
+	assert.NoError(t, err)
+
+	t.Cleanup(func() {
+		_ = db.Close()
+
+		if err := os.RemoveAll(db.opts.CfOpts.IndexerDir); err != nil {
+			logger.Errorf("remove indexer path err.%v", err)
+		}
+		if err := os.RemoveAll(db.opts.CfOpts.ValueLogDir); err != nil {
+			logger.Errorf("remove vlog path err.%v", err)
+		}
+	})
+
+	return db
 }
 
 func destroyDB(db *LotusDB) {
