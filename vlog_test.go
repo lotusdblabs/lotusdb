@@ -105,16 +105,11 @@ func TestValueLog_Write(t *testing.T) {
 }
 
 func testValueLogWrite(t *testing.T, ioType logfile.IOType) {
-	path, err := filepath.Abs(filepath.Join("/tmp", "vlog-test"))
+	vlog, err := openValueLogForTest(t.TempDir(), 1024<<20, ioType, 0.5)
 	assert.Nil(t, err)
-	err = os.MkdirAll(path, os.ModePerm)
-	assert.Nil(t, err)
-
-	defer func() {
-		_ = os.RemoveAll(path)
-	}()
-	vlog, err := openValueLogForTest(path, 1024<<20, ioType, 0.5)
-	assert.Nil(t, err)
+	t.Cleanup(func() {
+		assert.NoError(t, vlog.Close())
+	})
 
 	type fields struct {
 		vlog *valueLog
