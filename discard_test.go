@@ -1,17 +1,14 @@
 package lotusdb
 
 import (
-	"github.com/stretchr/testify/assert"
-	"os"
-	"path/filepath"
 	"testing"
+
+	"github.com/stretchr/testify/assert"
 )
 
 func TestDiscard_listenUpdates(t *testing.T) {
-	opts := DefaultOptions("/tmp" + separator + "lotusdb")
-	db, err := Open(opts)
-	assert.Nil(t, err)
-	defer destroyDB(db)
+	opts := DefaultOptions(t.TempDir())
+	db := newTestDB(t, opts)
 
 	// write enough data that can trigger flush operation.
 	var writeCount = 600000
@@ -44,22 +41,24 @@ func TestDiscard_listenUpdates(t *testing.T) {
 
 func TestDiscard_newDiscard(t *testing.T) {
 	t.Run("init", func(t *testing.T) {
-		path := filepath.Join("/tmp", "lotusdb-discard")
-		os.MkdirAll(path, os.ModePerm)
-		defer os.RemoveAll(path)
-		dis, err := newDiscard(path, vlogDiscardName)
+		dis, err := newDiscard(t.TempDir(), vlogDiscardName)
 		assert.Nil(t, err)
+		t.Cleanup(func() {
+			assert.NoError(t, dis.close())
+		})
 
 		assert.Equal(t, len(dis.freeList), 341)
 		assert.Equal(t, len(dis.location), 0)
 	})
 
 	t.Run("with-data", func(t *testing.T) {
-		path := filepath.Join("/tmp", "lotusdb-discard")
-		os.MkdirAll(path, os.ModePerm)
-		defer os.RemoveAll(path)
+		path := t.TempDir()
+
 		dis, err := newDiscard(path, vlogDiscardName)
 		assert.Nil(t, err)
+		t.Cleanup(func() {
+			assert.NoError(t, dis.close())
+		})
 
 		for i := 1; i < 300; i = i * 5 {
 			dis.setTotal(uint32(i), 223)
@@ -72,17 +71,21 @@ func TestDiscard_newDiscard(t *testing.T) {
 		// reopen
 		dis2, err := newDiscard(path, vlogDiscardName)
 		assert.Nil(t, err)
+		t.Cleanup(func() {
+			assert.NoError(t, dis2.close())
+		})
+
 		assert.Equal(t, len(dis2.freeList), 337)
 		assert.Equal(t, len(dis2.location), 4)
 	})
 }
 
 func TestDiscard_setTotal(t *testing.T) {
-	path := filepath.Join("/tmp", "lotusdb-discard")
-	os.MkdirAll(path, os.ModePerm)
-	defer os.RemoveAll(path)
-	dis, err := newDiscard(path, vlogDiscardName)
+	dis, err := newDiscard(t.TempDir(), vlogDiscardName)
 	assert.Nil(t, err)
+	t.Cleanup(func() {
+		assert.NoError(t, dis.close())
+	})
 
 	type args struct {
 		fid       uint32
@@ -114,11 +117,11 @@ func TestDiscard_setTotal(t *testing.T) {
 }
 
 func TestDiscard_clear(t *testing.T) {
-	path := filepath.Join("/tmp", "lotusdb-discard")
-	os.MkdirAll(path, os.ModePerm)
-	defer os.RemoveAll(path)
-	dis, err := newDiscard(path, vlogDiscardName)
+	dis, err := newDiscard(t.TempDir(), vlogDiscardName)
 	assert.Nil(t, err)
+	t.Cleanup(func() {
+		assert.NoError(t, dis.close())
+	})
 
 	for i := 0; i < 341; i++ {
 		dis.setTotal(uint32(i), uint32(i+100))
@@ -154,11 +157,11 @@ func TestDiscard_clear(t *testing.T) {
 }
 
 func TestDiscard_incrDiscard(t *testing.T) {
-	path := filepath.Join("/tmp", "lotusdb-discard")
-	os.MkdirAll(path, os.ModePerm)
-	defer os.RemoveAll(path)
-	dis, err := newDiscard(path, vlogDiscardName)
+	dis, err := newDiscard(t.TempDir(), vlogDiscardName)
 	assert.Nil(t, err)
+	t.Cleanup(func() {
+		assert.NoError(t, dis.close())
+	})
 
 	for i := 1; i < 300; i = i * 5 {
 		dis.setTotal(uint32(i-1), uint32(i+1000))
@@ -173,11 +176,11 @@ func TestDiscard_incrDiscard(t *testing.T) {
 }
 
 func TestDiscard_getCCL(t *testing.T) {
-	path := filepath.Join("/tmp", "lotusdb-discard")
-	os.MkdirAll(path, os.ModePerm)
-	defer os.RemoveAll(path)
-	dis, err := newDiscard(path, vlogDiscardName)
+	dis, err := newDiscard(t.TempDir(), vlogDiscardName)
 	assert.Nil(t, err)
+	t.Cleanup(func() {
+		assert.NoError(t, dis.close())
+	})
 
 	for i := 1; i < 2000; i = i * 5 {
 		dis.setTotal(uint32(i-1), uint32(i+1000))
