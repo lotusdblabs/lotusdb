@@ -2,7 +2,6 @@ package mmap
 
 import (
 	"os"
-	"path/filepath"
 	"testing"
 
 	"github.com/flower-corp/lotusdb/logger"
@@ -10,18 +9,12 @@ import (
 )
 
 func TestMmap(t *testing.T) {
-	dir, err := os.MkdirTemp("", "rosedb-mmap-test")
-	assert.Nil(t, err)
-	path := filepath.Join(dir, "mmap.txt")
+	fd, err := os.CreateTemp(t.TempDir(), "mmap.txt")
+	assert.NoError(t, err)
+	t.Cleanup(func() {
+		assert.NoError(t, fd.Close())
+	})
 
-	fd, err := os.OpenFile(path, os.O_CREATE|os.O_RDWR, 0644)
-	assert.Nil(t, err)
-	defer func() {
-		if fd != nil {
-			_ = fd.Close()
-			destroyDir(path)
-		}
-	}()
 	type args struct {
 		fd       *os.File
 		writable bool
@@ -46,6 +39,9 @@ func TestMmap(t *testing.T) {
 				t.Errorf("Mmap() error = %v, wantErr %v", err, tt.wantErr)
 				return
 			}
+			t.Cleanup(func() {
+				assert.NoError(t, Munmap(got))
+			})
 			if int64(len(got)) != tt.args.size {
 				t.Errorf("Mmap() want buf size = %d, actual = %d", tt.args.size, len(got))
 			}
@@ -54,18 +50,11 @@ func TestMmap(t *testing.T) {
 }
 
 func TestMunmap(t *testing.T) {
-	dir, err := os.MkdirTemp("", "rosedb-mmap-test")
-	assert.Nil(t, err)
-	path := filepath.Join(dir, "mmap.txt")
-
-	fd, err := os.OpenFile(path, os.O_CREATE|os.O_RDWR, 0644)
-	assert.Nil(t, err)
-	defer func() {
-		if fd != nil {
-			_ = fd.Close()
-			destroyDir(path)
-		}
-	}()
+	fd, err := os.CreateTemp(t.TempDir(), "mmap.txt")
+	assert.NoError(t, err)
+	t.Cleanup(func() {
+		assert.NoError(t, fd.Close())
+	})
 
 	buf, err := Mmap(fd, true, 100)
 	assert.Nil(t, err)
@@ -74,47 +63,35 @@ func TestMunmap(t *testing.T) {
 }
 
 func TestMsync(t *testing.T) {
-	dir, err := os.MkdirTemp("", "rosedb-mmap-test")
-	assert.Nil(t, err)
-	path := filepath.Join(dir, "mmap.txt")
-
-	fd, err := os.OpenFile(path, os.O_CREATE|os.O_RDWR, 0644)
-	assert.Nil(t, err)
-	defer func() {
-		if fd != nil {
-			_ = fd.Close()
-			destroyDir(path)
-		}
-	}()
+	fd, err := os.CreateTemp(t.TempDir(), "mmap.txt")
+	assert.NoError(t, err)
+	t.Cleanup(func() {
+		assert.NoError(t, fd.Close())
+	})
 
 	buf, err := Mmap(fd, true, 128)
 	assert.Nil(t, err)
+	t.Cleanup(func() {
+		assert.NoError(t, Munmap(buf))
+	})
+
 	err = Msync(buf)
 	assert.Nil(t, err)
 }
 
 func TestMadvise(t *testing.T) {
-	dir, err := os.MkdirTemp("", "rosedb-mmap-test")
-	assert.Nil(t, err)
-	path := filepath.Join(dir, "mmap.txt")
-
-	fd, err := os.OpenFile(path, os.O_CREATE|os.O_RDWR, 0644)
-	assert.Nil(t, err)
-	defer func() {
-		if fd != nil {
-			_ = fd.Close()
-			destroyDir(path)
-		}
-	}()
+	fd, err := os.CreateTemp(t.TempDir(), "mmap.txt")
+	assert.NoError(t, err)
+	t.Cleanup(func() {
+		assert.NoError(t, fd.Close())
+	})
 
 	buf, err := Mmap(fd, true, 128)
 	assert.Nil(t, err)
+	t.Cleanup(func() {
+		assert.NoError(t, Munmap(buf))
+	})
+
 	err = Madvise(buf, false)
 	assert.Nil(t, err)
-}
-
-func destroyDir(dir string) {
-	if err := os.RemoveAll(dir); err != nil {
-		logger.Warnf("remove dir err: %v", err)
-	}
 }
