@@ -4,3 +4,4 @@ lotusdb.iml
 codecov.yaml
 coverage.txt
 benchmark/
+/output
