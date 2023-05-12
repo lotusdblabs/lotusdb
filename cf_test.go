@@ -1,13 +1,13 @@
 package lotusdb
 
 import (
-	"github.com/stretchr/testify/assert"
-	"io/ioutil"
 	"os"
 	"path/filepath"
 	"reflect"
 	"testing"
 	"time"
+
+	"github.com/stretchr/testify/assert"
 )
 
 func TestLotusDB_OpenColumnFamily(t *testing.T) {
@@ -31,7 +31,7 @@ func TestLotusDB_OpenColumnFamily(t *testing.T) {
 
 	t.Run("spec-dir", func(t *testing.T) {
 		cfopt := DefaultColumnFamilyOptions("cf-2")
-		dir, _ := ioutil.TempDir("", "lotusdb-opencf2")
+		dir, _ := os.MkdirTemp("", "lotusdb-opencf2")
 		defer func() {
 			_ = os.RemoveAll(dir)
 		}()
@@ -41,8 +41,8 @@ func TestLotusDB_OpenColumnFamily(t *testing.T) {
 
 	t.Run("spec-val-dir", func(t *testing.T) {
 		cfopt := DefaultColumnFamilyOptions("cf-1")
-		dir, _ := ioutil.TempDir("", "lotusdb")
-		valDir, _ := ioutil.TempDir("", "lotus-val")
+		dir, _ := os.MkdirTemp("", "lotusdb")
+		valDir, _ := os.MkdirTemp("", "lotus-val")
 		defer func() {
 			_ = os.RemoveAll(dir)
 			_ = os.RemoveAll(valDir)

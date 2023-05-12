@@ -3,9 +3,6 @@ package main
 import (
 	"errors"
 	"fmt"
-	"github.com/flower-corp/lotusdb"
-	"github.com/flower-corp/lotusdb/logger"
-	"io/ioutil"
 	"log"
 	"net"
 	"os"
@@ -13,6 +10,9 @@ import (
 	"strings"
 	"syscall"
 	"time"
+
+	"github.com/flower-corp/lotusdb"
+	"github.com/flower-corp/lotusdb/logger"
 )
 
 const (
@@ -89,7 +89,7 @@ func main() {
 }
 
 func banner() {
-	b, err := ioutil.ReadFile("../../resource/banner/banner.txt")
+	b, err := os.ReadFile("../../resource/banner/banner.txt")
 	if err != nil {
 		panic(err)
 	}

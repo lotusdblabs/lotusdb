@@ -1,9 +1,10 @@
 package main
 
 import (
-	"github.com/flower-corp/lotusdb"
-	"io/ioutil"
+	"os"
 	"time"
+
+	"github.com/flower-corp/lotusdb"
 )
 
 // basic operations for LotusDB:
@@ -13,7 +14,7 @@ import (
 // delete
 // delete with options
 func main() {
-	path, _ := ioutil.TempDir("", "lotusdb")
+	path, _ := os.MkdirTemp("", "lotusdb")
 	opts := lotusdb.DefaultOptions(path)
 	db, err := lotusdb.Open(opts)
 	if err != nil {

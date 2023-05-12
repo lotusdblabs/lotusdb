@@ -2,7 +2,7 @@ package util
 
 import (
 	"io"
-	"io/ioutil"
+	"io/fs"
 	"os"
 	"path"
 )
@@ -19,7 +19,6 @@ func PathExist(path string) bool {
 func CopyDir(src string, dst string) error {
 	var (
 		err     error
-		dir     []os.FileInfo
 		srcInfo os.FileInfo
 	)
 
@@ -29,11 +28,20 @@ func CopyDir(src string, dst string) error {
 	if err = os.MkdirAll(dst, srcInfo.Mode()); err != nil {
 		return err
 	}
-	if dir, err = ioutil.ReadDir(src); err != nil {
+
+	entries, err := os.ReadDir(src)
+	if err != nil {
 		return err
 	}
-
-	for _, fd := range dir {
+	infos := make([]fs.FileInfo, 0, len(entries))
+	for _, entry := range entries {
+		info, err := entry.Info()
+		if err != nil {
+			return err
+		}
+		infos = append(infos, info)
+	}
+	for _, fd := range infos {
 		srcPath := path.Join(src, fd.Name())
 		dstPath := path.Join(dst, fd.Name())
 
