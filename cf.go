@@ -3,8 +3,7 @@ package lotusdb
 import (
 	"errors"
 	"fmt"
-	"github.com/flower-corp/lotusdb/flock"
-	"io/ioutil"
+	"io/fs"
 	"os"
 	"path/filepath"
 	"sort"
@@ -13,6 +12,8 @@ import (
 	"sync"
 	"sync/atomic"
 	"time"
+
+	"github.com/flower-corp/lotusdb/flock"
 
 	"github.com/flower-corp/lotusdb/index"
 	"github.com/flower-corp/lotusdb/logfile"
@@ -318,14 +319,22 @@ func (cf *ColumnFamily) Options() ColumnFamilyOptions {
 
 func (cf *ColumnFamily) openMemtables() error {
 	// read wal dirs.
-	fileInfos, err := ioutil.ReadDir(cf.opts.DirPath)
+	entries, err := os.ReadDir(cf.opts.DirPath)
 	if err != nil {
 		return err
+	}
+	infos := make([]fs.FileInfo, 0, len(entries))
+	for _, entry := range entries {
+		info, err := entry.Info()
+		if err != nil {
+			return err
+		}
+		infos = append(infos, info)
 	}
 
 	// find all wal files`id.
 	var fids []uint32
-	for _, file := range fileInfos {
+	for _, file := range infos {
 		if !strings.HasSuffix(file.Name(), logfile.WalSuffixName) {
 			continue
 		}

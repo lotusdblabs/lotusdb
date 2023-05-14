@@ -3,16 +3,16 @@ package index
 import (
 	"bytes"
 	"fmt"
-	"github.com/stretchr/testify/assert"
-	"io/ioutil"
 	"math/rand"
 	"os"
 	"testing"
 	"time"
+
+	"github.com/stretchr/testify/assert"
 )
 
 func TestNewBPTree(t *testing.T) {
-	path, err := ioutil.TempDir("", "indexer")
+	path, err := os.MkdirTemp("", "indexer")
 	assert.Nil(t, err)
 	defer func() {
 		_ = os.RemoveAll(path)
@@ -54,7 +54,7 @@ func TestNewBPTree(t *testing.T) {
 }
 
 func TestBPTree_Put(t *testing.T) {
-	path, err := ioutil.TempDir("", "indexer")
+	path, err := os.MkdirTemp("", "indexer")
 	assert.Nil(t, err)
 	opts := BPTreeOptions{DirPath: path, IndexType: BptreeBoltDB, ColumnFamilyName: "test", BucketName: []byte("test"), BatchSize: 100000}
 	tree, err := NewBPTree(opts)
@@ -100,7 +100,7 @@ func TestBPTree_Put(t *testing.T) {
 }
 
 func TestBPTree_PutBatch(t *testing.T) {
-	path, err := ioutil.TempDir("", "indexer")
+	path, err := os.MkdirTemp("", "indexer")
 	assert.Nil(t, err)
 	opts := BPTreeOptions{DirPath: path, IndexType: BptreeBoltDB, ColumnFamilyName: "test", BucketName: []byte("test"), BatchSize: 200000, DiscardChn: make(chan [][]byte, 1024)}
 	tree, err := NewBPTree(opts)
@@ -228,7 +228,7 @@ func GetValue4K() []byte {
 }
 
 func TestBPTree_Get(t *testing.T) {
-	path, err := ioutil.TempDir("", "indexer")
+	path, err := os.MkdirTemp("", "indexer")
 	assert.Nil(t, err)
 	opts := BPTreeOptions{DirPath: path, IndexType: BptreeBoltDB, ColumnFamilyName: "test", BucketName: []byte("test"), BatchSize: 200000}
 	tree, err := NewBPTree(opts)
@@ -303,7 +303,7 @@ func TestBPTree_Get(t *testing.T) {
 }
 
 func TestBPTree_Delete(t *testing.T) {
-	path, err := ioutil.TempDir("", "indexer")
+	path, err := os.MkdirTemp("", "indexer")
 	assert.Nil(t, err)
 	opts := BPTreeOptions{DirPath: path, IndexType: BptreeBoltDB, ColumnFamilyName: "test", BucketName: []byte("test"), BatchSize: 200000, DiscardChn: make(chan [][]byte, 1024)}
 	tree, err := NewBPTree(opts)
@@ -351,7 +351,7 @@ func TestBPTree_Delete(t *testing.T) {
 }
 
 func TestBPTree_DeleteBatch(t *testing.T) {
-	path, err := ioutil.TempDir("", "indexer")
+	path, err := os.MkdirTemp("", "indexer")
 	assert.Nil(t, err)
 	opts := BPTreeOptions{DirPath: path, IndexType: BptreeBoltDB, ColumnFamilyName: "test", BucketName: []byte("test"), BatchSize: 179933, DiscardChn: make(chan [][]byte, 1024)}
 	tree, err := NewBPTree(opts)
@@ -440,7 +440,7 @@ func TestBPTree_DeleteBatch(t *testing.T) {
 }
 
 func TestBPTree_Sync(t *testing.T) {
-	path, err := ioutil.TempDir("", "indexer")
+	path, err := os.MkdirTemp("", "indexer")
 	assert.Nil(t, err)
 	opts := BPTreeOptions{DirPath: path, IndexType: BptreeBoltDB, ColumnFamilyName: "test", BucketName: []byte("test"), BatchSize: 200000}
 	tree, err := NewBPTree(opts)
@@ -464,7 +464,7 @@ func TestBPTree_Sync(t *testing.T) {
 }
 
 func TestBPTree_Close(t *testing.T) {
-	path, err := ioutil.TempDir("", "indexer")
+	path, err := os.MkdirTemp("", "indexer")
 	assert.Nil(t, err)
 	opts := BPTreeOptions{DirPath: path, IndexType: BptreeBoltDB, ColumnFamilyName: "test", BucketName: []byte("test"), BatchSize: 200000}
 	tree, err := NewBPTree(opts)

@@ -3,11 +3,8 @@ package lotusdb
 import (
 	"errors"
 	"fmt"
-	"github.com/flower-corp/lotusdb/index"
-	"github.com/flower-corp/lotusdb/logfile"
-	"github.com/flower-corp/lotusdb/logger"
 	"io"
-	"io/ioutil"
+	"io/fs"
 	"os"
 	"os/signal"
 	"sort"
@@ -17,6 +14,10 @@ import (
 	"sync/atomic"
 	"syscall"
 	"time"
+
+	"github.com/flower-corp/lotusdb/index"
+	"github.com/flower-corp/lotusdb/logfile"
+	"github.com/flower-corp/lotusdb/logger"
 )
 
 var (
@@ -58,13 +59,21 @@ type (
 
 // openValueLog create a new value log file.
 func openValueLog(opt vlogOptions) (*valueLog, error) {
-	fileInfos, err := ioutil.ReadDir(opt.path)
+	entries, err := os.ReadDir(opt.path)
 	if err != nil {
 		return nil, err
 	}
+	infos := make([]fs.FileInfo, 0, len(entries))
+	for _, entry := range entries {
+		info, err := entry.Info()
+		if err != nil {
+			return nil, err
+		}
+		infos = append(infos, info)
+	}
 
 	var fids []uint32
-	for _, file := range fileInfos {
+	for _, file := range infos {
 		if strings.HasSuffix(file.Name(), logfile.VLogSuffixName) {
 			splitNames := strings.Split(file.Name(), ".")
 			fid, err := strconv.Atoi(splitNames[0])

@@ -1,16 +1,16 @@
 package mmap
 
 import (
-	"github.com/flower-corp/lotusdb/logger"
-	"github.com/stretchr/testify/assert"
-	"io/ioutil"
 	"os"
 	"path/filepath"
 	"testing"
+
+	"github.com/flower-corp/lotusdb/logger"
+	"github.com/stretchr/testify/assert"
 )
 
 func TestMmap(t *testing.T) {
-	dir, err := ioutil.TempDir("", "rosedb-mmap-test")
+	dir, err := os.MkdirTemp("", "rosedb-mmap-test")
 	assert.Nil(t, err)
 	path := filepath.Join(dir, "mmap.txt")
 
@@ -54,7 +54,7 @@ func TestMmap(t *testing.T) {
 }
 
 func TestMunmap(t *testing.T) {
-	dir, err := ioutil.TempDir("", "rosedb-mmap-test")
+	dir, err := os.MkdirTemp("", "rosedb-mmap-test")
 	assert.Nil(t, err)
 	path := filepath.Join(dir, "mmap.txt")
 
@@ -74,7 +74,7 @@ func TestMunmap(t *testing.T) {
 }
 
 func TestMsync(t *testing.T) {
-	dir, err := ioutil.TempDir("", "rosedb-mmap-test")
+	dir, err := os.MkdirTemp("", "rosedb-mmap-test")
 	assert.Nil(t, err)
 	path := filepath.Join(dir, "mmap.txt")
 
@@ -94,7 +94,7 @@ func TestMsync(t *testing.T) {
 }
 
 func TestMadvise(t *testing.T) {
-	dir, err := ioutil.TempDir("", "rosedb-mmap-test")
+	dir, err := os.MkdirTemp("", "rosedb-mmap-test")
 	assert.Nil(t, err)
 	path := filepath.Join(dir, "mmap.txt")
 
