@@ -2,13 +2,17 @@ package lotusdb
 
 import (
 	"encoding/binary"
+	"fmt"
+
+	"io"
+	"path/filepath"
+	"sync"
+	"time"
+
 	"github.com/flower-corp/lotusdb/arenaskl"
 	"github.com/flower-corp/lotusdb/logfile"
 	"github.com/flower-corp/lotusdb/logger"
-	"io"
-	"sync"
-	"sync/atomic"
-	"time"
+	"github.com/flower-corp/lotusdb/wal"
 )
 
 const paddedSize = 64
@@ -21,11 +25,11 @@ type (
 	// A background goroutine will flush the content of memtable into indexer or vlog, after which the memtable can be deleted.
 	memtable struct {
 		sync.RWMutex
-		sklIter      *arenaskl.Iterator
-		skl          *arenaskl.Skiplist
-		wal          *logfile.LogFile
-		bytesWritten uint32 // number of bytes written, used for flush wal file.
-		opts         memOptions
+		sklIter *arenaskl.Iterator
+		skl     *arenaskl.Skiplist
+		wal     *wal.WAL
+		// bytesWritten uint32 // number of bytes written, used for flush wal file.
+		opts memOptions
 	}
 
 	// options held by memtable for opening new memtables.
@@ -56,43 +60,49 @@ func openMemtable(opts memOptions) (*memtable, error) {
 	sklIter.Init(skl)
 	table := &memtable{opts: opts, skl: skl, sklIter: sklIter}
 
-	// open wal log file.
-	wal, err := logfile.OpenLogFile(opts.path, opts.fid, opts.fsize*2, logfile.WAL, opts.ioType)
+	// open wal log file，and set path, bytesPerSync parameters
+	// path/fid is dir of wal's segment files
+	wal.DefaultOptions.DirPath = filepath.Join(opts.path, fmt.Sprintf("%09d", opts.fid))
+	if opts.bytesFlush > 0 {
+		wal.DefaultOptions.BytesPerSync = opts.bytesFlush
+	}
+	wal, err := wal.Open(wal.DefaultOptions)
+	wal.Fid = opts.fid
+	// wal, err := logfile.OpenLogFile(opts.path, opts.fid, opts.fsize*2, logfile.WAL, opts.ioType)
 	if err != nil {
 		return nil, err
 	}
 	table.wal = wal
 
-	// load entries.
-	var offset int64 = 0
+	reader := wal.NewReader()
 	for {
-		if entry, size, err := wal.ReadLogEntry(offset); err == nil {
-			offset += size
-			// No need to use atomic updates.
-			// This function is only be executed in one goroutine at startup.
-			wal.WriteAt += size
-
-			mv := &memValue{
-				value:     entry.Value,
-				expiredAt: entry.ExpiredAt,
-				typ:       byte(entry.Type),
-			}
-			mvBuf := mv.encode()
-			var err error
-			if table.sklIter.Seek(entry.Key) {
-				err = table.sklIter.Set(mvBuf)
-			} else {
-				err = table.sklIter.Put(entry.Key, mvBuf)
-			}
-			if err != nil {
-				logger.Errorf("put value into skip list err.%+v", err)
-				return nil, err
-			}
-		} else {
-			if err == io.EOF || err == logfile.ErrEndOfEntry {
-				break
-			}
+		entryBuf, _, err := reader.Next()
+		if err == io.EOF {
+			break
+		}
+		if err != nil {
+			logger.Errorf("put value into skip list err.%+v", err)
 			return nil, err
+		}
+		entry, _, err := wal.DecodeWAL(entryBuf)
+		if err != nil {
+			logger.Errorf("decode err.%+v", err)
+		}
+		mv := &memValue{
+			value:     entry.Value,
+			expiredAt: entry.ExpiredAt,
+			typ:       byte(entry.Type),
+		}
+		mvBuf := mv.encode()
+		var err2 error
+		if table.sklIter.Seek(entry.Key) {
+			err2 = table.sklIter.Set(mvBuf)
+		} else {
+			err2 = table.sklIter.Put(entry.Key, mvBuf)
+		}
+		if err2 != nil {
+			logger.Errorf("put value into skip list err.%+v", err)
+			return nil, err2
 		}
 	}
 	return table, nil
@@ -100,34 +110,27 @@ func openMemtable(opts memOptions) (*memtable, error) {
 
 // put new writes to memtable.
 func (mt *memtable) put(key []byte, value []byte, deleted bool, opts WriteOptions) error {
-	entry := &logfile.LogEntry{Key: key, Value: value}
+	entry := &wal.WalLogEntry{Key: key, Value: value}
 	if opts.ExpiredAt > 0 {
 		entry.ExpiredAt = opts.ExpiredAt
 	}
 	if deleted {
-		entry.Type = logfile.TypeDelete
+		entry.Type = wal.TypeDelete
 	}
 
-	buf, sz := logfile.EncodeEntry(entry)
+	buf, sz := wal.EncodeEntry(entry)
 	if uint32(sz)+paddedSize >= mt.skl.Arena().Cap() {
 		return ErrValueTooBig
 	}
 	// write entry into wal first.
 	if !opts.DisableWal && mt.wal != nil {
-		if err := mt.wal.Write(buf); err != nil {
+		if _, err := mt.wal.Write(buf); err != nil {
 			return err
 		}
 
-		// if Sync is ture in WriteOptions or bytesWritten has reached bytesFlush, syncWal will be true.
-		var syncWal = opts.Sync
-		if mt.opts.bytesFlush > 0 {
-			writes := atomic.AddUint32(&mt.bytesWritten, uint32(sz))
-			if writes > mt.opts.bytesFlush {
-				syncWal = true
-				atomic.StoreUint32(&mt.bytesWritten, 0)
-			}
-		}
-		if syncWal {
+		// if Sync is ture in WriteOptions, syncWal will be true.
+		// otherwise, wal will Sync automatically throughput BytesPerSync parameter
+		if opts.Sync {
 			if err := mt.syncWAL(); err != nil {
 				return err
 			}
@@ -170,14 +173,10 @@ func (mt *memtable) delete(key []byte, opts WriteOptions) error {
 }
 
 func (mt *memtable) syncWAL() error {
-	mt.wal.RLock()
-	defer mt.wal.RUnlock()
 	return mt.wal.Sync()
 }
 
 func (mt *memtable) closeWAL() error {
-	mt.wal.RLock()
-	defer mt.wal.RUnlock()
 	return mt.wal.Close()
 }
 
@@ -188,8 +187,7 @@ func (mt *memtable) isFull(delta uint32) bool {
 	if mt.wal == nil {
 		return false
 	}
-
-	walSize := atomic.LoadInt64(&mt.wal.WriteAt)
+	walSize := mt.wal.DataSize
 	return walSize >= int64(mt.opts.memSize)
 }
 
@@ -198,8 +196,6 @@ func (mt *memtable) logFileId() uint32 {
 }
 
 func (mt *memtable) deleteWal() error {
-	mt.wal.Lock()
-	defer mt.wal.Unlock()
 	return mt.wal.Delete()
 }
 
