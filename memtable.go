@@ -10,7 +10,8 @@ import (
 	"sync"
 	"time"
 
-	"github.com/lotusdblabs/lotusdb/v2/arenaskl"
+	arenaskl "github.com/dgraph-io/badger/v3/skl"
+	"github.com/dgraph-io/badger/v3/y"
 	"github.com/lotusdblabs/lotusdb/v2/logger"
 	"github.com/lotusdblabs/lotusdb/v2/walEntry"
 	"github.com/rosedblabs/wal"
@@ -58,10 +59,8 @@ type (
 // and load all entries from wal to rebuild the content of the skip list.
 func openMemtable(opts *memOptions) (*memtable, error) {
 	// init skip list and arena.
-	var sklIter = new(arenaskl.Iterator)
-	arena := arenaskl.NewArena(opts.memSize + uint32(arenaskl.MaxNodeSize))
-	skl := arenaskl.NewSkiplist(arena)
-	sklIter.Init(skl)
+	skl := arenaskl.NewSkiplist(int64(opts.memSize) + int64(arenaskl.MaxNodeSize))
+	sklIter := skl.NewIterator()
 	table := &memtable{opts: opts, skl: skl, sklIter: sklIter}
 
 	// init wal and wal options
@@ -103,11 +102,7 @@ func openMemtable(opts *memOptions) (*memtable, error) {
 		mvBuf := mv.encode()
 		var errSeek error
 		table.Lock()
-		if table.sklIter.Seek(entry.Key) {
-			errSeek = table.sklIter.Set(mvBuf)
-		} else {
-			errSeek = table.sklIter.Put(entry.Key, mvBuf)
-		}
+		table.skl.Put(entry.Key, y.ValueStruct{Value: mvBuf})
 		table.Unlock()
 		if errSeek != nil {
 			logger.Errorf("put value into skip list err.%+v", err)
@@ -127,10 +122,7 @@ func (mt *memtable) put(key []byte, value []byte, deleted bool, opts EntryOption
 	if deleted {
 		entry.Type = walEntry.TypeDelete
 	}
-	buf, sz := walEntry.EncodeEntry(entry)
-	if uint32(sz)+paddedSize >= mt.skl.Arena().Cap() {
-		return ErrValueTooBig
-	}
+	buf, _ := walEntry.EncodeEntry(entry)
 
 	// write entry into wal first.
 	if !opts.DisableWal && mt.wal != nil {
@@ -151,10 +143,9 @@ func (mt *memtable) put(key []byte, value []byte, deleted bool, opts EntryOption
 	defer mt.Unlock()
 	mv := memValue{value: value, expiredAt: entry.ExpiredAt, typ: byte(entry.Type)}
 	mvBuf := mv.encode()
-	if mt.sklIter.Seek(key) {
-		return mt.sklIter.Set(mvBuf)
-	}
-	return mt.sklIter.Put(key, mvBuf)
+	mt.skl.Put(key, y.ValueStruct{Value: mvBuf})
+
+	return nil
 }
 
 // get value from memtable
@@ -163,11 +154,12 @@ func (mt *memtable) get(key []byte) (bool, []byte) {
 	mt.RLock()
 	defer mt.RUnlock()
 
-	if found := mt.sklIter.Seek(key); !found {
+	valStru := mt.skl.Get(key)
+
+	if valStru.Value == nil {
 		return false, nil
 	}
-
-	mv := decodeMemValue(mt.sklIter.Value())
+	mv := decodeMemValue(valStru.Value)
 	// ignore deleted key.
 	if mv.typ == byte(walEntry.TypeDelete) {
 		return true, nil
