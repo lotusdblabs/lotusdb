@@ -1,7 +1,7 @@
 package lotusdb
 
 import (
-	"github.com/lotusdblabs/lotusdb/v2/arenaskl"
+	arenaskl "github.com/dgraph-io/badger/v4/skl"
 	"github.com/rosedblabs/wal"
 )
 
