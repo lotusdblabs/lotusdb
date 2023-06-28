@@ -46,7 +46,7 @@ package arenaskl
 import (
 	"bytes"
 	"errors"
-	"github.com/flower-corp/lotusdb/util"
+	"github.com/lotusdblabs/lotusdb/v2/util"
 	"math"
 	"sync/atomic"
 	"unsafe"
@@ -168,7 +168,7 @@ func (s *Skiplist) newNode(key, val []byte) (nd *node, height uint32, err error)
 }
 
 func (s *Skiplist) randomHeight() uint32 {
-	rnd := util.Fastrand()
+	rnd := util.Uint32()
 	h := uint32(1)
 	for h < maxHeight && rnd <= probabilities[h] {
 		h++

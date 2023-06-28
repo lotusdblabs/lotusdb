@@ -1,3 +1,5 @@
+## The project is being refactored, please don't use it in production.
+
 ![](https://github.com/flower-corp/lotusdb/blob/main/resource/img/logo.png)
 
 LotusDB is a fast k/v database compatible with LSM tree and B+ tree.

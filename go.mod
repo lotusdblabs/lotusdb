@@ -1,13 +1,18 @@
-module github.com/flower-corp/lotusdb
+module github.com/lotusdblabs/lotusdb/v2
 
-go 1.16
+go 1.20
+
+require (
+	github.com/rosedblabs/wal v1.1.0
+	github.com/stretchr/testify v1.8.4
+	golang.org/x/exp v0.0.0-20230626212559-97b1e661b5df
+)
 
 require (
 	github.com/davecgh/go-spew v1.1.1 // indirect
-	github.com/peterh/liner v1.2.1
-	github.com/stretchr/testify v1.7.0
-	go.etcd.io/bbolt v1.3.6
-	golang.org/x/sys v0.0.0-20211210111614-af8b64212486
+	github.com/hashicorp/golang-lru/v2 v2.0.2 // indirect
+	github.com/kr/pretty v0.3.1 // indirect
+	github.com/pmezard/go-difflib v1.0.0 // indirect
+	gopkg.in/check.v1 v1.0.0-20201130134442-10cb98267c6c // indirect
+	gopkg.in/yaml.v3 v3.0.1 // indirect
 )
-
-replace go.etcd.io/bbolt => github.com/flower-corp/bbolt v1.3.7-0.20220315040627-32fed02add8f
