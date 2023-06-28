@@ -12,40 +12,15 @@ type DB struct {
 type Stat struct {
 }
 
-func Open(options Options) (*DB, error) {
-	// check whether all options are valid
-
-	// create the directory if not exist
-
-	// acquire file lock
-
-	// open all memtables
-
-	// open index
-
-	// open value log
-
+func Open() (*DB, error) {
 	return nil, nil
 }
 
 func (db *DB) Close() error {
-	// close all memtables
-
-	// close index
-
-	// close value log
-
-	// release file lock
-
 	return nil
 }
 
 func (db *DB) Sync() error {
-	// sync all wal of memtables
-
-	// sync index
-
-	// sync value log
 	return nil
 }
 
@@ -54,21 +29,17 @@ func (db *DB) Stat() *Stat {
 }
 
 func (db *DB) Put(key []byte, value []byte) error {
-	// call batch put
 	return nil
 }
 
 func (db *DB) Get(key []byte, value []byte) ([]byte, error) {
-	// call batch get
 	return nil, nil
 }
 
 func (db *DB) Delete(key []byte) error {
-	// call batch delete
 	return nil
 }
 
 func (db *DB) Exist(key []byte) (bool, error) {
-	// call batch exist
 	return false, nil
 }
