@@ -18,3 +18,7 @@ func (b *Batch) Delete(key []byte) error {
 func (b *Batch) Exist(key []byte) (bool, error) {
 	return false, nil
 }
+
+func (b *Batch) Commit(key []byte) error {
+	return nil
+}
