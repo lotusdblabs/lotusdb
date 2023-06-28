@@ -6,7 +6,7 @@ import (
 )
 
 // memtable is an in-memory data structure holding data before they are flushed into index and value log.
-// Currently the only supported data structure is skip list, see arenaskl.Skiplist.
+// Currently, the only supported data structure is skip list, see arenaskl.Skiplist.
 //
 // New writes always insert data to memtable, and reads has query from memtable
 // before reading from indexer and vlog, because memtable`s data is newer.
