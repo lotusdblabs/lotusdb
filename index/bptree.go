@@ -17,3 +17,11 @@ func (bt *BPTree) Get(key []byte) error {
 // Put Batch
 
 // Delete Batch
+
+func (bt *BPTree) Close() error {
+	return nil
+}
+
+func (bt *BPTree) Sync() error {
+	return nil
+}
