@@ -14,12 +14,14 @@ func openValueLog() (*valueLog, error) {
 	return nil, nil
 }
 
-func (vlog *valueLog) read() error {
-	return nil
+func (vlog *valueLog) read(position *wal.ChunkPosition) ([]byte, error) {
+	// read from wal
+	return nil, nil
 }
 
-func (vlog *valueLog) write() error {
-	return nil
+func (vlog *valueLog) write(data []byte) (*wal.ChunkPosition, error) {
+	// write to wal
+	return nil, nil
 }
 
 func (vlog *valueLog) sync() error {
