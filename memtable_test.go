@@ -1,8 +1,8 @@
 package lotusdb
 
 import (
+	"fmt"
 	"testing"
-	"time"
 
 	"github.com/stretchr/testify/require"
 )
@@ -16,12 +16,12 @@ func TestBasic(t *testing.T) {
 		WALSync:      false,
 	}
 	memtable, err := openMemtable(&opts)
+	defer memtable.wal.Delete()
 	require.Nil(t, err)
 
 	entryOpts := EntryOptions{
 		Sync:       false,
 		DisableWal: false,
-		ExpiredAt:  0,
 	}
 
 	// test memtable.put() and test memtable.get()
@@ -48,6 +48,7 @@ func TestBasic(t *testing.T) {
 	require.Nil(t, err)
 	_, value1_ := memtable.get([]byte("key 1"))
 	require.Nil(t, value1_)
+
 }
 
 func TestOptions(t *testing.T) {
@@ -59,12 +60,12 @@ func TestOptions(t *testing.T) {
 		WALSync:      false,
 	}
 	memtable, err := openMemtable(&opts)
+	defer memtable.wal.Delete()
 	require.Nil(t, err)
 
 	entryOptions := []EntryOptions{
-		{Sync: true, DisableWal: false, ExpiredAt: 0},
-		{Sync: false, DisableWal: true, ExpiredAt: 0},
-		{Sync: false, DisableWal: false, ExpiredAt: 1},
+		{Sync: true, DisableWal: false},
+		{Sync: false, DisableWal: true},
 	}
 
 	err = memtable.put([]byte("key 1"), []byte("value 1"), false, entryOptions[0])
@@ -76,12 +77,6 @@ func TestOptions(t *testing.T) {
 	memtable.wal.Close()
 	memtable, err = openMemtable(&opts)
 	_, value2 := memtable.get([]byte("key 2"))
-	require.Nil(t, value2)
-
-	err = memtable.put([]byte("key 2"), []byte("value 2"), false, entryOptions[2])
-	_, value2 = memtable.get([]byte("key 2"))
-	require.Equal(t, []byte("value 2"), value2)
-	time.Sleep(time.Second * 2)
-	_, value2 = memtable.get([]byte("key 2"))
+	fmt.Printf("%v\n", string(value2))
 	require.Nil(t, value2)
 }
