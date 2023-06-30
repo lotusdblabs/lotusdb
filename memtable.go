@@ -1,19 +1,19 @@
 package lotusdb
 
 import (
-	"encoding/binary"
 	"errors"
 	"fmt"
 	"io"
 	"os"
 	"path/filepath"
 	"sync"
-	"time"
 
 	arenaskl "github.com/dgraph-io/badger/v3/skl"
 	"github.com/dgraph-io/badger/v3/y"
 	"github.com/lotusdblabs/lotusdb/v2/logger"
-	"github.com/lotusdblabs/lotusdb/v2/walEntry"
+
+	// "github.com/lotusdblabs/lotusdb/v2/walEntry"
+
 	"github.com/rosedblabs/wal"
 )
 
@@ -48,9 +48,8 @@ type (
 	}
 
 	memValue struct {
-		value     []byte
-		expiredAt int64
-		typ       byte
+		value []byte
+		typ   byte
 	}
 )
 
@@ -90,14 +89,13 @@ func openMemtable(opts *memOptions) (*memtable, error) {
 			logger.Errorf("put value into skip list err.%+v", err)
 			return nil, err
 		}
-		entry, _, err := walEntry.DecodeWAL(entryBuf)
+		entry := decodeLogRecord(entryBuf)
 		if err != nil {
 			logger.Errorf("decode err.%+v", err)
 		}
 		mv := &memValue{
-			value:     entry.Value,
-			expiredAt: entry.ExpiredAt,
-			typ:       byte(entry.Type),
+			value: entry.Value,
+			typ:   byte(entry.Type),
 		}
 		mvBuf := mv.encode()
 		var errSeek error
@@ -115,16 +113,11 @@ func openMemtable(opts *memOptions) (*memtable, error) {
 // put inserts a key-value pair into memtable.
 func (mt *memtable) put(key []byte, value []byte, deleted bool, opts EntryOptions) error {
 	// new an entry
-	entry := &walEntry.WalLogEntry{Key: key, Value: value}
-	if opts.ExpiredAt > 0 {
-		sec := time.Second * time.Duration(opts.ExpiredAt)
-		expiredAt := time.Now().Add(sec).Unix()
-		entry.ExpiredAt = expiredAt
-	}
+	entry := &LogRecord{Key: key, Value: value}
 	if deleted {
-		entry.Type = walEntry.TypeDelete
+		entry.Type = LogRecordDeleted
 	}
-	buf, _ := walEntry.EncodeEntry(entry)
+	buf := encodeLogRecord(entry)
 
 	// write entry into wal first.
 	if !opts.DisableWal && mt.wal != nil {
@@ -143,7 +136,7 @@ func (mt *memtable) put(key []byte, value []byte, deleted bool, opts EntryOption
 	// write data into skip list in memory.
 	mt.Lock()
 	defer mt.Unlock()
-	mv := memValue{value: value, expiredAt: entry.ExpiredAt, typ: byte(entry.Type)}
+	mv := memValue{value: value, typ: byte(entry.Type)}
 	mvBuf := mv.encode()
 	mt.skl.Put(y.KeyWithTs(key, 0), y.ValueStruct{Value: mvBuf})
 
@@ -163,11 +156,7 @@ func (mt *memtable) get(key []byte) (bool, []byte) {
 	}
 	mv := decodeMemValue(valStru.Value)
 	// ignore deleted key.
-	if mv.typ == byte(walEntry.TypeDelete) {
-		return true, nil
-	}
-	// ignore expired key.
-	if mv.expiredAt > 0 && mv.expiredAt <= time.Now().Unix() {
+	if mv.typ == byte(LogRecordDeleted) {
 		return true, nil
 	}
 	return false, mv.value
@@ -179,20 +168,13 @@ func (mt *memtable) delete(key []byte, opts EntryOptions) error {
 }
 
 func (mv *memValue) encode() []byte {
-	head := make([]byte, 11)
-	head[0] = mv.typ
-	var index = 1
-	index += binary.PutVarint(head[index:], mv.expiredAt)
-
-	buf := make([]byte, len(mv.value)+index)
-	copy(buf[:index], head[:])
-	copy(buf[index:], mv.value)
+	buf := make([]byte, len(mv.value)+1)
+	buf[0] = mv.typ
+	copy(buf[1:], mv.value)
 	return buf
 }
 
 func decodeMemValue(buf []byte) memValue {
 	var index = 1
-	ex, n := binary.Varint(buf[index:])
-	index += n
-	return memValue{typ: buf[0], expiredAt: ex, value: buf[index:]}
+	return memValue{typ: buf[0], value: buf[index:]}
 }

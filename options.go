@@ -101,8 +101,8 @@ type EntryOptions struct {
 	// Default value is false.
 	DisableWal bool
 
-	// ExpiredAt time to live for the specified key, must be a time.Unix value.
-	// It will be ignored if it`s not a positive number.
-	// Default value is 0.
-	ExpiredAt int64
+	// // ExpiredAt time to live for the specified key, must be a time.Unix value.
+	// // It will be ignored if it`s not a positive number.
+	// // Default value is 0.
+	// ExpiredAt int64
 }
