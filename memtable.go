@@ -102,7 +102,7 @@ func openMemtable(opts *memOptions) (*memtable, error) {
 		mvBuf := mv.encode()
 		var errSeek error
 		table.Lock()
-		table.skl.Put(entry.Key, y.ValueStruct{Value: mvBuf})
+		table.skl.Put(y.KeyWithTs(entry.Key, 0), y.ValueStruct{Value: mvBuf})
 		table.Unlock()
 		if errSeek != nil {
 			logger.Errorf("put value into skip list err.%+v", err)
@@ -117,7 +117,9 @@ func (mt *memtable) put(key []byte, value []byte, deleted bool, opts EntryOption
 	// new an entry
 	entry := &walEntry.WalLogEntry{Key: key, Value: value}
 	if opts.ExpiredAt > 0 {
-		entry.ExpiredAt = opts.ExpiredAt
+		sec := time.Second * time.Duration(opts.ExpiredAt)
+		expiredAt := time.Now().Add(sec).Unix()
+		entry.ExpiredAt = expiredAt
 	}
 	if deleted {
 		entry.Type = walEntry.TypeDelete
@@ -143,7 +145,7 @@ func (mt *memtable) put(key []byte, value []byte, deleted bool, opts EntryOption
 	defer mt.Unlock()
 	mv := memValue{value: value, expiredAt: entry.ExpiredAt, typ: byte(entry.Type)}
 	mvBuf := mv.encode()
-	mt.skl.Put(key, y.ValueStruct{Value: mvBuf})
+	mt.skl.Put(y.KeyWithTs(key, 0), y.ValueStruct{Value: mvBuf})
 
 	return nil
 }
@@ -154,7 +156,7 @@ func (mt *memtable) get(key []byte) (bool, []byte) {
 	mt.RLock()
 	defer mt.RUnlock()
 
-	valStru := mt.skl.Get(key)
+	valStru := mt.skl.Get(y.KeyWithTs(key, 0))
 
 	if valStru.Value == nil {
 		return false, nil
