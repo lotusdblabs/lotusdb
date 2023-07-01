@@ -8,12 +8,9 @@ import (
 	"path/filepath"
 	"sync"
 
-	arenaskl "github.com/dgraph-io/badger/v3/skl"
-	"github.com/dgraph-io/badger/v3/y"
+	arenaskl "github.com/dgraph-io/badger/v4/skl"
+	"github.com/dgraph-io/badger/v4/y"
 	"github.com/lotusdblabs/lotusdb/v2/logger"
-
-	// "github.com/lotusdblabs/lotusdb/v2/walEntry"
-
 	"github.com/rosedblabs/wal"
 )
 
