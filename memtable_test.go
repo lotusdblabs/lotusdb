@@ -2,15 +2,19 @@ package lotusdb
 
 import (
 	"fmt"
+	"io/ioutil"
+	"math"
+	"strings"
 	"testing"
 
+	"github.com/rosedblabs/wal"
 	"github.com/stretchr/testify/require"
 )
 
 func TestBasic(t *testing.T) {
 	var opts = memOptions{
 		path:         "/tmp/lotusdb",
-		dirId:        0,
+		walId:        0,
 		memSize:      64 << 20,
 		walByteFlush: 100000,
 		WALSync:      false,
@@ -51,10 +55,42 @@ func TestBasic(t *testing.T) {
 
 }
 
+// test whether memtable can generate multiple segment files normally
+func TestWriteLarge(t *testing.T) {
+	var opts = memOptions{
+		path:         "/tmp/lotusdb",
+		walId:        0,
+		memSize:      64 << 20,
+		walByteFlush: 100000,
+		WALSync:      false,
+	}
+	wal.DefaultOptions.SegmentSize = 5 * wal.MB
+	memtable, err := openMemtable(&opts)
+
+	defer memtable.wal.Delete()
+	require.Nil(t, err)
+
+	entryOpts := EntryOptions{
+		Sync:       false,
+		DisableWal: false,
+	}
+
+	val := strings.Repeat("v", 512)
+	for i := 0; i < 100000; i++ {
+		memtable.put([]byte("key"), []byte(val), false, entryOpts)
+	}
+
+	fileNum, fileSizes, err := walkDir(memtable.opts.path)
+	require.Nil(t, err)
+	numSegment := int(math.Ceil(float64(fileSizes) / float64(wal.DefaultOptions.SegmentSize)))
+
+	require.Equal(t, numSegment, fileNum)
+}
+
 func TestOptions(t *testing.T) {
 	var opts = memOptions{
 		path:         "/tmp/lotusdb",
-		dirId:        1,
+		walId:        1,
 		memSize:      64 << 20,
 		walByteFlush: 100000,
 		WALSync:      false,
@@ -79,4 +115,18 @@ func TestOptions(t *testing.T) {
 	_, value2 := memtable.get([]byte("key 2"))
 	fmt.Printf("%v\n", string(value2))
 	require.Nil(t, value2)
+}
+
+func walkDir(dir string) (count int, fileSizes int64, err error) {
+	entries, err := ioutil.ReadDir(dir)
+	if err != nil {
+		return 0, 0, err
+	}
+	for _, entry := range entries {
+		if !entry.IsDir() {
+			count++
+			fileSizes += entry.Size()
+		}
+	}
+	return count, fileSizes, nil
 }
