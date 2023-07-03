@@ -5,7 +5,6 @@ import (
 	"fmt"
 	"io"
 	"os"
-	"path/filepath"
 	"sync"
 
 	arenaskl "github.com/dgraph-io/badger/v4/skl"
@@ -38,7 +37,7 @@ type (
 
 	memOptions struct {
 		path         string
-		dirId        uint32
+		walId        uint32
 		memSize      uint32
 		walByteFlush uint32
 		WALSync      bool // WAL flush immediately after each writing
@@ -60,7 +59,8 @@ func openMemtable(opts *memOptions) (*memtable, error) {
 	table := &memtable{opts: opts, skl: skl, sklIter: sklIter}
 
 	// init wal and wal options
-	wal.DefaultOptions.DirPath = filepath.Join(opts.path, fmt.Sprintf("%09d", opts.dirId))
+	wal.DefaultOptions.DirPath = opts.path
+	wal.DefaultOptions.SementFileExt = ".SEG" + "." + fmt.Sprint(opts.walId)
 	wal.DefaultOptions.Sync = opts.WALSync
 	if opts.walByteFlush > 0 {
 		wal.DefaultOptions.BytesPerSync = opts.walByteFlush
