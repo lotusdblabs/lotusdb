@@ -1,0 +1,90 @@
+goos: darwin
+goarch: arm64
+pkg: github.com/lotusdblabs/lotusdb/v2/index
+Benchmark_Put_1-8        1000000             36227 ns/op           73684 B/op        112 allocs/op
+PASS
+ok      github.com/lotusdblabs/lotusdb/v2/index 36.345s
+
+goos: darwin
+goarch: arm64
+pkg: github.com/lotusdblabs/lotusdb/v2/index
+Benchmark_Put_3-8        1000000             30337 ns/op           74441 B/op        107 allocs/op
+PASS
+ok      github.com/lotusdblabs/lotusdb/v2/index 30.476s
+
+goos: darwin
+goarch: arm64
+pkg: github.com/lotusdblabs/lotusdb/v2/index
+Benchmark_Put_10-8       1000000             41903 ns/op           82345 B/op         91 allocs/op
+PASS
+ok      github.com/lotusdblabs/lotusdb/v2/index 42.154s
+
+goos: darwin
+goarch: arm64
+pkg: github.com/lotusdblabs/lotusdb/v2/index
+Benchmark_PutBatch_1-8                10        2257064588 ns/op        274608116 B/op   3587109 allocs/op
+PASS
+ok      github.com/lotusdblabs/lotusdb/v2/index 26.156s
+
+goos: darwin
+goarch: arm64
+pkg: github.com/lotusdblabs/lotusdb/v2/index
+Benchmark_PutBatch_3-8                10         582082362 ns/op        342034217 B/op   3067615 allocs/op
+PASS
+ok      github.com/lotusdblabs/lotusdb/v2/index 6.641s
+
+goos: darwin
+goarch: arm64
+pkg: github.com/lotusdblabs/lotusdb/v2/index
+Benchmark_PutBatch_10-8                5         462246958 ns/op        218801976 B/op   4321026 allocs/op
+PASS
+ok      github.com/lotusdblabs/lotusdb/v2/index 2.770s
+
+goos: darwin
+goarch: arm64
+pkg: github.com/lotusdblabs/lotusdb/v2/index
+Benchmark_PutBatch_10-8               10         539254479 ns/op        306332715 B/op   3553089 allocs/op
+PASS
+ok      github.com/lotusdblabs/lotusdb/v2/index 5.993s
+
+goos: darwin
+goarch: arm64
+pkg: github.com/lotusdblabs/lotusdb/v2/index
+Benchmark_Delete_1-8           5        52140053375 ns/op       27359055198 B/op        25690256 allocs/op
+PASS
+ok      github.com/lotusdblabs/lotusdb/v2/index 277.754s
+
+goos: darwin
+goarch: arm64
+pkg: github.com/lotusdblabs/lotusdb/v2/index
+Benchmark_Delete_3-8           5        11205904700 ns/op       14435706758 B/op        24350305 allocs/op
+PASS
+ok      github.com/lotusdblabs/lotusdb/v2/index 64.557s
+
+goos: darwin
+goarch: arm64
+pkg: github.com/lotusdblabs/lotusdb/v2/index
+Benchmark_Delete_10-8                  5        5634839042 ns/op        10112577632 B/op        22059067 allocs/op
+PASS
+ok      github.com/lotusdblabs/lotusdb/v2/index 34.660s
+
+goos: darwin
+goarch: arm64
+pkg: github.com/lotusdblabs/lotusdb/v2/index
+Benchmark_DeleteBatch_1-8              5        1735753600 ns/op        355448176 B/op   4629526 allocs/op
+PASS
+ok      github.com/lotusdblabs/lotusdb/v2/index 12.784s
+
+goos: darwin
+goarch: arm64
+pkg: github.com/lotusdblabs/lotusdb/v2/index
+Benchmark_DeleteBatch_3-8              5         704950192 ns/op        372750216 B/op   4362700 allocs/op
+PASS
+ok      github.com/lotusdblabs/lotusdb/v2/index 4.377s
+
+goos: darwin
+goarch: arm64
+pkg: github.com/lotusdblabs/lotusdb/v2/index
+Benchmark_DeleteBatch_10-8             5         559069475 ns/op        378819734 B/op   4827994 allocs/op
+PASS
+ok      github.com/lotusdblabs/lotusdb/v2/index 3.446s
