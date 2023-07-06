@@ -3,8 +3,9 @@ module github.com/lotusdblabs/lotusdb/v2
 go 1.20
 
 require (
+	github.com/bwmarrin/snowflake v0.3.0
 	github.com/dgraph-io/badger/v4 v4.1.0
-	github.com/rosedblabs/wal v1.1.0
+	github.com/rosedblabs/wal v1.2.1-0.20230705094622-df4b590b2b72
 	golang.org/x/exp v0.0.0-20230626212559-97b1e661b5df
 )
 
