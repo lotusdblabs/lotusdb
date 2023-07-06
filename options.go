@@ -35,3 +35,11 @@ type Options struct {
 	// Default value is 1GB.
 	ValueLogFileSize int64
 }
+
+// BatchOptions specifies the options for creating a batch.
+type BatchOptions struct {
+	// Sync has the same semantics as Options.Sync.
+	Sync bool
+	// ReadOnly specifies whether the batch is read only.
+	ReadOnly bool
+}
