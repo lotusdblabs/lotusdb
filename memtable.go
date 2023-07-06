@@ -59,7 +59,7 @@ func openMemtable(opts *memOptions) (*memtable, error) {
 
 	// init wal and wal options
 	wal.DefaultOptions.DirPath = opts.path
-	wal.DefaultOptions.SementFileExt = ".SEG" + "." + fmt.Sprint(opts.walId)
+	wal.DefaultOptions.SegmentFileExt = ".SEG" + "." + fmt.Sprint(opts.walId)
 	wal.DefaultOptions.Sync = opts.WALSync
 	if opts.walByteFlush > 0 {
 		wal.DefaultOptions.BytesPerSync = opts.walByteFlush
