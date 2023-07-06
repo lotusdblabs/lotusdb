@@ -45,12 +45,13 @@ func TestVlogBasic(t *testing.T) {
 
 }
 
-func TestWriteLarge(t *testing.T) {
+func TestRWLarge(t *testing.T) {
 	opts := valueLogOptions{
 		DirPath:     "/tmp/lotusdb",
 		SegmentSize: wal.GB,
 		BlockCache:  32 * wal.KB * 10,
 	}
+	numRW := 100000
 
 	// test opening vlog
 	vlog, err := openValueLog(opts)
@@ -58,9 +59,18 @@ func TestWriteLarge(t *testing.T) {
 
 	defer vlog.wal.Delete()
 
+	pos := []*wal.ChunkPosition{}
 	val := strings.Repeat("v", 512)
-	for i := 0; i < 100000; i++ {
-		vlog.write([]byte(val))
+	for i := 0; i < numRW; i++ {
+		p, err := vlog.write([]byte(val))
+		require.Nil(t, err)
+		pos = append(pos, p)
 	}
 	vlog.sync()
+
+	for i := 0; i < numRW; i++ {
+		_, err := vlog.read(pos[i])
+		require.Nil(t, err)
+	}
+
 }
