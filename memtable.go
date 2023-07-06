@@ -4,7 +4,6 @@ import (
 	"errors"
 	"fmt"
 	"io"
-	"os"
 	"sync"
 
 	arenaskl "github.com/dgraph-io/badger/v4/skl"
@@ -65,10 +64,7 @@ func openMemtable(opts *memOptions) (*memtable, error) {
 	if opts.walByteFlush > 0 {
 		wal.DefaultOptions.BytesPerSync = opts.walByteFlush
 	}
-	// Each memtable corresponds to a segment files folder.
-	if _, err := os.Stat(wal.DefaultOptions.DirPath); !os.IsExist(err) {
-		os.Mkdir(wal.DefaultOptions.DirPath, os.ModePerm)
-	}
+
 	wal, err := wal.Open(wal.DefaultOptions)
 	if err != nil {
 		return nil, err
