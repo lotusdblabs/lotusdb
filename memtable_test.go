@@ -7,6 +7,7 @@ import (
 	"strings"
 	"testing"
 
+	arenaskl "github.com/dgraph-io/badger/v4/skl"
 	"github.com/rosedblabs/wal"
 	"github.com/stretchr/testify/require"
 )
@@ -18,6 +19,7 @@ func TestBasic(t *testing.T) {
 		memSize:      64 << 20,
 		walByteFlush: 100000,
 		WALSync:      false,
+		maxBatchSize: int64(50 * arenaskl.MaxNodeSize),
 	}
 	memtable, err := openMemtable(&opts)
 	defer memtable.wal.Delete()
@@ -63,6 +65,7 @@ func TestWriteLarge(t *testing.T) {
 		memSize:      64 << 20,
 		walByteFlush: 100000,
 		WALSync:      false,
+		maxBatchSize: int64(50 * arenaskl.MaxNodeSize),
 	}
 	wal.DefaultOptions.SegmentSize = 5 * wal.MB
 	memtable, err := openMemtable(&opts)
@@ -94,6 +97,7 @@ func TestOptions(t *testing.T) {
 		memSize:      64 << 20,
 		walByteFlush: 100000,
 		WALSync:      false,
+		maxBatchSize: int64(50 * arenaskl.MaxNodeSize),
 	}
 	memtable, err := openMemtable(&opts)
 	defer memtable.wal.Delete()

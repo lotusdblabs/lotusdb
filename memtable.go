@@ -39,7 +39,8 @@ type (
 		walId        uint32
 		memSize      uint32
 		walByteFlush uint32
-		WALSync      bool // WAL flush immediately after each writing
+		WALSync      bool  // WAL flush immediately after each writing
+		maxBatchSize int64 // max entries size of a transaction
 	}
 
 	memValue struct {
@@ -53,7 +54,7 @@ type (
 // and load all entries from wal to rebuild the content of the skip list.
 func openMemtable(opts *memOptions) (*memtable, error) {
 	// init skip list and arena.
-	skl := arenaskl.NewSkiplist(int64(opts.memSize) + int64(arenaskl.MaxNodeSize))
+	skl := arenaskl.NewSkiplist(int64(opts.memSize) + opts.maxBatchSize)
 	sklIter := skl.NewIterator()
 	table := &memtable{opts: opts, skl: skl, sklIter: sklIter}
 
