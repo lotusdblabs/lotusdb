@@ -187,6 +187,7 @@ func (bt *BPTree) PutBatch(nodes []*IndexerNode) (offset int, err error) {
 
 		g := new(errgroup.Group)
 		errChan := make(chan error, 1)
+		defer close(errChan)
 		for i := range nodeBucket {
 			i := i
 			g.Go(func() error {
@@ -251,6 +252,7 @@ func (bt *BPTree) DeleteBatch(keys [][]byte) (err error) {
 
 		g := new(errgroup.Group)
 		errChan := make(chan error, 1)
+		defer close(errChan)
 		for i := range keyBucket {
 			i := i
 			g.Go(func() error {
