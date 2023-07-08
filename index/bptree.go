@@ -186,8 +186,6 @@ func (bt *BPTree) PutBatch(nodes []*IndexerNode) (offset int, err error) {
 		}
 
 		g := new(errgroup.Group)
-		errChan := make(chan error, 1)
-		defer close(errChan)
 		for i := range nodeBucket {
 			i := i
 			g.Go(func() error {
@@ -197,7 +195,6 @@ func (bt *BPTree) PutBatch(nodes []*IndexerNode) (offset int, err error) {
 					for _, node := range nodeBucket[i] {
 						meta := EncodeMeta(node.Meta)
 						if err := bucket.Put(node.Key, meta); err != nil {
-							errChan <- err
 							return err
 						}
 					}
@@ -209,14 +206,8 @@ func (bt *BPTree) PutBatch(nodes []*IndexerNode) (offset int, err error) {
 				return nil
 			})
 		}
-		select {
-		case err := <-errChan:
+		if err := g.Wait(); err != nil {
 			return offset, err
-		default:
-			err := g.Wait()
-			if err != nil {
-				return offset, err
-			}
 		}
 	}
 	return len(nodes) - 1, nil
@@ -251,8 +242,6 @@ func (bt *BPTree) DeleteBatch(keys [][]byte) (err error) {
 		}
 
 		g := new(errgroup.Group)
-		errChan := make(chan error, 1)
-		defer close(errChan)
 		for i := range keyBucket {
 			i := i
 			g.Go(func() error {
@@ -261,7 +250,6 @@ func (bt *BPTree) DeleteBatch(keys [][]byte) (err error) {
 					bucket := tx.Bucket(bucketName)
 					for _, key := range keyBucket[i] {
 						if err := bucket.Delete(key); err != nil {
-							errChan <- err
 							return err
 						}
 					}
@@ -273,14 +261,8 @@ func (bt *BPTree) DeleteBatch(keys [][]byte) (err error) {
 				return nil
 			})
 		}
-		select {
-		case err := <-errChan:
+		if err := g.Wait(); err != nil {
 			return err
-		default:
-			err := g.Wait()
-			if err != nil {
-				return err
-			}
 		}
 	}
 	return nil
