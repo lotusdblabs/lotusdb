@@ -1,5 +1,7 @@
 package lotusdb
 
+import "os"
+
 type Options struct {
 	// DirPath specifies the directory path where all the database files will be stored.
 	DirPath string
@@ -42,4 +44,16 @@ type BatchOptions struct {
 	Sync bool
 	// ReadOnly specifies whether the batch is read only.
 	ReadOnly bool
+}
+
+var DefaultOptions = Options{
+	DirPath:      tempDBDir(),
+	BlockCache:   64 * 1024 * 1024, // 64 MB
+	Sync:         false,
+	BytesPerSync: 0,
+}
+
+func tempDBDir() string {
+	dir, _ := os.MkdirTemp("", "lotusdb-temp")
+	return dir
 }

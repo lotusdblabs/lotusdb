@@ -7,6 +7,7 @@ require (
 	github.com/dgraph-io/badger/v4 v4.1.0
 	github.com/rosedblabs/wal v1.2.1-0.20230705094622-df4b590b2b72
 	golang.org/x/exp v0.0.0-20230626212559-97b1e661b5df
+	golang.org/x/sync v0.0.0-20201020160332-67f06af15bc9
 )
 
 require (

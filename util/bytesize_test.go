@@ -1,15 +1,7 @@
-/*
- * @Author: 27
- * @LastEditors: 27
- * @Date: 2023-07-09 01:05:27
- * @LastEditTime: 2023-07-09 01:33:27
- * @FilePath: /lotusdb-learn/util/bytesize_test.go
- * @description: type some description
- */
-
 package util
 
 import (
+	"fmt"
 	"testing"
 
 	"github.com/stretchr/testify/require"
@@ -17,7 +9,7 @@ import (
 
 var unitsTestCase = []struct {
 	name                string
-	unit                byteSize
+	unit                ByteSize
 	expectDisplayString string
 	errMsg              string
 }{
@@ -32,6 +24,7 @@ var unitsTestCase = []struct {
 }
 
 func TestString(t *testing.T) {
+	fmt.Println(KB)
 	for _, tc := range unitsTestCase {
 		require.Equal(t, tc.expectDisplayString, tc.unit.String(), tc.errMsg)
 	}

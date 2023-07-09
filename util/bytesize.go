@@ -3,12 +3,12 @@ package util
 import "fmt"
 
 // Code from http://golang.org/doc/effective_go.html
-// byteSize use this for benchmark-test display
-type byteSize float64
+// ByteSize use this for benchmark-test display
+type ByteSize float64
 
 const (
 	_           = iota
-	KB byteSize = 1 << (10 * iota)
+	KB ByteSize = 1 << (10 * iota)
 	MB
 	GB
 	TB
@@ -18,7 +18,7 @@ const (
 	YB
 )
 
-func (b byteSize) String() string {
+func (b ByteSize) String() string {
 	switch {
 	case b >= YB:
 		return fmt.Sprintf("%.2fYB", b/YB)
