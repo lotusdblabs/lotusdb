@@ -3,6 +3,7 @@ package util
 import "fmt"
 
 // Code from http://golang.org/doc/effective_go.html
+// byteSize use this for benchmark-test display
 type byteSize float64
 
 const (
