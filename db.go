@@ -58,7 +58,7 @@ func (db *DB) Put(key []byte, value []byte) error {
 	return nil
 }
 
-func (db *DB) Get(key []byte, value []byte) ([]byte, error) {
+func (db *DB) Get(key []byte) ([]byte, error) {
 	// call batch get
 	return nil, nil
 }
