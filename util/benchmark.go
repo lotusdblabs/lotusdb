@@ -2,7 +2,7 @@
  * @Author: 27
  * @LastEditors: 27
  * @Date: 2023-07-09 00:54:56
- * @LastEditTime: 2023-07-09 02:16:51
+ * @LastEditTime: 2023-07-09 14:08:36
  * @FilePath: /lotusdb-learn/util/benchmark.go
  * @description: type some description
  */
@@ -25,6 +25,7 @@ type BenchmarkStore interface {
 	Exist(key []byte) (bool, error)
 	Delete(key []byte) error
 	Close() error
+	// TODO declare compaction and collection
 }
 
 // dirSize calculate path dir's files size
@@ -59,5 +60,5 @@ type TestScale struct {
 	Concurrency int    // concurrency run numbers, goroutines in go.
 	Path        string // database path
 	Compact     bool   // is benchmark compaction. write keys twice and run compaction after
-	Collection  bool   // is benchmark collection. write some keys and delete keys, then use collection.
+	Collect     bool   // is benchmark collection. write some keys and delete keys, then use collection.
 }
