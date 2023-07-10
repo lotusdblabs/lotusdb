@@ -130,7 +130,6 @@ func NewBPTree(opt BPTreeOptions) (*BPTree, error) {
 }
 
 func (bt *BPTree) Get(key []byte) (meta *IndexerMeta, err error) {
-	var indexMeta *IndexerMeta
 	tree := bt.getTree(key)
 	if err := tree.View(func(tx *bbolt.Tx) error {
 		bucket := tx.Bucket(bucketName)
@@ -142,7 +141,7 @@ func (bt *BPTree) Get(key []byte) (meta *IndexerMeta, err error) {
 	}); err != nil {
 		return nil, err
 	}
-	return indexMeta, nil
+	return meta, nil
 }
 
 func (bt *BPTree) Put(key []byte, value []byte) (err error) {
