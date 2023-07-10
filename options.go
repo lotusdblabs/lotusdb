@@ -40,13 +40,14 @@ type Options struct {
 type BatchOptions struct {
 	// Sync has the same semantics as Options.Sync.
 	Sync bool
+
 	// ReadOnly specifies whether the batch is read only.
 	ReadOnly bool
 }
 
-// EntryOptions set optional params for PutWithOptions and DeleteWithOptions.
-// If use Put and Delete (without options), that means to use the default values.
-type EntryOptions struct {
+// WriteOptions set optional params for PutWithOptions and DeleteWithOptions.
+// If you use Put and Delete (without options), that means to use the default values.
+type WriteOptions struct {
 	// Sync is whether to synchronize writes through os buffer cache and down onto the actual disk.
 	// Setting sync is required for durability of a single write operation, but also results in slower writes.
 	//
@@ -63,9 +64,4 @@ type EntryOptions struct {
 	// Setting true only if don`t care about the data loss.
 	// Default value is false.
 	DisableWal bool
-
-	// // ExpiredAt time to live for the specified key, must be a time.Unix value.
-	// // It will be ignored if it`s not a positive number.
-	// // Default value is 0.
-	// ExpiredAt int64
 }

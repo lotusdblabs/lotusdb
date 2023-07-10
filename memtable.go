@@ -1,126 +1,115 @@
 package lotusdb
 
 import (
-	"errors"
 	"fmt"
 	"io"
+	"math"
 	"sync"
 
 	arenaskl "github.com/dgraph-io/badger/v4/skl"
 	"github.com/dgraph-io/badger/v4/y"
-	"github.com/lotusdblabs/lotusdb/v2/logger"
 	"github.com/rosedblabs/wal"
 )
 
-const paddedSize = 64
+// todo in memtable
+// 1. put with multiple key/value pairs, guarantee atomicity just like rosedb
+// 2. handle the uncommitted records in wal while reopening the memtable
 
-var ErrValueTooBig = errors.New("value is too big to fit into memtable")
+const (
+	// the wal file name format is .SEG.%d
+	// %d is the unique id of the memtable, used to generate wal file name
+	// for example, the wal file name of memtable with id 1 is .SEG.1
+	walFileExt = ".SEG.%d"
+)
 
-// memtable is an in-memory data structure holding data before they are flushed into index and value log.
-// Currently the only supported data structure is skip list, see arenaskl.Skiplist.
-//
-// New writes always insert data to memtable, and reads has query from memtable
-// before reading from indexer and vlog, because memtable`s data is newer.
-// Once a memtable is full(memtable has its threshold, see MemtableSize in options),
-// it becomes immutable and replaced by a new memtable.
-// A background goroutine will flush the content of memtable into index and vlog,
-// after that the memtable can be deleted.
 type (
+	// memtable is an in-memory data structure holding data before they are flushed into index and value log.
+	// Currently, the only supported data structure is skip list, see github.com/dgraph-io/badger/v4/skl.
+	//
+	// New writes always insert data to memtable, and reads has query from memtable
+	// before reading from index and value log, because memtable`s data is newer.
+	//
+	// Once a memtable is full(memtable has its threshold, see MemtableSize in options),
+	// it becomes immutable and replaced by a new memtable.
+	//
+	// A background goroutine will flush the content of memtable into index and vlog,
+	// after that the memtable can be deleted.
 	memtable struct {
-		sync.RWMutex
-		wal     *wal.WAL
-		skl     *arenaskl.Skiplist
-		sklIter *arenaskl.Iterator
-		opts    *memOptions
+		mu      sync.RWMutex
+		wal     *wal.WAL           // write ahead log for the memtable
+		skl     *arenaskl.Skiplist // in-memory skip list
+		options *memtableOptions
 	}
 
-	memOptions struct {
-		path         string
-		walId        uint32
-		memSize      uint32
-		walByteFlush uint32
-		WALSync      bool  // WAL flush immediately after each writing
-		maxBatchSize int64 // max entries size of a transaction
-	}
-
-	memValue struct {
-		value []byte
-		typ   byte
+	// memtableOptions represents the configuration options for a memtable.
+	memtableOptions struct {
+		dirPath         string // where write ahead log wal file is stored
+		tableId         uint32 // unique id of the memtable, used to generate wal file name
+		memSize         uint32 // max size of the memtable
+		maxBatchSize    int64  // max entries size of a single batch
+		walBytesPerSync uint32 // flush wal file to disk throughput BytesPerSync parameter
+		walSync         bool   // WAL flush immediately after each writing
+		walBlockCache   uint32 // block cache size of wal
 	}
 )
 
 // memtable holds a wal(write ahead log), so when opening a memtable,
 // actually it open the corresponding wal file.
 // and load all entries from wal to rebuild the content of the skip list.
-func openMemtable(opts *memOptions) (*memtable, error) {
-	// init skip list and arena.
-	skl := arenaskl.NewSkiplist(int64(opts.memSize) + opts.maxBatchSize)
-	sklIter := skl.NewIterator()
-	table := &memtable{opts: opts, skl: skl, sklIter: sklIter}
+func openMemtable(options *memtableOptions) (*memtable, error) {
+	// init skip list
+	skl := arenaskl.NewSkiplist(int64(options.memSize) + options.maxBatchSize)
+	table := &memtable{options: options, skl: skl}
 
-	// init wal and wal options
-	wal.DefaultOptions.DirPath = opts.path
-	wal.DefaultOptions.SegmentFileExt = ".SEG" + "." + fmt.Sprint(opts.walId)
-	wal.DefaultOptions.Sync = opts.WALSync
-	if opts.walByteFlush > 0 {
-		wal.DefaultOptions.BytesPerSync = opts.walByteFlush
-	}
-
-	wal, err := wal.Open(wal.DefaultOptions)
+	// open the corresponding Write Ahead Log file
+	walFile, err := wal.Open(wal.Options{
+		DirPath:        options.dirPath,
+		SegmentSize:    math.MaxInt, // no limit, guarantee that a wal file only contains one segment file
+		SegmentFileExt: fmt.Sprintf(walFileExt, options.tableId),
+		BlockCache:     options.walBlockCache,
+		Sync:           options.walSync,
+		BytesPerSync:   options.walBytesPerSync,
+	})
 	if err != nil {
 		return nil, err
 	}
-	table.wal = wal
+	table.wal = walFile
 
-	// load all entries from wal to rebuild the content of the skip list
-	reader := wal.NewReader()
+	// now we get the opened wal file, we need to load all entries
+	// from wal to rebuild the content of the skip list
+	reader := table.wal.NewReader()
 	for {
-		entryBuf, _, err := reader.Next()
+		chunk, _, err := reader.Next()
 		if err != nil {
 			if err == io.EOF {
 				break
 			}
-			logger.Errorf("put value into skip list err.%+v", err)
 			return nil, err
 		}
-		entry := decodeLogRecord(entryBuf)
-		if err != nil {
-			logger.Errorf("decode err.%+v", err)
-		}
-		mv := &memValue{
-			value: entry.Value,
-			typ:   byte(entry.Type),
-		}
-		mvBuf := mv.encode()
-		var errSeek error
-		table.Lock()
-		table.skl.Put(y.KeyWithTs(entry.Key, 0), y.ValueStruct{Value: mvBuf})
-		table.Unlock()
-		if errSeek != nil {
-			logger.Errorf("put value into skip list err.%+v", err)
-			return nil, errSeek
-		}
+		record := decodeLogRecord(chunk)
+		// handle the batch id todo
+		table.skl.Put(y.KeyWithTs(record.Key, 0), y.ValueStruct{Value: record.Value, Meta: record.Type})
 	}
+
+	// open and read wal file successfully, return the memtable
 	return table, nil
 }
 
-// put inserts a key-value pair into memtable.
-func (mt *memtable) put(key []byte, value []byte, deleted bool, opts EntryOptions) error {
-	// new an entry
-	entry := &LogRecord{Key: key, Value: value}
+// put a key-value pair into memtable
+func (mt *memtable) put(key []byte, value []byte, deleted bool, options WriteOptions) error {
+	record := &LogRecord{Key: key, Value: value}
 	if deleted {
-		entry.Type = LogRecordDeleted
+		record.Type = LogRecordDeleted
 	}
-	buf := encodeLogRecord(entry)
+	encRecord := encodeLogRecord(record)
 
-	// write entry into wal first.
-	if !opts.DisableWal && mt.wal != nil {
-		if _, err := mt.wal.Write(buf); err != nil {
+	// write record into wal first.
+	if !options.DisableWal && mt.wal != nil {
+		if _, err := mt.wal.Write(encRecord); err != nil {
 			return err
 		}
-		// if Sync is ture in WriteOptions, syncWal will be true.
-		// otherwise, wal will Sync automatically throughput BytesPerSync parameter
-		if opts.Sync && !mt.opts.WALSync {
+		// sync wal file to disk if needed.
+		if options.Sync && !mt.options.walSync {
 			if err := mt.wal.Sync(); err != nil {
 				return err
 			}
@@ -128,47 +117,30 @@ func (mt *memtable) put(key []byte, value []byte, deleted bool, opts EntryOption
 	}
 
 	// write data into skip list in memory.
-	mt.Lock()
-	defer mt.Unlock()
-	mv := memValue{value: value, typ: byte(entry.Type)}
-	mvBuf := mv.encode()
-	mt.skl.Put(y.KeyWithTs(key, 0), y.ValueStruct{Value: mvBuf})
+	mt.mu.Lock()
+	mt.skl.Put(y.KeyWithTs(key, 0), y.ValueStruct{Value: value, Meta: record.Type})
+	mt.mu.Unlock()
 
 	return nil
 }
 
 // get value from memtable
-// if the specified key is marked as deleted or expired, a true bool value is returned.
+// if the specified key is marked as deleted, a true bool value is returned.
 func (mt *memtable) get(key []byte) (bool, []byte) {
-	mt.RLock()
-	defer mt.RUnlock()
+	mt.mu.RLock()
+	defer mt.mu.RUnlock()
 
-	valStru := mt.skl.Get(y.KeyWithTs(key, 0))
-
-	if valStru.Value == nil {
-		return false, nil
-	}
-	mv := decodeMemValue(valStru.Value)
-	// ignore deleted key.
-	if mv.typ == byte(LogRecordDeleted) {
+	var deleted bool
+	valueStruct := mt.skl.Get(y.KeyWithTs(key, 0))
+	if valueStruct.Meta == LogRecordDeleted {
 		return true, nil
 	}
-	return false, mv.value
+
+	deleted = valueStruct.Meta == LogRecordDeleted
+	return deleted, valueStruct.Value
 }
 
 // delete operation is to put a key and a special tombstone value.
-func (mt *memtable) delete(key []byte, opts EntryOptions) error {
-	return mt.put(key, nil, true, opts)
-}
-
-func (mv *memValue) encode() []byte {
-	buf := make([]byte, len(mv.value)+1)
-	buf[0] = mv.typ
-	copy(buf[1:], mv.value)
-	return buf
-}
-
-func decodeMemValue(buf []byte) memValue {
-	var index = 1
-	return memValue{typ: buf[0], value: buf[index:]}
+func (mt *memtable) delete(key []byte, options WriteOptions) error {
+	return mt.put(key, nil, true, options)
 }
