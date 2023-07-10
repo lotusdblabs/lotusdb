@@ -494,3 +494,20 @@ func TestBPTreeOptions(t *testing.T) {
 	opts.GetDirPath()
 	opts.GetColumnFamilyName()
 }
+
+func TestBPTree_Size(t *testing.T) {
+	path, err := os.MkdirTemp("", "indexer")
+	assert.Nil(t, err)
+	opts := BPTreeOptions{DirPath: path, IndexType: BptreeBoltDB, ColumnFamilyName: "test", BatchSize: 100000}
+	tree, err := NewBPTree(opts)
+	assert.Nil(t, err)
+	defer func() {
+		_ = os.RemoveAll(path)
+	}()
+	assert.Equal(t, 0, tree.Size())
+	tree.Put([]byte("123"), []byte("123"))
+	tree.Put([]byte("123"), []byte("234"))
+	assert.Equal(t, 1, tree.Size())
+	tree.Put([]byte("321"), []byte("123"))
+	assert.Equal(t, 2, tree.Size())
+}

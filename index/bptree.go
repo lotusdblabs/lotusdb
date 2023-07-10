@@ -130,20 +130,19 @@ func NewBPTree(opt BPTreeOptions) (*BPTree, error) {
 }
 
 func (bt *BPTree) Get(key []byte) (meta *IndexerMeta, err error) {
+	var indexMeta *IndexerMeta
 	tree := bt.getTree(key)
-	tx, err := tree.Begin(false)
-	if err != nil {
+	if err := tree.View(func(tx *bbolt.Tx) error {
+		bucket := tx.Bucket(bucketName)
+		value := bucket.Get(key)
+		if len(value) != 0 {
+			meta = DecodeMeta(value)
+		}
+		return nil
+	}); err != nil {
 		return nil, err
 	}
-	defer func() {
-		_ = tx.Rollback()
-	}()
-
-	buf := tx.Bucket(bucketName).Get(key)
-	if buf == nil {
-		return nil, nil
-	}
-	return DecodeMeta(buf), nil
+	return indexMeta, nil
 }
 
 func (bt *BPTree) Put(key []byte, value []byte) (err error) {
@@ -152,17 +151,13 @@ func (bt *BPTree) Put(key []byte, value []byte) (err error) {
 }
 
 func (bt *BPTree) putTree(tree *bbolt.DB, key []byte, value []byte) (err error) {
-	var tx *bbolt.Tx
-	if tx, err = tree.Begin(true); err != nil {
-		return
+	if err := tree.Update(func(tx *bbolt.Tx) error {
+		bucket := tx.Bucket(bucketName)
+		return bucket.Put(key, value)
+	}); err != nil {
+		return err
 	}
-	bucket := tx.Bucket(bucketName)
-	if err = bucket.Put(key, value); err != nil {
-		_ = tx.Rollback()
-		return
-	}
-	return tx.Commit()
-
+	return nil
 }
 
 func (bt *BPTree) PutBatch(nodes []*IndexerNode) (offset int, err error) {
@@ -216,8 +211,7 @@ func (bt *BPTree) PutBatch(nodes []*IndexerNode) (offset int, err error) {
 func (bt *BPTree) Delete(key []byte) error {
 	tree := bt.getTree(key)
 	return tree.Update(func(tx *bbolt.Tx) error {
-		err := tx.Bucket(bucketName).Delete(key)
-		return err
+		return tx.Bucket(bucketName).Delete(key)
 	})
 }
 
@@ -286,6 +280,20 @@ func (bt *BPTree) Sync() error {
 		}
 	}
 	return nil
+}
+
+func (bt *BPTree) Size() int {
+	var size int
+	for _, tree := range bt.trees {
+		if err := tree.View(func(tx *bbolt.Tx) error {
+			bucket := tx.Bucket(bucketName)
+			size += bucket.Stats().KeyN
+			return nil
+		}); err != nil {
+			return -1
+		}
+	}
+	return size
 }
 
 func (bt *BPTree) getTree(key []byte) *bbolt.DB {
