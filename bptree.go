@@ -103,49 +103,38 @@ func (bt *BPTree) PutBatch(records []*IndexRecord) error {
 }
 
 func (bt *BPTree) DeleteBatch(keys [][]byte) error {
-	batchLoopNum := len(keys) / bt.opts.BatchSize
-	if len(keys)%bt.opts.BatchSize > 0 {
-		batchLoopNum++
+	if len(keys) == 0 {
+		return nil
 	}
 
-	batchlimit := bt.opts.BatchSize
-	for batchIdx := 0; batchIdx < batchLoopNum; batchIdx++ {
-		keyBucket := make([][][]byte, bt.opts.PartitionNum)
-		for i := range keyBucket {
-			keyBucket[i] = make([][]byte, 0)
-		}
-		offset := batchIdx * batchlimit
+	partitionKeys := make([][][]byte, bt.options.partitionNum)
+	for _, key := range keys {
+		p := bt.getKeyPartition(key)
+		partitionKeys[p] = append(partitionKeys[p], key)
+	}
 
-		for itemIdx := offset; itemIdx < offset+bt.opts.BatchSize && itemIdx < len(keys); itemIdx++ {
-			key := keys[itemIdx]
-			treeIndex := bt.getTreeIndex(key)
-			keyBucket[treeIndex] = append(keyBucket[treeIndex], key)
+	for i, pk := range partitionKeys {
+		if len(pk) == 0 {
+			continue
 		}
-
 		g := new(errgroup.Group)
-		for i := range keyBucket {
-			i := i
-			g.Go(func() error {
-				tree := bt.trees[i]
-				err = tree.Batch(func(tx *bbolt.Tx) error {
-					bucket := tx.Bucket(bucketName)
-					for _, key := range keyBucket[i] {
-						if err := bucket.Delete(key); err != nil {
-							return err
-						}
+		g.Go(func() error {
+			tree := bt.trees[i]
+			return tree.Update(func(tx *bbolt.Tx) error {
+				bucket := tx.Bucket(bucketName)
+				for _, key := range pk {
+					if err := bucket.Delete(key); err != nil {
+						return err
 					}
-					return nil
-				})
-				if err != nil {
-					return err
 				}
 				return nil
 			})
-		}
+		})
 		if err := g.Wait(); err != nil {
 			return err
 		}
 	}
+
 	return nil
 }
 
