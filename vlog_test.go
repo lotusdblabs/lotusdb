@@ -84,7 +84,7 @@ func TestRWLarge(t *testing.T) {
 		BlockCache:  32 * wal.KB * 10,
 		NumPartions: 1,
 	}
-	numRWList := []int{1000000, 2000000}
+	numRWList := []int{500000, 1000000, 2000000}
 	numPartList := []int{1, 3, 10}
 
 	for _, numRW := range numRWList {
