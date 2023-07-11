@@ -2,7 +2,6 @@ package lotusdb
 
 import (
 	"encoding/binary"
-
 	"github.com/rosedblabs/wal"
 )
 
@@ -31,15 +30,6 @@ type LogRecord struct {
 	Value   []byte
 	Type    LogRecordType
 	BatchId uint64
-}
-
-// IndexRecord is the index record of the key.
-// It contains the key, the record type and the position of the record in the wal.
-// Only used in start up to rebuild the index.
-type IndexRecord struct {
-	key        []byte
-	recordType LogRecordType
-	position   *wal.ChunkPosition
 }
 
 // +-------------+-------------+-------------+--------------+-------------+--------------+
@@ -101,4 +91,11 @@ func decodeLogRecord(buf []byte) *LogRecord {
 
 	return &LogRecord{Key: key, Value: value,
 		BatchId: batchId, Type: recordType}
+}
+
+// IndexRecord is the index record of the key.
+// It contains the key and the position of the record in the wal.
+type IndexRecord struct {
+	key      []byte
+	position *wal.ChunkPosition
 }
