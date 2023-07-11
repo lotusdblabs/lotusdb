@@ -2,23 +2,30 @@ package lotusdb
 
 import (
 	"fmt"
+	"path/filepath"
+
 	"github.com/rosedblabs/wal"
 	"go.etcd.io/bbolt"
 	"golang.org/x/sync/errgroup"
-	"path/filepath"
 )
 
-var bucketName = []byte("lotusdb-index")
+// bucket name for bolt db to store index data
+var boltBucketName = []byte("lotusdb-index")
 
+// BPTree is the BoltDB index implementation.
 type BPTree struct {
 	options indexOptions
 	trees   []*bbolt.DB
 }
 
+// openIndexBoltDB opens a BoltDB index.
+// Actually, it opens a BoltDB for each partition.
+// The partition number is specified by the index options.
 func openIndexBoltDB(options indexOptions) (*BPTree, error) {
 	trees := make([]*bbolt.DB, options.partitionNum)
 
 	for i := 0; i < options.partitionNum; i++ {
+		// open bolt db
 		tree, err := bbolt.Open(
 			filepath.Join(options.dirPath, fmt.Sprintf(indexFileExt, i)),
 			0600,
@@ -32,11 +39,12 @@ func openIndexBoltDB(options indexOptions) (*BPTree, error) {
 			return nil, err
 		}
 
+		// begin a writable transaction to create the bucket if not exists
 		tx, err := tree.Begin(true)
 		if err != nil {
 			return nil, err
 		}
-		if _, err := tx.CreateBucketIfNotExists(bucketName); err != nil {
+		if _, err := tx.CreateBucketIfNotExists(boltBucketName); err != nil {
 			return nil, err
 		}
 		if err := tx.Commit(); err != nil {
@@ -50,13 +58,14 @@ func openIndexBoltDB(options indexOptions) (*BPTree, error) {
 
 func (bt *BPTree) Get(key []byte) (*wal.ChunkPosition, error) {
 	tree := bt.getTreeByKey(key)
-	position := new(wal.ChunkPosition)
+	var position *wal.ChunkPosition
 
 	if err := tree.View(func(tx *bbolt.Tx) error {
-		bucket := tx.Bucket(bucketName)
+		bucket := tx.Bucket(boltBucketName)
 		value := bucket.Get(key)
-		// decode to chunkPosition todo
-		println(value)
+		if len(value) != 0 {
+			position = wal.DecodeChunkPosition(value)
+		}
 		return nil
 	}); err != nil {
 		return nil, err
@@ -76,18 +85,20 @@ func (bt *BPTree) PutBatch(records []*IndexRecord) error {
 		partitionRecords[p] = append(partitionRecords[p], record)
 	}
 
-	for i, pr := range partitionRecords {
-		if len(pr) == 0 {
+	for i, prs := range partitionRecords {
+		if len(prs) == 0 {
 			continue
 		}
 		g := new(errgroup.Group)
 		g.Go(func() error {
+			// get the bolt db instance for this partition
 			tree := bt.trees[i]
 			return tree.Update(func(tx *bbolt.Tx) error {
-				bucket := tx.Bucket(bucketName)
-				for _, record := range pr {
-					// encode chunk position todo
-					if err := bucket.Put(record.key, nil); err != nil {
+				bucket := tx.Bucket(boltBucketName)
+				// put each record into the bucket
+				for _, record := range prs {
+					encPos := record.position.Encode()
+					if err := bucket.Put(record.key, encPos); err != nil {
 						return err
 					}
 				}
@@ -121,7 +132,9 @@ func (bt *BPTree) DeleteBatch(keys [][]byte) error {
 		g.Go(func() error {
 			tree := bt.trees[i]
 			return tree.Update(func(tx *bbolt.Tx) error {
-				bucket := tx.Bucket(bucketName)
+				// get the bolt db instance for this partition
+				bucket := tx.Bucket(boltBucketName)
+				// delete each key from the bucket
 				for _, key := range pk {
 					if err := bucket.Delete(key); err != nil {
 						return err
