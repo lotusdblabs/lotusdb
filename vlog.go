@@ -47,8 +47,7 @@ func (vlog *valueLog) read(position *wal.ChunkPosition) ([]byte, error) {
 	if err != nil {
 		return nil, err
 	}
-	logRecord := decodeLogRecord(value)
-	return logRecord.Value, nil
+	return value, nil
 }
 
 func (vlog *valueLog) write(data []byte) (*wal.ChunkPosition, error) {
