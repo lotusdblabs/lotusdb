@@ -41,7 +41,5 @@ type indexOptions struct {
 
 	partitionNum int
 
-	batchSize int
-
 	hashKeyFunction func(string) uint32
 }
