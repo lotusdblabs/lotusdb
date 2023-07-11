@@ -4,7 +4,7 @@ import "github.com/rosedblabs/wal"
 
 const (
 	// indexFileExt is the file extension for index files.
-	indexFileExt        = ".INDEX.%d"
+	indexFileExt        = "%09d.INDEX"
 	defaultPartitionNum = 1
 )
 
