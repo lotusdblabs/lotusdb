@@ -25,6 +25,9 @@ type valueLogOptions struct {
 	// A block cache is used to store recently accessed data blocks, improving read performance.
 	// If BlockCache is set to 0, no block cache will be used.
 	blockCache uint32
+
+	// partitionNum specifies the number of partitions for sharding.
+	partitionNum int
 }
 
 func openValueLog(options valueLogOptions) (*valueLog, error) {

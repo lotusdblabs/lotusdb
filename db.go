@@ -4,6 +4,7 @@ import (
 	"errors"
 	"os"
 	"path/filepath"
+	"sync"
 
 	"github.com/gofrs/flock"
 )
@@ -23,6 +24,8 @@ type DB struct {
 	vlog *valueLog
 	// fileLock to prevent multiple processes from using the same database directory.
 	fileLock *flock.Flock
+	mu       sync.RWMutex
+	closed   bool
 }
 
 type Stat struct {
@@ -70,9 +73,10 @@ func Open(options Options) (*DB, error) {
 
 	// open value log
 	vlog, err := openValueLog(valueLogOptions{
-		dirPath:     options.DirPath,
-		segmentSize: options.ValueLogFileSize,
-		blockCache:  options.BlockCache,
+		dirPath:      options.DirPath,
+		segmentSize:  options.ValueLogFileSize,
+		blockCache:   options.BlockCache,
+		partitionNum: options.PartitionNum,
 	})
 	if err != nil {
 		return nil, err
