@@ -108,6 +108,18 @@ func (b *Batch) Get(key []byte) ([]byte, error) {
 		}
 	}
 
+	// get from memtables
+	tables := b.db.getMemTables()
+	for _, table := range tables {
+		deleted, value := table.get(key)
+		if deleted {
+			return nil, ErrKeyNotFound
+		}
+		if len(value) != 0 {
+			return value, nil
+		}
+	}
+
 	// get from index
 	chunkPosition, err := b.db.index.Get(key)
 	if err != nil {
@@ -179,7 +191,19 @@ func (b *Batch) Exist(key []byte) (bool, error) {
 		b.mu.RUnlock()
 	}
 
-	// check if the key exists in data file
+	// get from memtables
+	tables := b.db.getMemTables()
+	for _, table := range tables {
+		deleted, value := table.get(key)
+		if deleted {
+			return false, nil
+		}
+		if len(value) != 0 {
+			return true, nil
+		}
+	}
+
+	// check if the key exists in index
 	position, err := b.db.index.Get(key)
 	if err != nil {
 		return false, err

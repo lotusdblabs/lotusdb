@@ -155,3 +155,18 @@ func validateOptions(options *Options) error {
 	}
 	return nil
 }
+
+func (db *DB) getMemTables() []*memtable {
+	db.mu.RLock()
+	defer db.mu.RUnlock()
+
+	var tables []*memtable
+	tables = append(tables, db.activeMem)
+
+	last := len(db.immuMems) - 1
+	for i := range db.immuMems {
+		tables = append(tables, db.immuMems[last-i])
+	}
+
+	return tables
+}
