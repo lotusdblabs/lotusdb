@@ -31,6 +31,9 @@ type Options struct {
 	// BytesPerSync specifies the number of bytes to write before calling fsync.
 	BytesPerSync uint32
 
+	// PartitionNum specifies the number of partitions to use for the index and value log.
+	PartitionNum int
+
 	// ValueLogFileSize size of a single value log file.
 	// Default value is 1GB.
 	ValueLogFileSize int64

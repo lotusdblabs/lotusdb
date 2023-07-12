@@ -15,24 +15,24 @@ type valueLog struct {
 }
 
 type valueLogOptions struct {
-	// DirPath specifies the directory path where the WAL segment files will be stored.
-	DirPath string
+	// dirPath specifies the directory path where the WAL segment files will be stored.
+	dirPath string
 
-	// SegmentSize specifies the maximum size of each segment file in bytes.
-	SegmentSize int64
+	// segmentSize specifies the maximum size of each segment file in bytes.
+	segmentSize int64
 
-	// BlockCache specifies the size of the block cache in number of bytes.
+	// blockCache specifies the size of the block cache in number of bytes.
 	// A block cache is used to store recently accessed data blocks, improving read performance.
 	// If BlockCache is set to 0, no block cache will be used.
-	BlockCache uint32
+	blockCache uint32
 }
 
 func openValueLog(options valueLogOptions) (*valueLog, error) {
 	vLogWal, err := wal.Open(wal.Options{
-		DirPath:        options.DirPath,
-		SegmentSize:    options.SegmentSize,
+		DirPath:        options.dirPath,
+		SegmentSize:    options.segmentSize,
 		SegmentFileExt: valueLogFileExt,
-		BlockCache:     options.BlockCache,
+		BlockCache:     options.blockCache,
 		Sync:           false,
 		BytesPerSync:   0,
 	})
