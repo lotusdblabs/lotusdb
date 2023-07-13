@@ -8,6 +8,8 @@ import (
 	"sort"
 	"sync"
 
+	"github.com/bwmarrin/snowflake"
+
 	arenaskl "github.com/dgraph-io/badger/v4/skl"
 	"github.com/dgraph-io/badger/v4/y"
 	"github.com/rosedblabs/wal"
@@ -143,20 +145,28 @@ func openMemtable(options memtableOptions) (*memtable, error) {
 	return table, nil
 }
 
-// put a key-value pair into memtable
-func (mt *memtable) put(key []byte, value []byte, deleted bool, options WriteOptions) error {
-	record := &LogRecord{Key: key, Value: value}
-	if deleted {
-		record.Type = LogRecordDeleted
-	}
-	encRecord := encodeLogRecord(record)
+// putBatch writes a batch of entries to memtable.
+func (mt *memtable) putBatch(pendingWrites map[string]*LogRecord,
+	batchId snowflake.ID, options *WriteOptions) error {
 
-	// write record into wal first.
-	if !options.DisableWal && mt.wal != nil {
-		if _, err := mt.wal.Write(encRecord); err != nil {
+	// if wal is not disabled, write to wal first to ensure durability and atomicity
+	if options == nil || !options.DisableWal {
+		for _, record := range pendingWrites {
+			record.BatchId = uint64(batchId)
+			encRecord := encodeLogRecord(record)
+			if _, err := mt.wal.Write(encRecord); err != nil {
+				return err
+			}
+		}
+		// write a record to indicate the end of the batch
+		endRecord := encodeLogRecord(&LogRecord{
+			Key:  batchId.Bytes(),
+			Type: LogRecordBatchFinished,
+		})
+		if _, err := mt.wal.Write(endRecord); err != nil {
 			return err
 		}
-		// sync wal file to disk if needed.
+		// flush wal if necessary
 		if options.Sync && !mt.options.walSync {
 			if err := mt.wal.Sync(); err != nil {
 				return err
@@ -164,9 +174,11 @@ func (mt *memtable) put(key []byte, value []byte, deleted bool, options WriteOpt
 		}
 	}
 
-	// write data into skip list in memory.
 	mt.mu.Lock()
-	mt.skl.Put(y.KeyWithTs(key, 0), y.ValueStruct{Value: value, Meta: record.Type})
+	// write to in-memory skip list
+	for key, record := range pendingWrites {
+		mt.skl.Put([]byte(key), y.ValueStruct{Value: record.Value, Meta: record.Type})
+	}
 	mt.mu.Unlock()
 
 	return nil
@@ -178,17 +190,14 @@ func (mt *memtable) get(key []byte) (bool, []byte) {
 	mt.mu.RLock()
 	defer mt.mu.RUnlock()
 
-	var deleted bool
 	valueStruct := mt.skl.Get(y.KeyWithTs(key, 0))
-	if valueStruct.Meta == LogRecordDeleted {
-		return true, nil
-	}
-
-	deleted = valueStruct.Meta == LogRecordDeleted
+	deleted := valueStruct.Meta == LogRecordDeleted
 	return deleted, valueStruct.Value
 }
 
-// delete operation is to put a key and a special tombstone value.
-func (mt *memtable) delete(key []byte, options WriteOptions) error {
-	return mt.put(key, nil, true, options)
+func (mt *memtable) isFull() bool {
+	if mt.skl.MemSize() >= int64(mt.options.memSize) {
+		return true
+	}
+	return false
 }

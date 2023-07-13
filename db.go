@@ -3,8 +3,11 @@ package lotusdb
 import (
 	"errors"
 	"os"
+	"os/signal"
 	"path/filepath"
 	"sync"
+	"syscall"
+	"time"
 
 	"github.com/gofrs/flock"
 )
@@ -14,18 +17,14 @@ const (
 )
 
 type DB struct {
-	// Active memtable for writing.
-	activeMem *memtable
-	// Immutable memtables, waiting to be flushed to disk.
-	immuMems []*memtable
-	// index is multi-partition bptree to store key and chunk position.
-	index Index
-	// vlog is the value log.
-	vlog *valueLog
-	// fileLock to prevent multiple processes from using the same database directory.
-	fileLock *flock.Flock
-	mu       sync.RWMutex
-	closed   bool
+	activeMem *memtable    // Active memtable for writing.
+	immuMems  []*memtable  // Immutable memtables, waiting to be flushed to disk.
+	index     Index        // index is multi-partition bptree to store key and chunk position.
+	vlog      *valueLog    // vlog is the value log.
+	fileLock  *flock.Flock // fileLock to prevent multiple processes from using the same database directory.
+	flushChan chan *memtable
+	mu        sync.RWMutex
+	closed    bool
 }
 
 type Stat struct {
@@ -169,4 +168,53 @@ func (db *DB) getMemTables() []*memtable {
 	}
 
 	return tables
+}
+
+func (db *DB) waitMemetableSpace() error {
+	if !db.activeMem.isFull() {
+		return nil
+	}
+
+	timer := time.NewTimer(100 * time.Millisecond)
+	defer timer.Stop()
+	select {
+	case db.flushChan <- db.activeMem:
+		db.immuMems = append(db.immuMems, db.activeMem)
+		options := db.activeMem.options
+		options.tableId++
+		table, err := openMemtable(options)
+		if err != nil {
+			return err
+		}
+		db.activeMem = table
+	case <-timer.C:
+		return errors.New("wait memtable space to write failed")
+	}
+
+	return nil
+}
+
+func (db *DB) flushMemtables() {
+	sig := make(chan os.Signal, 1)
+	signal.Notify(sig, os.Interrupt, syscall.SIGHUP, syscall.SIGINT, syscall.SIGTERM, syscall.SIGQUIT)
+	for {
+		select {
+		case table := <-db.flushChan:
+			sklIter := table.skl.NewIterator()
+			var deletedKeys [][]byte
+			for sklIter.SeekToFirst(); sklIter.Valid(); sklIter.Next() {
+				key, valueStruct := sklIter.Key(), sklIter.Value()
+				// put to value log
+				if valueStruct.Meta == LogRecordDeleted {
+					deletedKeys = append(deletedKeys, key)
+				} else {
+					 
+				}
+				// update index
+			}
+			_ = sklIter.Close()
+		case <-sig:
+			return
+		}
+	}
 }

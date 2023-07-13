@@ -216,7 +216,7 @@ func (b *Batch) Exist(key []byte) (bool, error) {
 // It will iterate the pendingWrites and write the data to the database,
 // then write a record to indicate the end of the batch to guarantee atomicity.
 // Finally, it will write the index.
-func (b *Batch) Commit() error {
+func (b *Batch) Commit(options *WriteOptions) error {
 	defer b.unlock()
 	if b.db.closed {
 		return ErrDBClosed
@@ -234,10 +234,12 @@ func (b *Batch) Commit() error {
 		return ErrBatchCommitted
 	}
 
-	//batchId := b.batchId.Generate()
-	//positions := make(map[string]*wal.ChunkPosition)
-
+	batchId := b.batchId.Generate()
 	// call memtable put batch
+	err := b.db.activeMem.putBatch(b.pendingWrites, batchId, options)
+	if err != nil {
+		return err
+	}
 
 	b.committed = true
 	return nil
