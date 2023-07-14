@@ -202,17 +202,38 @@ func (db *DB) flushMemtables() {
 		case table := <-db.flushChan:
 			sklIter := table.skl.NewIterator()
 			var deletedKeys [][]byte
+			var vlogRecords []*ValueLogRecord
 			for sklIter.SeekToFirst(); sklIter.Valid(); sklIter.Next() {
 				key, valueStruct := sklIter.Key(), sklIter.Value()
-				// put to value log
 				if valueStruct.Meta == LogRecordDeleted {
 					deletedKeys = append(deletedKeys, key)
 				} else {
-					 
+					vlogRecords = append(vlogRecords, &ValueLogRecord{
+						key: key, value: valueStruct.Value,
+					})
 				}
-				// update index
 			}
 			_ = sklIter.Close()
+
+			// put to value log
+			var indexRecords []*IndexRecord
+			// indexRecords = db.vlog.writeBatch(vlogRecords)
+
+			// update index
+			err := db.index.DeleteBatch(deletedKeys)
+			if err != nil {
+			}
+			err = db.index.PutBatch(indexRecords)
+			if err != nil {
+			}
+
+			db.mu.Lock()
+			if len(db.immuMems) == 1 {
+				db.immuMems = db.immuMems[:0]
+			} else {
+				db.immuMems = db.immuMems[1:]
+			}
+			db.mu.Unlock()
 		case <-sig:
 			return
 		}

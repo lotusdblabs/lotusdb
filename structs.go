@@ -99,3 +99,8 @@ type IndexRecord struct {
 	key      []byte
 	position *wal.ChunkPosition
 }
+
+type ValueLogRecord struct {
+	key   []byte
+	value []byte
+}
