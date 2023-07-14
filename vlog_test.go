@@ -2,7 +2,6 @@ package lotusdb
 
 import (
 	"fmt"
-	"io/ioutil"
 	"strings"
 	"testing"
 	"time"
@@ -21,10 +20,10 @@ func TestVlogBasic(t *testing.T) {
 
 	// test opening vlog
 	vlog, err := openValueLog(opts)
-	entries, err := ioutil.ReadDir(opts.dirPath)
-	for _, ent := range entries {
-		fmt.Printf("%v\n", ent)
-	}
+	// entries, err := ioutil.ReadDir(opts.dirPath)
+	// for _, ent := range entries {
+	// 	fmt.Printf("%v\n", ent)
+	// }
 
 	require.Nil(t, err)
 

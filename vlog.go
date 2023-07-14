@@ -131,6 +131,8 @@ func (vlog *valueLog) writeBatch(logs []*LogRecord) ([]*partPosition, error) {
 	posChan := make(chan []seq, vlog.numPartions)
 	for i := 0; i < int(vlog.numPartions); i++ {
 		if len(logParts[i]) == 0 {
+			errChan <- nil
+			posChan <- []seq{}
 			continue
 		}
 		go func(part int) {
