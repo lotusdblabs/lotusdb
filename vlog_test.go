@@ -13,15 +13,15 @@ import (
 
 func TestVlogBasic(t *testing.T) {
 	opts := valueLogOptions{
-		DirPath:     "/tmp/lotusdb",
-		SegmentSize: wal.GB,
-		BlockCache:  32 * wal.KB * 10,
-		NumPartions: 5,
+		dirPath:     "/tmp/lotusdb",
+		segmentSize: wal.GB,
+		blockCache:  32 * wal.KB * 10,
+		numPartions: 5,
 	}
 
 	// test opening vlog
 	vlog, err := openValueLog(opts)
-	entries, err := ioutil.ReadDir(opts.DirPath)
+	entries, err := ioutil.ReadDir(opts.dirPath)
 	for _, ent := range entries {
 		fmt.Printf("%v\n", ent)
 	}
@@ -79,10 +79,10 @@ func TestVlogBasic(t *testing.T) {
 // Please set the go-test timeout long enough before run this test!
 func TestRWLarge(t *testing.T) {
 	opts := valueLogOptions{
-		DirPath:     "/tmp/lotusdb",
-		SegmentSize: wal.GB,
-		BlockCache:  32 * wal.KB * 10,
-		NumPartions: 1,
+		dirPath:     "/tmp/lotusdb",
+		segmentSize: wal.GB,
+		blockCache:  32 * wal.KB * 10,
+		numPartions: 1,
 	}
 	numRWList := []int{500000, 1000000, 2000000}
 	numPartList := []int{1, 3, 10}
@@ -99,7 +99,7 @@ func TestRWLarge(t *testing.T) {
 }
 
 func RWBatch(opts valueLogOptions, numRW int, numPart int) error {
-	opts.NumPartions = uint32(numPart)
+	opts.numPartions = uint32(numPart)
 	vlog, err := openValueLog(opts)
 	if err != nil {
 		return err

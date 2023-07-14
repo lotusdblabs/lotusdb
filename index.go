@@ -1,7 +1,5 @@
 package lotusdb
 
-import "github.com/rosedblabs/wal"
-
 const (
 	// indexFileExt is the file extension for index files.
 	indexFileExt        = "%09d.INDEX"
@@ -19,7 +17,7 @@ type Index interface {
 	PutBatch([]*IndexRecord) error
 
 	// Get chunk position by key
-	Get([]byte) (*wal.ChunkPosition, error)
+	Get([]byte) (*partPosition, error)
 
 	// DeleteBatch delete batch records from index
 	DeleteBatch([][]byte) error

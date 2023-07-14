@@ -56,20 +56,22 @@ func openIndexBoltDB(options indexOptions) (*BPTree, error) {
 	return &BPTree{trees: trees, options: options}, nil
 }
 
-func (bt *BPTree) Get(key []byte) (*wal.ChunkPosition, error) {
+func (bt *BPTree) Get(key []byte) (*partPosition, error) {
 	tree := bt.getTreeByKey(key)
-	var position *wal.ChunkPosition
+	var position *partPosition
 
 	if err := tree.View(func(tx *bbolt.Tx) error {
 		bucket := tx.Bucket(boltBucketName)
 		value := bucket.Get(key)
 		if len(value) != 0 {
-			position = wal.DecodeChunkPosition(value)
+			position.walPosition = wal.DecodeChunkPosition(value)
 		}
 		return nil
 	}); err != nil {
 		return nil, err
 	}
+
+	position.partIndex = int(bt.getKeyPartition(key))
 
 	return position, nil
 }

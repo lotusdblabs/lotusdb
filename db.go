@@ -10,6 +10,7 @@ import (
 	"time"
 
 	"github.com/gofrs/flock"
+	"github.com/rosedblabs/wal"
 )
 
 const (
@@ -25,6 +26,11 @@ type DB struct {
 	flushChan chan *memtable
 	mu        sync.RWMutex
 	closed    bool
+}
+
+type partPosition struct {
+	partIndex   int
+	walPosition *wal.ChunkPosition
 }
 
 type Stat struct {
@@ -72,10 +78,10 @@ func Open(options Options) (*DB, error) {
 
 	// open value log
 	vlog, err := openValueLog(valueLogOptions{
-		dirPath:      options.DirPath,
-		segmentSize:  options.ValueLogFileSize,
-		blockCache:   options.BlockCache,
-		partitionNum: options.PartitionNum,
+		dirPath:     options.DirPath,
+		segmentSize: options.ValueLogFileSize,
+		blockCache:  options.BlockCache,
+		numPartions: uint32(options.PartitionNum),
 	})
 	if err != nil {
 		return nil, err

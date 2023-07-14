@@ -6,26 +6,19 @@ require (
 	github.com/bwmarrin/snowflake v0.3.0
 	github.com/dgraph-io/badger/v4 v4.1.0
 	github.com/rosedblabs/wal v1.2.1-0.20230711134524-3ccf5333fd5f
+	github.com/stretchr/testify v1.8.3
 	golang.org/x/exp v0.0.0-20230626212559-97b1e661b5df
 )
 
 require golang.org/x/sys v0.5.0 // indirect
-require golang.org/x/sys v0.4.0 // indirect
-require (
-	github.com/kr/text v0.2.0 // indirect
-	golang.org/x/sys v0.5.0 // indirect
-)
+
+require github.com/kr/text v0.2.0 // indirect
 
 require (
 	github.com/cespare/xxhash/v2 v2.1.2 // indirect
 	github.com/davecgh/go-spew v1.1.1 // indirect
 	github.com/pmezard/go-difflib v1.0.0 // indirect
 	gopkg.in/yaml.v3 v3.0.1 // indirect
-	github.com/kr/text v0.2.0 // indirect
-	golang.org/x/sys v0.5.0 // indirect
-)
-
-require github.com/cespare/xxhash/v2 v2.1.2 // indirect
 )
 
 require (

@@ -31,10 +31,10 @@ type valueLogOptions struct {
 	// blockCache specifies the size of the block cache in number of bytes.
 	// A block cache is used to store recently accessed data blocks, improving read performance.
 	// If BlockCache is set to 0, no block cache will be used.
-	BlockCache uint32
+	blockCache uint32
 
 	// Value logs are partioned to serveral parts for concurrent writing and reading
-	NumPartions uint32
+	numPartions uint32
 }
 
 // an auxiliary struct for returning chunkPositions in correct order
@@ -55,12 +55,12 @@ type VlogPosition struct {
 func openValueLog(options valueLogOptions) (*valueLog, error) {
 	vLogWals := []*wal.WAL{}
 
-	for i := 0; i < int(options.NumPartions); i++ {
+	for i := 0; i < int(options.numPartions); i++ {
 		vLogWal, err := wal.Open(wal.Options{
-			DirPath:        options.DirPath,
-			SegmentSize:    options.SegmentSize,
+			DirPath:        options.dirPath,
+			SegmentSize:    options.segmentSize,
 			SegmentFileExt: fmt.Sprintf(".%d%s", i, valueLogFileExt),
-			BlockCache:     options.BlockCache,
+			BlockCache:     options.blockCache,
 			Sync:           false,
 			BytesPerSync:   0,
 		})
@@ -70,7 +70,7 @@ func openValueLog(options valueLogOptions) (*valueLog, error) {
 		vLogWals = append(vLogWals, vLogWal)
 	}
 
-	return &valueLog{wals: vLogWals, numPartions: options.NumPartions}, nil
+	return &valueLog{wals: vLogWals, numPartions: options.numPartions}, nil
 }
 
 func (vlog *valueLog) write(data []byte, part int) (*wal.ChunkPosition, error) {
@@ -81,8 +81,8 @@ func (vlog *valueLog) write(data []byte, part int) (*wal.ChunkPosition, error) {
 	return pos, nil
 }
 
-func (vlog *valueLog) read(position *VlogPosition) ([]byte, error) {
-	value, err := vlog.wals[position.part].Read(position.walPos)
+func (vlog *valueLog) read(position *partPosition) ([]byte, error) {
+	value, err := vlog.wals[position.partIndex].Read(position.walPosition)
 	if err != nil {
 		return nil, err
 	}
@@ -163,7 +163,7 @@ func (vlog *valueLog) readBatch(vlogPos []*VlogPosition) ([]*LogRecord, error) {
 		go func(part int) {
 			buf := []seq{}
 			for _, s := range posParts[part] {
-				b, err := vlog.read(&VlogPosition{part: s.part, walPos: s.walpos})
+				b, err := vlog.read(&partPosition{partIndex: s.part, walPosition: s.walpos})
 				if err != nil {
 					errChan <- err
 					bufChan <- nil
