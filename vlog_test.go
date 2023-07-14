@@ -42,7 +42,7 @@ func TestVlogBasic(t *testing.T) {
 		{Key: []byte("key 3"), Value: []byte("value 3")},
 		{Key: []byte("key 4"), Value: []byte("value 4")},
 	}
-	pos := []*VlogPosition{}
+	pos := []*partPosition{}
 
 	// test writing
 	t.Run("test writing", func(t *testing.T) {

@@ -46,11 +46,11 @@ type seq struct {
 	part   int
 }
 
-// record accurate position in multiple vlogs
-type VlogPosition struct {
-	part   int
-	walPos *wal.ChunkPosition
-}
+// // record accurate position in multiple vlogs
+// type VlogPosition struct {
+// 	part   int
+// 	walPos *wal.ChunkPosition
+// }
 
 func openValueLog(options valueLogOptions) (*valueLog, error) {
 	vLogWals := []*wal.WAL{}
@@ -73,7 +73,7 @@ func openValueLog(options valueLogOptions) (*valueLog, error) {
 	return &valueLog{wals: vLogWals, numPartions: options.numPartions}, nil
 }
 
-func (vlog *valueLog) write(data []byte, part int) (*wal.ChunkPosition, error) {
+func (vlog *valueLog) writeLog(data []byte, part int) (*wal.ChunkPosition, error) {
 	pos, err := vlog.wals[part].Write(data)
 	if err != nil {
 		return nil, err
@@ -81,7 +81,7 @@ func (vlog *valueLog) write(data []byte, part int) (*wal.ChunkPosition, error) {
 	return pos, nil
 }
 
-func (vlog *valueLog) read(position *partPosition) ([]byte, error) {
+func (vlog *valueLog) readLog(position *partPosition) ([]byte, error) {
 	value, err := vlog.wals[position.partIndex].Read(position.walPosition)
 	if err != nil {
 		return nil, err
@@ -90,8 +90,30 @@ func (vlog *valueLog) read(position *partPosition) ([]byte, error) {
 	return value, nil
 }
 
+// write a log
+func (vlog *valueLog) write(log *LogRecord) (*partPosition, error) {
+	logs := []*LogRecord{}
+	logs = append(logs, log)
+	positions, err := vlog.writeBatch(logs)
+	if err != nil {
+		return nil, err
+	}
+	return positions[0], nil
+}
+
+// read a log
+func (vlog *valueLog) read(vlogPos *partPosition) (*LogRecord, error) {
+	positions := []*partPosition{}
+	positions = append(positions, vlogPos)
+	logs, err := vlog.readBatch(positions)
+	if err != nil {
+		return nil, err
+	}
+	return logs[0], nil
+}
+
 // we must maintain correct order with respect to input while returning chunkPositions
-func (vlog *valueLog) writeBatch(logs []*LogRecord) ([]*VlogPosition, error) {
+func (vlog *valueLog) writeBatch(logs []*LogRecord) ([]*partPosition, error) {
 	// split logs into parts
 	logParts := [][]seq{}
 	for i := 0; i < int(vlog.numPartions); i++ {
@@ -108,10 +130,13 @@ func (vlog *valueLog) writeBatch(logs []*LogRecord) ([]*VlogPosition, error) {
 	errChan := make(chan error, vlog.numPartions)
 	posChan := make(chan []seq, vlog.numPartions)
 	for i := 0; i < int(vlog.numPartions); i++ {
+		if len(logParts[i]) == 0 {
+			continue
+		}
 		go func(part int) {
 			pos := []seq{}
 			for _, s := range logParts[part] {
-				p, err := vlog.write(s.buf, part)
+				p, err := vlog.writeLog(s.buf, part)
 				if err != nil {
 					errChan <- err
 					posChan <- nil
@@ -143,7 +168,7 @@ func (vlog *valueLog) writeBatch(logs []*LogRecord) ([]*VlogPosition, error) {
 	return realPositions, nil
 }
 
-func (vlog *valueLog) readBatch(vlogPos []*VlogPosition) ([]*LogRecord, error) {
+func (vlog *valueLog) readBatch(vlogPos []*partPosition) ([]*LogRecord, error) {
 	// split positions into parts
 	posParts := [][]seq{}
 	for i := 0; i < int(vlog.numPartions); i++ {
@@ -151,9 +176,9 @@ func (vlog *valueLog) readBatch(vlogPos []*VlogPosition) ([]*LogRecord, error) {
 		posParts = append(posParts, posPart)
 	}
 	for i, pos := range vlogPos {
-		partIdx := pos.part
-		walPos := pos.walPos
-		posParts[partIdx] = append(posParts[partIdx], seq{walpos: walPos, id: i, part: partIdx})
+		partIdx := pos.partIndex
+		walPos := pos.walPosition
+		posParts[partIdx] = append(posParts[partIdx], seq{walpos: walPos, id: i, part: int(partIdx)})
 	}
 
 	// read parts concurrently
@@ -163,7 +188,7 @@ func (vlog *valueLog) readBatch(vlogPos []*VlogPosition) ([]*LogRecord, error) {
 		go func(part int) {
 			buf := []seq{}
 			for _, s := range posParts[part] {
-				b, err := vlog.read(&partPosition{partIndex: s.part, walPosition: s.walpos})
+				b, err := vlog.readLog(&partPosition{partIndex: uint32(s.part), walPosition: s.walpos})
 				if err != nil {
 					errChan <- err
 					bufChan <- nil
@@ -241,8 +266,8 @@ func (vlog *valueLog) getIndex(key []byte) int {
 }
 
 // multiplex merge sort for returning in correct order of input logs
-func (vlog *valueLog) mergePosSeqs(seqs [][]seq, numSeq int) []*VlogPosition {
-	pos := []*VlogPosition{}
+func (vlog *valueLog) mergePosSeqs(seqs [][]seq, numSeq int) []*partPosition {
+	pos := []*partPosition{}
 
 	for len(pos) < numSeq {
 		minId := numSeq + 1
@@ -253,7 +278,7 @@ func (vlog *valueLog) mergePosSeqs(seqs [][]seq, numSeq int) []*VlogPosition {
 				minIdSeq = i
 			}
 		}
-		pos = append(pos, &VlogPosition{part: seqs[minIdSeq][0].part, walPos: seqs[minIdSeq][0].walpos})
+		pos = append(pos, &partPosition{partIndex: uint32(seqs[minIdSeq][0].part), walPosition: seqs[minIdSeq][0].walpos})
 		if len(seqs[minIdSeq]) > 1 {
 			seqs[minIdSeq] = seqs[minIdSeq][1:]
 		} else {

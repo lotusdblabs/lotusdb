@@ -71,7 +71,7 @@ func (bt *BPTree) Get(key []byte) (*partPosition, error) {
 		return nil, err
 	}
 
-	position.partIndex = int(bt.getKeyPartition(key))
+	position.partIndex = bt.getKeyPartition(key)
 
 	return position, nil
 }
@@ -83,7 +83,7 @@ func (bt *BPTree) PutBatch(records []*IndexRecord) error {
 
 	partitionRecords := make([][]*IndexRecord, bt.options.partitionNum)
 	for _, record := range records {
-		p := bt.getKeyPartition(record.key)
+		p := record.position.partIndex
 		partitionRecords[p] = append(partitionRecords[p], record)
 	}
 

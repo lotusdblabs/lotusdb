@@ -128,12 +128,11 @@ func (b *Batch) Get(key []byte) ([]byte, error) {
 	if partPosition == nil {
 		return nil, ErrKeyNotFound
 	}
-	chunk, err := b.db.vlog.read(partPosition)
+	record, err := b.db.vlog.read(partPosition)
 	if err != nil {
 		return nil, err
 	}
 
-	record := decodeLogRecord(chunk)
 	if record.Type == LogRecordDeleted {
 		return nil, ErrKeyNotFound
 	}

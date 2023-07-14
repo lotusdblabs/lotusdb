@@ -2,7 +2,6 @@ package lotusdb
 
 import (
 	"encoding/binary"
-	"github.com/rosedblabs/wal"
 )
 
 // LogRecordType is the type of the log record.
@@ -98,7 +97,7 @@ func decodeLogRecord(buf []byte) *LogRecord {
 type IndexRecord struct {
 	key        []byte
 	recordType LogRecordType
-	position   *wal.ChunkPosition
+	position   *partPosition
 }
 
 type ValueLogRecord struct {

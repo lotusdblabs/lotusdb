@@ -1,6 +1,7 @@
 package lotusdb
 
 import (
+	"encoding/binary"
 	"errors"
 	"os"
 	"os/signal"
@@ -20,6 +21,7 @@ const (
 type DB struct {
 	activeMem *memtable    // Active memtable for writing.
 	immuMems  []*memtable  // Immutable memtables, waiting to be flushed to disk.
+	memNums   int          // MemtableNums represents maximum number of memtables to keep in memory before flushing
 	index     Index        // index is multi-partition bptree to store key and chunk position.
 	vlog      *valueLog    // vlog is the value log.
 	fileLock  *flock.Flock // fileLock to prevent multiple processes from using the same database directory.
@@ -29,7 +31,7 @@ type DB struct {
 }
 
 type partPosition struct {
-	partIndex   int
+	partIndex   uint32
 	walPosition *wal.ChunkPosition
 }
 
@@ -272,40 +274,54 @@ func (db *DB) flushMemtables() {
 		case table := <-db.flushChan:
 			sklIter := table.skl.NewIterator()
 			var deletedKeys [][]byte
-			var vlogRecords []*ValueLogRecord
+			indexRecords := []*IndexRecord{}
+			logRecords := []*LogRecord{}
 			for sklIter.SeekToFirst(); sklIter.Valid(); sklIter.Next() {
 				key, valueStruct := sklIter.Key(), sklIter.Value()
 				if valueStruct.Meta == LogRecordDeleted {
 					deletedKeys = append(deletedKeys, key)
 				} else {
-					vlogRecords = append(vlogRecords, &ValueLogRecord{
-						key: key, value: valueStruct.Value,
-					})
+					logRecord := LogRecord{Key: key, Value: valueStruct.Value, Type: valueStruct.Meta}
+					logRecords = append(logRecords, &logRecord)
 				}
 			}
 			_ = sklIter.Close()
 
-			// put to value log
-			var indexRecords []*IndexRecord
-			// indexRecords = db.vlog.writeBatch(vlogRecords)
-
-			// update index
-			err := db.index.DeleteBatch(deletedKeys)
+			// flush to vlog
+			partPos, err := db.vlog.writeBatch(logRecords)
 			if err != nil {
-			}
-			err = db.index.PutBatch(indexRecords)
-			if err != nil {
+				panic("vlog writeBatch failed!\n")
 			}
 
-			db.mu.Lock()
-			if len(db.immuMems) == 1 {
-				db.immuMems = db.immuMems[:0]
-			} else {
+			// flush to index
+			for i := 0; i < len(partPos); i++ {
+				indexRec := IndexRecord{key: logRecords[i].Key, position: partPos[i]}
+				indexRecords = append(indexRecords, &indexRec)
+			}
+			if err := db.index.PutBatch(indexRecords); err != nil {
+				panic("index PutBatch failed!\n")
+			}
+			if err := db.index.DeleteBatch(deletedKeys); err != nil {
+				panic("index DeleteBatch failed!\n")
+			}
+
+			// delete old memtable keeped in memory
+			if len(db.immuMems) > db.memNums {
 				db.immuMems = db.immuMems[1:]
 			}
-			db.mu.Unlock()
+
 		case <-sig:
 			return
 		}
 	}
+}
+
+func (partPos *partPosition) Encode() []byte {
+	maxLen := binary.MaxVarintLen32*4 + binary.MaxVarintLen64
+	buf := make([]byte, maxLen)
+	walPosBuf := partPos.walPosition.Encode()
+	var index = 0
+	index += binary.PutUvarint(buf[index:], uint64(partPos.partIndex))
+	copy(buf[index:], walPosBuf)
+	return buf[:index+len(walPosBuf)]
 }
