@@ -201,3 +201,17 @@ func (mt *memtable) isFull() bool {
 	}
 	return false
 }
+
+func (mt *memtable) close() error {
+	if mt.wal != nil {
+		return mt.wal.Close()
+	}
+	return nil
+}
+
+func (mt *memtable) sync() error {
+	if mt.wal != nil {
+		return mt.wal.Sync()
+	}
+	return nil
+}

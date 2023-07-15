@@ -81,33 +81,73 @@ func Open(options Options) (*DB, error) {
 		return nil, err
 	}
 
-	return &DB{
+	db := &DB{
 		activeMem: memtables[len(memtables)-1],
 		immuMems:  memtables[:len(memtables)-1],
 		index:     index,
 		vlog:      vlog,
 		fileLock:  fileLock,
-	}, nil
+		flushChan: make(chan *memtable, options.MemtableNums-1),
+	}
+
+	// start flush memtables goroutine
+	go db.flushMemtables()
+
+	return db, nil
 }
 
 func (db *DB) Close() error {
+	db.mu.Lock()
+	defer db.mu.Unlock()
+
 	// close all memtables
-
+	for _, table := range db.immuMems {
+		if err := table.close(); err != nil {
+			return err
+		}
+	}
+	if err := db.activeMem.close(); err != nil {
+		return err
+	}
 	// close index
-
+	if err := db.index.Close(); err != nil {
+		return err
+	}
 	// close value log
-
+	if err := db.vlog.close(); err != nil {
+		return err
+	}
 	// release file lock
+	if err := db.fileLock.Unlock(); err != nil {
+		return err
+	}
 
+	db.closed = true
 	return nil
 }
 
 func (db *DB) Sync() error {
+	db.mu.Lock()
+	defer db.mu.Unlock()
+
 	// sync all wal of memtables
-
+	for _, table := range db.immuMems {
+		if err := table.sync(); err != nil {
+			return err
+		}
+	}
+	if err := db.activeMem.sync(); err != nil {
+		return err
+	}
 	// sync index
-
+	if err := db.index.Sync(); err != nil {
+		return err
+	}
 	// sync value log
+	if err := db.vlog.sync(); err != nil {
+		return err
+	}
+
 	return nil
 }
 
@@ -115,24 +155,48 @@ func (db *DB) Stat() *Stat {
 	return nil
 }
 
-func (db *DB) Put(key []byte, value []byte) error {
-	// call batch put
-	return nil
+func (db *DB) Put(key []byte, value []byte, options *WriteOptions) error {
+	batch := db.NewBatch(BatchOptions{
+		Sync:     false,
+		ReadOnly: false,
+	})
+	if err := batch.Put(key, value); err != nil {
+		return err
+	}
+	return batch.Commit(options)
 }
 
 func (db *DB) Get(key []byte, value []byte) ([]byte, error) {
-	// call batch get
-	return nil, nil
+	batch := db.NewBatch(BatchOptions{
+		Sync:     false,
+		ReadOnly: true,
+	})
+	defer func() {
+		batch.Commit(nil)
+	}()
+	return batch.Get(key)
 }
 
-func (db *DB) Delete(key []byte) error {
-	// call batch delete
-	return nil
+func (db *DB) Delete(key []byte, options *WriteOptions) error {
+	batch := db.NewBatch(BatchOptions{
+		Sync:     false,
+		ReadOnly: false,
+	})
+	if err := batch.Delete(key); err != nil {
+		return err
+	}
+	return batch.Commit(options)
 }
 
 func (db *DB) Exist(key []byte) (bool, error) {
-	// call batch exist
-	return false, nil
+	batch := db.NewBatch(BatchOptions{
+		Sync:     false,
+		ReadOnly: true,
+	})
+	defer func() {
+		batch.Commit(nil)
+	}()
+	return batch.Exist(key)
 }
 
 // validateOptions validates the given options.

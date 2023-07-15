@@ -217,6 +217,11 @@ func (b *Batch) Exist(key []byte) (bool, error) {
 // then write a record to indicate the end of the batch to guarantee atomicity.
 // Finally, it will write the index.
 func (b *Batch) Commit(options *WriteOptions) error {
+	// use the default options if options is nil
+	if options == nil {
+		options = &WriteOptions{Sync: false, DisableWal: false}
+	}
+
 	defer b.unlock()
 	if b.db.closed {
 		return ErrDBClosed
