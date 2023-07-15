@@ -1,5 +1,7 @@
 package lotusdb
 
+import "os"
+
 type Options struct {
 	// DirPath specifies the directory path where all the database files will be stored.
 	DirPath string
@@ -67,4 +69,47 @@ type WriteOptions struct {
 	// Setting true only if don`t care about the data loss.
 	// Default value is false.
 	DisableWal bool
+}
+
+// IteratorOptions is the options for the iterator.
+type IteratorOptions struct {
+	// Prefix filters the keys by prefix.
+	Prefix []byte
+
+	// Reverse indicates whether the iterator is reversed.
+	// false is forward, true is backward.
+	Reverse bool
+}
+
+const (
+	B  = 1
+	KB = 1024 * B
+	MB = 1024 * KB
+	GB = 1024 * MB
+)
+
+var DefaultOptions = Options{
+	DirPath:          tempDBDir(),
+	MemtableSize:     64 * MB,
+	MemtableNums:     15,
+	BlockCache:       64 * MB,
+	Sync:             false,
+	BytesPerSync:     0,
+	PartitionNum:     5,
+	ValueLogFileSize: 1 * GB,
+}
+
+var DefaultBatchOptions = BatchOptions{
+	Sync:     true,
+	ReadOnly: false,
+}
+
+var DefaultIteratorOptions = IteratorOptions{
+	Prefix:  nil,
+	Reverse: false,
+}
+
+func tempDBDir() string {
+	dir, _ := os.MkdirTemp("", "lotusdb-temp")
+	return dir
 }

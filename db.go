@@ -166,7 +166,7 @@ func (db *DB) Put(key []byte, value []byte, options *WriteOptions) error {
 	return batch.Commit(options)
 }
 
-func (db *DB) Get(key []byte, value []byte) ([]byte, error) {
+func (db *DB) Get(key []byte) ([]byte, error) {
 	batch := db.NewBatch(BatchOptions{
 		Sync:     false,
 		ReadOnly: true,
