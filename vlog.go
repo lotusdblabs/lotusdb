@@ -41,9 +41,14 @@ type valueLogOptions struct {
 // while writing or reading batch
 type seq struct {
 	buf    []byte
-	id     int
+	key    []byte
 	walpos *wal.ChunkPosition
 	part   int
+}
+
+type keyPos struct {
+	key []byte
+	pos *partPosition
 }
 
 // // record accurate position in multiple vlogs
@@ -91,7 +96,7 @@ func (vlog *valueLog) readLog(position *partPosition) ([]byte, error) {
 }
 
 // write a log
-func (vlog *valueLog) write(log *LogRecord) (*partPosition, error) {
+func (vlog *valueLog) write(log *LogRecord) (*keyPos, error) {
 	logs := []*LogRecord{}
 	logs = append(logs, log)
 	positions, err := vlog.writeBatch(logs)
@@ -103,40 +108,35 @@ func (vlog *valueLog) write(log *LogRecord) (*partPosition, error) {
 
 // read a log
 func (vlog *valueLog) read(vlogPos *partPosition) (*LogRecord, error) {
-	positions := []*partPosition{}
-	positions = append(positions, vlogPos)
-	logs, err := vlog.readBatch(positions)
+	buf, err := vlog.readLog(vlogPos)
 	if err != nil {
 		return nil, err
 	}
-	return logs[0], nil
+	log := decodeLogRecord(buf)
+	return log, nil
 }
 
 // we must maintain correct order with respect to input while returning chunkPositions
-func (vlog *valueLog) writeBatch(logs []*LogRecord) ([]*partPosition, error) {
+func (vlog *valueLog) writeBatch(logs []*LogRecord) ([]*keyPos, error) {
 	// split logs into parts
-	logParts := [][]seq{}
-	for i := 0; i < int(vlog.numPartions); i++ {
-		logPart := []seq{}
-		logParts = append(logParts, logPart)
-	}
-	for i, log := range logs {
+	logParts := make([][]seq, vlog.numPartions)
+	for _, log := range logs {
 		partIdx := vlog.getIndex(log.Key)
 		buf := encodeLogRecord(log)
-		logParts[partIdx] = append(logParts[partIdx], seq{buf: buf, id: i, part: partIdx})
+		logParts[partIdx] = append(logParts[partIdx], seq{buf: buf, key: log.Key, part: partIdx})
 	}
 
 	// write parts concurrently
 	errChan := make(chan error, vlog.numPartions)
-	posChan := make(chan []seq, vlog.numPartions)
+	posChan := make(chan []*keyPos, vlog.numPartions)
 	for i := 0; i < int(vlog.numPartions); i++ {
 		if len(logParts[i]) == 0 {
 			errChan <- nil
-			posChan <- []seq{}
+			posChan <- []*keyPos{}
 			continue
 		}
 		go func(part int) {
-			pos := []seq{}
+			pos := []*keyPos{}
 			for _, s := range logParts[part] {
 				p, err := vlog.writeLog(s.buf, part)
 				if err != nil {
@@ -144,7 +144,7 @@ func (vlog *valueLog) writeBatch(logs []*LogRecord) ([]*partPosition, error) {
 					posChan <- nil
 					return
 				}
-				pos = append(pos, seq{walpos: p, id: s.id, part: s.part})
+				pos = append(pos, &keyPos{key: s.key, pos: &partPosition{partIndex: uint32(part), walPosition: p}})
 			}
 			errChan <- nil
 			posChan <- pos
@@ -152,78 +152,20 @@ func (vlog *valueLog) writeBatch(logs []*LogRecord) ([]*partPosition, error) {
 	}
 
 	flag := false
-	positions := [][]seq{}
+	keyPositions := []*keyPos{}
 	for i := 0; i < int(vlog.numPartions); i++ {
 		e := <-errChan
 		pos := <-posChan
 		if e != nil {
 			flag = true
 		}
-		positions = append(positions, pos)
+		keyPositions = append(keyPositions, pos...)
 	}
 
 	if flag {
 		return nil, ErrWriteVlog
 	}
-
-	realPositions := vlog.mergePosSeqs(positions, len(logs))
-	return realPositions, nil
-}
-
-func (vlog *valueLog) readBatch(vlogPos []*partPosition) ([]*LogRecord, error) {
-	// split positions into parts
-	posParts := [][]seq{}
-	for i := 0; i < int(vlog.numPartions); i++ {
-		posPart := []seq{}
-		posParts = append(posParts, posPart)
-	}
-	for i, pos := range vlogPos {
-		partIdx := pos.partIndex
-		walPos := pos.walPosition
-		posParts[partIdx] = append(posParts[partIdx], seq{walpos: walPos, id: i, part: int(partIdx)})
-	}
-
-	// read parts concurrently
-	errChan := make(chan error, vlog.numPartions)
-	bufChan := make(chan []seq, vlog.numPartions)
-	for i := 0; i < int(vlog.numPartions); i++ {
-		go func(part int) {
-			buf := []seq{}
-			for _, s := range posParts[part] {
-				b, err := vlog.readLog(&partPosition{partIndex: uint32(s.part), walPosition: s.walpos})
-				if err != nil {
-					errChan <- err
-					bufChan <- nil
-					return
-				}
-				buf = append(buf, seq{buf: b, id: s.id, part: s.part})
-			}
-			errChan <- nil
-			bufChan <- buf
-		}(i)
-	}
-
-	flag := false
-	bufs := [][]seq{}
-	for i := 0; i < int(vlog.numPartions); i++ {
-		e := <-errChan
-		buf := <-bufChan
-		if e != nil {
-			flag = true
-		}
-		bufs = append(bufs, buf)
-	}
-
-	if flag {
-		return nil, ErrWriteVlog
-	}
-
-	realBuf := vlog.mergeBufSeqs(bufs, len(vlogPos))
-	logRecords := []*LogRecord{}
-	for _, buf := range realBuf {
-		logRecords = append(logRecords, decodeLogRecord(buf))
-	}
-	return logRecords, nil
+	return keyPositions, nil
 }
 
 func (vlog *valueLog) sync() error {
@@ -265,53 +207,4 @@ func (vlog *valueLog) doConcurrent(f func(int) error) error {
 
 func (vlog *valueLog) getIndex(key []byte) int {
 	return int(util.FnvNew32a(string(key)) % vlog.numPartions)
-}
-
-// multiplex merge sort for returning in correct order of input logs
-func (vlog *valueLog) mergePosSeqs(seqs [][]seq, numSeq int) []*partPosition {
-	pos := []*partPosition{}
-
-	for len(pos) < numSeq {
-		minId := numSeq + 1
-		minIdSeq := -1
-		for i := 0; i < int(vlog.numPartions); i++ {
-			if len(seqs[i]) > 0 && seqs[i][0].id < minId {
-				minId = seqs[i][0].id
-				minIdSeq = i
-			}
-		}
-		pos = append(pos, &partPosition{partIndex: uint32(seqs[minIdSeq][0].part), walPosition: seqs[minIdSeq][0].walpos})
-		if len(seqs[minIdSeq]) > 1 {
-			seqs[minIdSeq] = seqs[minIdSeq][1:]
-		} else {
-			seqs[minIdSeq] = []seq{}
-		}
-	}
-
-	return pos
-}
-
-// multiplex merge sort for returning in correct order of input VlogPositions
-func (vlog *valueLog) mergeBufSeqs(seqs [][]seq, numSeq int) [][]byte {
-	bufs := [][]byte{}
-
-	// multiplex merge sort
-	for len(bufs) < numSeq {
-		minId := numSeq + 1
-		minIdSeq := -1
-		for i := 0; i < int(vlog.numPartions); i++ {
-			if len(seqs[i]) > 0 && seqs[i][0].id < minId {
-				minId = seqs[i][0].id
-				minIdSeq = i
-			}
-		}
-		bufs = append(bufs, seqs[minIdSeq][0].buf)
-		if len(seqs[minIdSeq]) > 1 {
-			seqs[minIdSeq] = seqs[minIdSeq][1:]
-		} else {
-			seqs[minIdSeq] = []seq{}
-		}
-	}
-
-	return bufs
 }

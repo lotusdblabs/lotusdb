@@ -1,7 +1,6 @@
 package lotusdb
 
 import (
-	"encoding/binary"
 	"errors"
 	"os"
 	"os/signal"
@@ -288,14 +287,14 @@ func (db *DB) flushMemtables() {
 			_ = sklIter.Close()
 
 			// flush to vlog
-			partPos, err := db.vlog.writeBatch(logRecords)
+			keyPos, err := db.vlog.writeBatch(logRecords)
 			if err != nil {
 				panic("vlog writeBatch failed!\n")
 			}
 
 			// flush to index
-			for i := 0; i < len(partPos); i++ {
-				indexRec := IndexRecord{key: logRecords[i].Key, position: partPos[i]}
+			for i := 0; i < len(keyPos); i++ {
+				indexRec := IndexRecord{key: keyPos[i].key, position: keyPos[i].pos}
 				indexRecords = append(indexRecords, &indexRec)
 			}
 			if err := db.index.PutBatch(indexRecords); err != nil {
@@ -314,14 +313,4 @@ func (db *DB) flushMemtables() {
 			return
 		}
 	}
-}
-
-func (partPos *partPosition) Encode() []byte {
-	maxLen := binary.MaxVarintLen32*4 + binary.MaxVarintLen64
-	buf := make([]byte, maxLen)
-	walPosBuf := partPos.walPosition.Encode()
-	var index = 0
-	index += binary.PutUvarint(buf[index:], uint64(partPos.partIndex))
-	copy(buf[index:], walPosBuf)
-	return buf[:index+len(walPosBuf)]
 }

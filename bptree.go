@@ -57,7 +57,8 @@ func openIndexBoltDB(options indexOptions) (*BPTree, error) {
 }
 
 func (bt *BPTree) Get(key []byte) (*partPosition, error) {
-	tree := bt.getTreeByKey(key)
+	treeIndex := bt.getTreeByKey(key)
+	tree := bt.trees[treeIndex]
 	var position *partPosition
 
 	if err := tree.View(func(tx *bbolt.Tx) error {
@@ -71,7 +72,7 @@ func (bt *BPTree) Get(key []byte) (*partPosition, error) {
 		return nil, err
 	}
 
-	position.partIndex = bt.getKeyPartition(key)
+	position.partIndex = treeIndex
 
 	return position, nil
 }
@@ -99,7 +100,7 @@ func (bt *BPTree) PutBatch(records []*IndexRecord) error {
 				bucket := tx.Bucket(boltBucketName)
 				// put each record into the bucket
 				for _, record := range prs {
-					encPos := record.position.Encode()
+					encPos := record.position.walPosition.Encode()
 					if err := bucket.Put(record.key, encPos); err != nil {
 						return err
 					}
@@ -173,11 +174,11 @@ func (bt *BPTree) Sync() error {
 	return nil
 }
 
-func (bt *BPTree) getTreeByKey(key []byte) *bbolt.DB {
+func (bt *BPTree) getTreeByKey(key []byte) uint32 {
 	if bt.options.partitionNum == defaultPartitionNum {
-		return bt.trees[0]
+		return 0
 	} else {
-		return bt.trees[bt.getKeyPartition(key)]
+		return bt.getKeyPartition(key)
 	}
 }
 
