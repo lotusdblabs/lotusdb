@@ -6,6 +6,7 @@ import (
 
 	"github.com/lotusdblabs/lotusdb/v2/util"
 	"github.com/rosedblabs/wal"
+	"golang.org/x/sync/errgroup"
 )
 
 const (
@@ -35,15 +36,6 @@ type valueLogOptions struct {
 
 	// Value logs are partioned to serveral parts for concurrent writing and reading
 	numPartions uint32
-}
-
-// an auxiliary struct for returning chunkPositions in correct order
-// while writing or reading batch
-type seq struct {
-	buf    []byte
-	key    []byte
-	walpos *wal.ChunkPosition
-	part   int
 }
 
 type keyPos struct {
@@ -96,8 +88,8 @@ func (vlog *valueLog) readLog(position *partPosition) ([]byte, error) {
 }
 
 // write a log
-func (vlog *valueLog) write(log *LogRecord) (*keyPos, error) {
-	logs := []*LogRecord{}
+func (vlog *valueLog) write(log *ValueLogRecord) (*keyPos, error) {
+	logs := []*ValueLogRecord{}
 	logs = append(logs, log)
 	positions, err := vlog.writeBatch(logs)
 	if err != nil {
@@ -107,64 +99,66 @@ func (vlog *valueLog) write(log *LogRecord) (*keyPos, error) {
 }
 
 // read a log
-func (vlog *valueLog) read(vlogPos *partPosition) (*LogRecord, error) {
+func (vlog *valueLog) read(vlogPos *partPosition) (*ValueLogRecord, error) {
 	buf, err := vlog.readLog(vlogPos)
 	if err != nil {
 		return nil, err
 	}
-	log := decodeLogRecord(buf)
+	log := decodeValueLogRecord(buf)
 	return log, nil
 }
 
 // we must maintain correct order with respect to input while returning chunkPositions
-func (vlog *valueLog) writeBatch(logs []*LogRecord) ([]*keyPos, error) {
+func (vlog *valueLog) writeBatch(logs []*ValueLogRecord) ([]*keyPos, error) {
+	// storage key and encoded log
+	type keyBuf struct {
+		key []byte
+		buf []byte
+	}
+
 	// split logs into parts
-	logParts := make([][]seq, vlog.numPartions)
+	logParts := make([][]keyBuf, vlog.numPartions)
 	for _, log := range logs {
-		partIdx := vlog.getIndex(log.Key)
-		buf := encodeLogRecord(log)
-		logParts[partIdx] = append(logParts[partIdx], seq{buf: buf, key: log.Key, part: partIdx})
+		partIdx := vlog.getIndex(log.key)
+		buf := encodeValueLogRecord(log)
+		logParts[partIdx] = append(logParts[partIdx], keyBuf{key: log.key, buf: buf})
 	}
 
 	// write parts concurrently
-	errChan := make(chan error, vlog.numPartions)
 	posChan := make(chan []*keyPos, vlog.numPartions)
+	errG := make([]errgroup.Group, vlog.numPartions)
 	for i := 0; i < int(vlog.numPartions); i++ {
 		if len(logParts[i]) == 0 {
-			errChan <- nil
 			posChan <- []*keyPos{}
 			continue
 		}
-		go func(part int) {
+
+		part := i
+		errG[part].Go(func() error {
 			pos := []*keyPos{}
 			for _, s := range logParts[part] {
 				p, err := vlog.writeLog(s.buf, part)
 				if err != nil {
-					errChan <- err
 					posChan <- nil
-					return
+					return err
 				}
 				pos = append(pos, &keyPos{key: s.key, pos: &partPosition{partIndex: uint32(part), walPosition: p}})
 			}
-			errChan <- nil
 			posChan <- pos
-		}(i)
+			return nil
+		})
 	}
 
-	flag := false
 	keyPositions := []*keyPos{}
+
 	for i := 0; i < int(vlog.numPartions); i++ {
-		e := <-errChan
-		pos := <-posChan
-		if e != nil {
-			flag = true
+		if err := errG[i].Wait(); err != nil {
+			return nil, err
 		}
+		pos := <-posChan
 		keyPositions = append(keyPositions, pos...)
 	}
 
-	if flag {
-		return nil, ErrWriteVlog
-	}
 	return keyPositions, nil
 }
 

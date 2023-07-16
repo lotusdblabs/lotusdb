@@ -274,13 +274,13 @@ func (db *DB) flushMemtables() {
 			sklIter := table.skl.NewIterator()
 			var deletedKeys [][]byte
 			indexRecords := []*IndexRecord{}
-			logRecords := []*LogRecord{}
+			logRecords := []*ValueLogRecord{}
 			for sklIter.SeekToFirst(); sklIter.Valid(); sklIter.Next() {
 				key, valueStruct := sklIter.Key(), sklIter.Value()
 				if valueStruct.Meta == LogRecordDeleted {
 					deletedKeys = append(deletedKeys, key)
 				} else {
-					logRecord := LogRecord{Key: key, Value: valueStruct.Value, Type: valueStruct.Meta}
+					logRecord := ValueLogRecord{key: key, value: valueStruct.Value}
 					logRecords = append(logRecords, &logRecord)
 				}
 			}
@@ -305,9 +305,13 @@ func (db *DB) flushMemtables() {
 			}
 
 			// delete old memtable keeped in memory
-			if len(db.immuMems) > db.memNums {
+			db.mu.Lock()
+			if len(db.immuMems) == 1 {
+				db.immuMems = db.immuMems[:0]
+			} else {
 				db.immuMems = db.immuMems[1:]
 			}
+			db.mu.Unlock()
 
 		case <-sig:
 			return

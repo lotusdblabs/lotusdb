@@ -104,3 +104,16 @@ type ValueLogRecord struct {
 	key   []byte
 	value []byte
 }
+
+type ValueLogRecord struct {
+	key   []byte
+	value []byte
+}
+
+func encodeValueLogRecord(vLogRecord *ValueLogRecord) []byte {
+	return nil
+}
+
+func decodeValueLogRecord(buf []byte) *ValueLogRecord {
+	return nil
+}

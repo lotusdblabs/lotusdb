@@ -133,10 +133,7 @@ func (b *Batch) Get(key []byte) ([]byte, error) {
 		return nil, err
 	}
 
-	if record.Type == LogRecordDeleted {
-		return nil, ErrKeyNotFound
-	}
-	return record.Value, nil
+	return record.value, nil
 }
 
 // Delete marks a key for deletion in the batch.

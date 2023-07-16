@@ -34,16 +34,21 @@ func TestVlogBasic(t *testing.T) {
 		}
 	}()
 
-	logs := [5]*LogRecord{
-		{Key: []byte("key 0"), Value: []byte("value 0")},
-		{Key: []byte("key 1"), Value: []byte("value 1")},
-		{Key: []byte("key 2"), Value: []byte("value 2")},
-		{Key: []byte("key 3"), Value: []byte("value 3")},
-		{Key: []byte("key 4"), Value: []byte("value 4")},
+	logs := [10]*ValueLogRecord{
+		{key: []byte("key 0"), value: []byte("value 0")},
+		{key: []byte("key 1"), value: []byte("value 1")},
+		{key: []byte("key 2"), value: []byte("value 2")},
+		{key: []byte("key 3"), value: []byte("value 3")},
+		{key: []byte("key 4"), value: []byte("value 4")},
+		{key: []byte("key 5"), value: []byte("value 5")},
+		{key: []byte("key 6"), value: []byte("value 6")},
+		{key: []byte("key 7"), value: []byte("value 7")},
+		{key: []byte("key 8"), value: []byte("value 8")},
+		{key: []byte("key 9"), value: []byte("value 9")},
 	}
 	kvMap := make(map[string]string)
 	for _, log := range logs {
-		kvMap[string(log.Key)] = string(log.Value)
+		kvMap[string(log.key)] = string(log.value)
 	}
 	keyPos := []*keyPos{}
 
@@ -59,10 +64,10 @@ func TestVlogBasic(t *testing.T) {
 		for i := 0; i < len(logs); i++ {
 			log, err := vlog.read(keyPos[i].pos)
 			require.Nil(t, err)
-			fmt.Printf("%v\n", string(log.Value))
+			fmt.Printf("%v\n", string(log.value))
 			// test whether keyPos[i].pos correspond to the real position of keyPos[i].key
-			fmt.Printf("expected value:%v, real value:%v\n", kvMap[string(keyPos[i].key)], string(log.Value))
-			require.Equal(t, kvMap[string(keyPos[i].key)], string(log.Value))
+			fmt.Printf("expected value:%v, real value:%v\n", kvMap[string(keyPos[i].key)], string(log.value))
+			require.Equal(t, kvMap[string(keyPos[i].key)], string(log.value))
 		}
 	})
 
@@ -85,7 +90,7 @@ func TestVlogBasic(t *testing.T) {
 // numPart:20 write:8.5486256s
 
 // Please set the go-test timeout long enough before run this test!
-func TestRWLarge(t *testing.T) {
+func TestRWBatch(t *testing.T) {
 	opts := valueLogOptions{
 		dirPath:     "/tmp/lotusdb",
 		segmentSize: wal.GB,
@@ -119,9 +124,9 @@ func RWBatch(opts valueLogOptions, numRW int, numPart int) error {
 	}()
 
 	val := strings.Repeat("v", 512)
-	logs := []*LogRecord{}
+	logs := []*ValueLogRecord{}
 	for i := 0; i < numRW; i++ {
-		log := &LogRecord{Key: []byte(fmt.Sprintf("%d", i)), Value: []byte(val)}
+		log := &ValueLogRecord{key: []byte(fmt.Sprintf("%d", i)), value: []byte(val)}
 		logs = append(logs, log)
 	}
 	start := time.Now()

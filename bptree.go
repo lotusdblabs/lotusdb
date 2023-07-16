@@ -88,18 +88,19 @@ func (bt *BPTree) PutBatch(records []*IndexRecord) error {
 		partitionRecords[p] = append(partitionRecords[p], record)
 	}
 
-	for i, prs := range partitionRecords {
-		if len(prs) == 0 {
+	errG := make([]errgroup.Group, len(partitionRecords))
+	for i := 0; i < len(partitionRecords); i++ {
+		if len(partitionRecords[i]) == 0 {
 			continue
 		}
-		g := new(errgroup.Group)
-		g.Go(func() error {
+		part := i
+		errG[part].Go(func() error {
 			// get the bolt db instance for this partition
-			tree := bt.trees[i]
+			tree := bt.trees[part]
 			return tree.Update(func(tx *bbolt.Tx) error {
 				bucket := tx.Bucket(boltBucketName)
 				// put each record into the bucket
-				for _, record := range prs {
+				for _, record := range partitionRecords[part] {
 					encPos := record.position.walPosition.Encode()
 					if err := bucket.Put(record.key, encPos); err != nil {
 						return err
@@ -108,7 +109,10 @@ func (bt *BPTree) PutBatch(records []*IndexRecord) error {
 				return nil
 			})
 		})
-		if err := g.Wait(); err != nil {
+	}
+
+	for i := 0; i < len(partitionRecords); i++ {
+		if err := errG[i].Wait(); err != nil {
 			return err
 		}
 	}
