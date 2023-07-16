@@ -57,7 +57,7 @@ func openIndexBoltDB(options indexOptions) (*BPTree, error) {
 }
 
 func (bt *BPTree) Get(key []byte) (*partPosition, error) {
-	treeIndex := bt.getTreeByKey(key)
+	treeIndex := bt.getKeyPartition(key)
 	tree := bt.trees[treeIndex]
 	var position *partPosition
 
@@ -176,14 +176,6 @@ func (bt *BPTree) Sync() error {
 		}
 	}
 	return nil
-}
-
-func (bt *BPTree) getTreeByKey(key []byte) uint32 {
-	if bt.options.partitionNum == defaultPartitionNum {
-		return 0
-	} else {
-		return bt.getKeyPartition(key)
-	}
 }
 
 func (bt *BPTree) getKeyPartition(key []byte) uint32 {

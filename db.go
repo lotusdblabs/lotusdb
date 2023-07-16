@@ -10,7 +10,6 @@ import (
 	"time"
 
 	"github.com/gofrs/flock"
-	"github.com/rosedblabs/wal"
 )
 
 const (
@@ -20,18 +19,12 @@ const (
 type DB struct {
 	activeMem *memtable    // Active memtable for writing.
 	immuMems  []*memtable  // Immutable memtables, waiting to be flushed to disk.
-	memNums   int          // MemtableNums represents maximum number of memtables to keep in memory before flushing
 	index     Index        // index is multi-partition bptree to store key and chunk position.
 	vlog      *valueLog    // vlog is the value log.
 	fileLock  *flock.Flock // fileLock to prevent multiple processes from using the same database directory.
 	flushChan chan *memtable
 	mu        sync.RWMutex
 	closed    bool
-}
-
-type partPosition struct {
-	partIndex   uint32
-	walPosition *wal.ChunkPosition
 }
 
 type Stat struct {
@@ -79,10 +72,10 @@ func Open(options Options) (*DB, error) {
 
 	// open value log
 	vlog, err := openValueLog(valueLogOptions{
-		dirPath:     options.DirPath,
-		segmentSize: options.ValueLogFileSize,
-		blockCache:  options.BlockCache,
-		numPartions: uint32(options.PartitionNum),
+		dirPath:      options.DirPath,
+		segmentSize:  options.ValueLogFileSize,
+		blockCache:   options.BlockCache,
+		partitionNum: uint32(options.PartitionNum),
 	})
 	if err != nil {
 		return nil, err

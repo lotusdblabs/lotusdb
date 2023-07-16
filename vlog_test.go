@@ -12,10 +12,10 @@ import (
 
 func TestVlogBasic(t *testing.T) {
 	opts := valueLogOptions{
-		dirPath:     "/tmp/lotusdb",
-		segmentSize: wal.GB,
-		blockCache:  32 * wal.KB * 10,
-		numPartions: 5,
+		dirPath:      "/tmp/lotusdb",
+		segmentSize:  wal.GB,
+		blockCache:   32 * wal.KB * 10,
+		partitionNum: 5,
 	}
 
 	// test opening vlog
@@ -29,7 +29,7 @@ func TestVlogBasic(t *testing.T) {
 
 	defer func() {
 		fmt.Printf("delete!\n")
-		for i := 0; i < int(vlog.numPartions); i++ {
+		for i := 0; i < int(vlog.options.partitionNum); i++ {
 			vlog.wals[i].Delete()
 		}
 	}()
@@ -74,28 +74,28 @@ func TestVlogBasic(t *testing.T) {
 }
 
 // numRW:500000
-// numPart:1 write:4.6256513s
-// numPart:3 write:2.511225s
-// numPart:10 write:2.0412199s
-// numPart:20 write:2.0883136s
+// numPart:1 write:3.6274064s
+// numPart:3 write:1.8013284s
+// numPart:10 write:1.74286s
+// numPart:20 write:1.6966751s
 // numRW:1000000
-// numPart:1 write:9.4966978s
-// numPart:3 write:4.6746816s
-// numPart:10 write:4.0549516s
-// numPart:20 write:4.1269718s
+// numPart:1 write:6.8533157s
+// numPart:3 write:3.6517114s
+// numPart:10 write:3.2682143s
+// numPart:20 write:3.3364603s
 // numRW:2000000
-// numPart:1 write:18.4623601s
-// numPart:3 write:9.3436442s
-// numPart:10 write:8.3442342s
-// numPart:20 write:8.5486256s
+// numPart:1 write:14.276294s
+// numPart:3 write:7.0658334s
+// numPart:10 write:6.6338356s
+// numPart:20 write:6.896586s
 
 // Please set the go-test timeout long enough before run this test!
 func TestRWBatch(t *testing.T) {
 	opts := valueLogOptions{
-		dirPath:     "/tmp/lotusdb",
-		segmentSize: wal.GB,
-		blockCache:  32 * wal.KB * 10,
-		numPartions: 1,
+		dirPath:      "/tmp/lotusdb",
+		segmentSize:  wal.GB,
+		blockCache:   32 * wal.KB * 10,
+		partitionNum: 1,
 	}
 	numRWList := []int{500000, 1000000, 2000000}
 	numPartList := []int{1, 3, 10, 20}
@@ -111,14 +111,14 @@ func TestRWBatch(t *testing.T) {
 }
 
 func RWBatch(opts valueLogOptions, numRW int, numPart int) error {
-	opts.numPartions = uint32(numPart)
+	opts.partitionNum = uint32(numPart)
 	vlog, err := openValueLog(opts)
 	if err != nil {
 		return err
 	}
 
 	defer func() {
-		for i := 0; i < int(vlog.numPartions); i++ {
+		for i := 0; i < int(vlog.options.partitionNum); i++ {
 			vlog.wals[i].Delete()
 		}
 	}()

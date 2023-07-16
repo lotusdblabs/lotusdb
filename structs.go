@@ -2,6 +2,8 @@ package lotusdb
 
 import (
 	"encoding/binary"
+
+	"github.com/rosedblabs/wal"
 )
 
 // LogRecordType is the type of the log record.
@@ -15,6 +17,11 @@ const (
 	// LogRecordBatchFinished is the batch finished log record type.
 	LogRecordBatchFinished
 )
+
+type partPosition struct {
+	partIndex   uint32
+	walPosition *wal.ChunkPosition
+}
 
 // type batchId keySize valueSize
 //

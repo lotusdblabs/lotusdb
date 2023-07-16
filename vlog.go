@@ -1,7 +1,6 @@
 package lotusdb
 
 import (
-	"errors"
 	"fmt"
 
 	"github.com/lotusdblabs/lotusdb/v2/util"
@@ -13,13 +12,11 @@ const (
 	valueLogFileExt = ".VLOG"
 )
 
-var ErrWriteVlog = errors.New("Write vLog error")
-
 // valueLog value log is named after the concept in Wisckey paper
 // https://www.usenix.org/system/files/conference/fast16/fast16-papers-lu.pdf
 type valueLog struct {
-	wals        []*wal.WAL
-	numPartions uint32
+	wals    []*wal.WAL
+	options valueLogOptions
 }
 
 type valueLogOptions struct {
@@ -35,7 +32,7 @@ type valueLogOptions struct {
 	blockCache uint32
 
 	// Value logs are partioned to serveral parts for concurrent writing and reading
-	numPartions uint32
+	partitionNum uint32
 }
 
 type keyPos struct {
@@ -43,16 +40,10 @@ type keyPos struct {
 	pos *partPosition
 }
 
-// // record accurate position in multiple vlogs
-// type VlogPosition struct {
-// 	part   int
-// 	walPos *wal.ChunkPosition
-// }
-
 func openValueLog(options valueLogOptions) (*valueLog, error) {
 	vLogWals := []*wal.WAL{}
 
-	for i := 0; i < int(options.numPartions); i++ {
+	for i := 0; i < int(options.partitionNum); i++ {
 		vLogWal, err := wal.Open(wal.Options{
 			DirPath:        options.dirPath,
 			SegmentSize:    options.segmentSize,
@@ -67,7 +58,7 @@ func openValueLog(options valueLogOptions) (*valueLog, error) {
 		vLogWals = append(vLogWals, vLogWal)
 	}
 
-	return &valueLog{wals: vLogWals, numPartions: options.numPartions}, nil
+	return &valueLog{wals: vLogWals, options: options}, nil
 }
 
 func (vlog *valueLog) writeLog(data []byte, part int) (*wal.ChunkPosition, error) {
@@ -117,7 +108,7 @@ func (vlog *valueLog) writeBatch(logs []*ValueLogRecord) ([]*keyPos, error) {
 	}
 
 	// split logs into parts
-	logParts := make([][]keyBuf, vlog.numPartions)
+	logParts := make([][]keyBuf, vlog.options.partitionNum)
 	for _, log := range logs {
 		partIdx := vlog.getIndex(log.key)
 		buf := encodeValueLogRecord(log)
@@ -125,9 +116,9 @@ func (vlog *valueLog) writeBatch(logs []*ValueLogRecord) ([]*keyPos, error) {
 	}
 
 	// write parts concurrently
-	posChan := make(chan []*keyPos, vlog.numPartions)
-	errG := make([]errgroup.Group, vlog.numPartions)
-	for i := 0; i < int(vlog.numPartions); i++ {
+	posChan := make(chan []*keyPos, vlog.options.partitionNum)
+	errG := make([]errgroup.Group, vlog.options.partitionNum)
+	for i := 0; i < int(vlog.options.partitionNum); i++ {
 		if len(logParts[i]) == 0 {
 			posChan <- []*keyPos{}
 			continue
@@ -151,7 +142,7 @@ func (vlog *valueLog) writeBatch(logs []*ValueLogRecord) ([]*keyPos, error) {
 
 	keyPositions := []*keyPos{}
 
-	for i := 0; i < int(vlog.numPartions); i++ {
+	for i := 0; i < int(vlog.options.partitionNum); i++ {
 		if err := errG[i].Wait(); err != nil {
 			return nil, err
 		}
@@ -177,28 +168,22 @@ func (vlog *valueLog) close() error {
 }
 
 func (vlog *valueLog) doConcurrent(f func(int) error) error {
-	errChan := make(chan error, vlog.numPartions)
-	for i := 0; i < int(vlog.numPartions); i++ {
-		go func(part int) {
-			err := f(part)
-			errChan <- err
-		}(i)
+	errG := make([]errgroup.Group, vlog.options.partitionNum)
+	for i := 0; i < int(vlog.options.partitionNum); i++ {
+		part := i
+		errG[part].Go(func() error {
+			return f(part)
+		})
 	}
 
-	flag := false
-	for i := 0; i < int(vlog.numPartions); i++ {
-		e := <-errChan
-		if e != nil {
-			flag = true
+	for i := 0; i < int(vlog.options.partitionNum); i++ {
+		if err := errG[i].Wait(); err != nil {
+			return err
 		}
-	}
-
-	if flag {
-		return ErrWriteVlog
 	}
 	return nil
 }
 
 func (vlog *valueLog) getIndex(key []byte) int {
-	return int(util.FnvNew32a(string(key)) % vlog.numPartions)
+	return int(util.FnvNew32a(string(key)) % vlog.options.partitionNum)
 }
