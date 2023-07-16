@@ -96,8 +96,9 @@ func decodeLogRecord(buf []byte) *LogRecord {
 // IndexRecord is the index record of the key.
 // It contains the key and the position of the record in the wal.
 type IndexRecord struct {
-	key      []byte
-	position *wal.ChunkPosition
+	key        []byte
+	recordType LogRecordType
+	position   *wal.ChunkPosition
 }
 
 type ValueLogRecord struct {

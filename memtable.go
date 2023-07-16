@@ -15,10 +15,6 @@ import (
 	"github.com/rosedblabs/wal"
 )
 
-// todo in memtable
-// 1. put with multiple key/value pairs, guarantee atomicity just like rosedb
-// 2. handle the uncommitted records in wal while reopening the memtable
-
 const (
 	// the wal file name format is .SEG.%d
 	// %d is the unique id of the memtable, used to generate wal file name
@@ -125,6 +121,7 @@ func openMemtable(options memtableOptions) (*memtable, error) {
 	}
 	table.wal = walFile
 
+	indexRecords := make(map[uint64][]*LogRecord)
 	// now we get the opened wal file, we need to load all entries
 	// from wal to rebuild the content of the skip list
 	reader := table.wal.NewReader()
@@ -137,8 +134,19 @@ func openMemtable(options memtableOptions) (*memtable, error) {
 			return nil, err
 		}
 		record := decodeLogRecord(chunk)
-		// handle the batch id todo
-		table.skl.Put(y.KeyWithTs(record.Key, 0), y.ValueStruct{Value: record.Value, Meta: record.Type})
+		if record.Type == LogRecordBatchFinished {
+			batchId, err := snowflake.ParseBytes(record.Key)
+			if err != nil {
+				return nil, err
+			}
+			for _, idxRecord := range indexRecords[uint64(batchId)] {
+				table.skl.Put(y.KeyWithTs(idxRecord.Key, 0),
+					y.ValueStruct{Value: idxRecord.Value, Meta: record.Type})
+			}
+			delete(indexRecords, uint64(batchId))
+		} else {
+			indexRecords[record.BatchId] = append(indexRecords[record.BatchId], record)
+		}
 	}
 
 	// open and read wal file successfully, return the memtable
@@ -177,7 +185,7 @@ func (mt *memtable) putBatch(pendingWrites map[string]*LogRecord,
 	mt.mu.Lock()
 	// write to in-memory skip list
 	for key, record := range pendingWrites {
-		mt.skl.Put([]byte(key), y.ValueStruct{Value: record.Value, Meta: record.Type})
+		mt.skl.Put(y.KeyWithTs([]byte(key), 0), y.ValueStruct{Value: record.Value, Meta: record.Type})
 	}
 	mt.mu.Unlock()
 
