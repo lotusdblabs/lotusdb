@@ -2,6 +2,7 @@ package lotusdb
 
 import (
 	"encoding/binary"
+
 	"github.com/rosedblabs/wal"
 )
 
@@ -16,6 +17,11 @@ const (
 	// LogRecordBatchFinished is the batch finished log record type.
 	LogRecordBatchFinished
 )
+
+type partPosition struct {
+	partIndex   uint32
+	walPosition *wal.ChunkPosition
+}
 
 // type batchId keySize valueSize
 //
@@ -98,10 +104,18 @@ func decodeLogRecord(buf []byte) *LogRecord {
 type IndexRecord struct {
 	key        []byte
 	recordType LogRecordType
-	position   *wal.ChunkPosition
+	position   *partPosition
 }
 
 type ValueLogRecord struct {
 	key   []byte
 	value []byte
+}
+
+func encodeValueLogRecord(vLogRecord *ValueLogRecord) []byte {
+	return nil
+}
+
+func decodeValueLogRecord(buf []byte) *ValueLogRecord {
+	return nil
 }

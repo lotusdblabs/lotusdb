@@ -204,10 +204,7 @@ func (mt *memtable) get(key []byte) (bool, []byte) {
 }
 
 func (mt *memtable) isFull() bool {
-	if mt.skl.MemSize() >= int64(mt.options.memSize) {
-		return true
-	}
-	return false
+	return mt.skl.MemSize() >= int64(mt.options.memSize)
 }
 
 func (mt *memtable) close() error {

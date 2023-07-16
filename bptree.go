@@ -56,20 +56,23 @@ func openIndexBoltDB(options indexOptions) (*BPTree, error) {
 	return &BPTree{trees: trees, options: options}, nil
 }
 
-func (bt *BPTree) Get(key []byte) (*wal.ChunkPosition, error) {
-	tree := bt.getTreeByKey(key)
-	var position *wal.ChunkPosition
+func (bt *BPTree) Get(key []byte) (*partPosition, error) {
+	treeIndex := bt.getKeyPartition(key)
+	tree := bt.trees[treeIndex]
+	var position *partPosition
 
 	if err := tree.View(func(tx *bbolt.Tx) error {
 		bucket := tx.Bucket(boltBucketName)
 		value := bucket.Get(key)
 		if len(value) != 0 {
-			position = wal.DecodeChunkPosition(value)
+			position.walPosition = wal.DecodeChunkPosition(value)
 		}
 		return nil
 	}); err != nil {
 		return nil, err
 	}
+
+	position.partIndex = treeIndex
 
 	return position, nil
 }
@@ -81,23 +84,24 @@ func (bt *BPTree) PutBatch(records []*IndexRecord) error {
 
 	partitionRecords := make([][]*IndexRecord, bt.options.partitionNum)
 	for _, record := range records {
-		p := bt.getKeyPartition(record.key)
+		p := record.position.partIndex
 		partitionRecords[p] = append(partitionRecords[p], record)
 	}
 
-	for i, prs := range partitionRecords {
-		if len(prs) == 0 {
+	errG := make([]errgroup.Group, len(partitionRecords))
+	for i := 0; i < len(partitionRecords); i++ {
+		if len(partitionRecords[i]) == 0 {
 			continue
 		}
-		g := new(errgroup.Group)
-		g.Go(func() error {
+		part := i
+		errG[part].Go(func() error {
 			// get the bolt db instance for this partition
-			tree := bt.trees[i]
+			tree := bt.trees[part]
 			return tree.Update(func(tx *bbolt.Tx) error {
 				bucket := tx.Bucket(boltBucketName)
 				// put each record into the bucket
-				for _, record := range prs {
-					encPos := record.position.Encode()
+				for _, record := range partitionRecords[part] {
+					encPos := record.position.walPosition.Encode()
 					if err := bucket.Put(record.key, encPos); err != nil {
 						return err
 					}
@@ -105,7 +109,10 @@ func (bt *BPTree) PutBatch(records []*IndexRecord) error {
 				return nil
 			})
 		})
-		if err := g.Wait(); err != nil {
+	}
+
+	for i := 0; i < len(partitionRecords); i++ {
+		if err := errG[i].Wait(); err != nil {
 			return err
 		}
 	}
@@ -169,14 +176,6 @@ func (bt *BPTree) Sync() error {
 		}
 	}
 	return nil
-}
-
-func (bt *BPTree) getTreeByKey(key []byte) *bbolt.DB {
-	if bt.options.partitionNum == defaultPartitionNum {
-		return bt.trees[0]
-	} else {
-		return bt.trees[bt.getKeyPartition(key)]
-	}
 }
 
 func (bt *BPTree) getKeyPartition(key []byte) uint32 {

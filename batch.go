@@ -121,23 +121,19 @@ func (b *Batch) Get(key []byte) ([]byte, error) {
 	}
 
 	// get from index
-	chunkPosition, err := b.db.index.Get(key)
+	partPosition, err := b.db.index.Get(key)
 	if err != nil {
 		return nil, err
 	}
-	if chunkPosition == nil {
+	if partPosition == nil {
 		return nil, ErrKeyNotFound
 	}
-	chunk, err := b.db.vlog.read(chunkPosition)
+	record, err := b.db.vlog.read(partPosition)
 	if err != nil {
 		return nil, err
 	}
 
-	record := decodeLogRecord(chunk)
-	if record.Type == LogRecordDeleted {
-		return nil, ErrKeyNotFound
-	}
-	return record.Value, nil
+	return record.value, nil
 }
 
 // Delete marks a key for deletion in the batch.

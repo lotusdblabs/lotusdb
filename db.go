@@ -75,7 +75,7 @@ func Open(options Options) (*DB, error) {
 		dirPath:      options.DirPath,
 		segmentSize:  options.ValueLogFileSize,
 		blockCache:   options.BlockCache,
-		partitionNum: options.PartitionNum,
+		partitionNum: uint32(options.PartitionNum),
 	})
 	if err != nil {
 		return nil, err
@@ -266,31 +266,38 @@ func (db *DB) flushMemtables() {
 		case table := <-db.flushChan:
 			sklIter := table.skl.NewIterator()
 			var deletedKeys [][]byte
-			var vlogRecords []*ValueLogRecord
+			indexRecords := []*IndexRecord{}
+			logRecords := []*ValueLogRecord{}
 			for sklIter.SeekToFirst(); sklIter.Valid(); sklIter.Next() {
 				key, valueStruct := sklIter.Key(), sklIter.Value()
 				if valueStruct.Meta == LogRecordDeleted {
 					deletedKeys = append(deletedKeys, key)
 				} else {
-					vlogRecords = append(vlogRecords, &ValueLogRecord{
-						key: key, value: valueStruct.Value,
-					})
+					logRecord := ValueLogRecord{key: key, value: valueStruct.Value}
+					logRecords = append(logRecords, &logRecord)
 				}
 			}
 			_ = sklIter.Close()
 
-			// put to value log
-			var indexRecords []*IndexRecord
-			// indexRecords = db.vlog.writeBatch(vlogRecords)
-
-			// update index
-			err := db.index.DeleteBatch(deletedKeys)
+			// flush to vlog
+			keyPos, err := db.vlog.writeBatch(logRecords)
 			if err != nil {
-			}
-			err = db.index.PutBatch(indexRecords)
-			if err != nil {
+				panic("vlog writeBatch failed!\n")
 			}
 
+			// flush to index
+			for i := 0; i < len(keyPos); i++ {
+				indexRec := IndexRecord{key: keyPos[i].key, position: keyPos[i].pos}
+				indexRecords = append(indexRecords, &indexRec)
+			}
+			if err := db.index.PutBatch(indexRecords); err != nil {
+				panic("index PutBatch failed!\n")
+			}
+			if err := db.index.DeleteBatch(deletedKeys); err != nil {
+				panic("index DeleteBatch failed!\n")
+			}
+
+			// delete old memtable keeped in memory
 			db.mu.Lock()
 			if len(db.immuMems) == 1 {
 				db.immuMems = db.immuMems[:0]
@@ -298,6 +305,7 @@ func (db *DB) flushMemtables() {
 				db.immuMems = db.immuMems[1:]
 			}
 			db.mu.Unlock()
+
 		case <-sig:
 			return
 		}
