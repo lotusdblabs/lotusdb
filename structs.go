@@ -2,7 +2,6 @@ package lotusdb
 
 import (
 	"encoding/binary"
-
 	"github.com/rosedblabs/wal"
 )
 
@@ -17,11 +16,6 @@ const (
 	// LogRecordBatchFinished is the batch finished log record type.
 	LogRecordBatchFinished
 )
-
-type partPosition struct {
-	partIndex   uint32
-	walPosition *wal.ChunkPosition
-}
 
 // type batchId keySize valueSize
 //
@@ -99,23 +93,34 @@ func decodeLogRecord(buf []byte) *LogRecord {
 		BatchId: batchId, Type: recordType}
 }
 
-// IndexRecord is the index record of the key.
-// It contains the key and the position of the record in the wal.
-type IndexRecord struct {
-	key        []byte
-	recordType LogRecordType
-	position   *partPosition
-}
-
 type ValueLogRecord struct {
 	key   []byte
 	value []byte
 }
 
-func encodeValueLogRecord(vLogRecord *ValueLogRecord) []byte {
-	return nil
+type KeyPosition struct {
+	key       []byte
+	partition uint32
+	position  *wal.ChunkPosition
+}
+
+func encodeValueLogRecord(record *ValueLogRecord) []byte {
+	buf := make([]byte, 4+len(record.key)+len(record.value))
+	index := 0
+	binary.LittleEndian.PutUint32(buf[index:index+4], uint32(len(record.key)))
+	index += 4
+
+	copy(buf[index:index+len(record.key)], record.key)
+	index += len(record.key)
+	copy(buf[index:], record.value)
+	return buf
 }
 
 func decodeValueLogRecord(buf []byte) *ValueLogRecord {
-	return nil
+	keyLen := binary.LittleEndian.Uint32(buf[:4])
+	key := make([]byte, keyLen)
+	copy(key, buf[4:4+keyLen])
+	value := make([]byte, uint32(len(buf))-keyLen-4)
+	copy(value, buf[4+keyLen:])
+	return &ValueLogRecord{key: key, value: value}
 }

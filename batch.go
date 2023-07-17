@@ -235,6 +235,10 @@ func (b *Batch) Commit(options *WriteOptions) error {
 		return ErrBatchCommitted
 	}
 
+	// wait for memtable space
+	if err := b.db.waitMemetableSpace(); err != nil {
+		return err
+	}
 	batchId := b.batchId.Generate()
 	// call memtable put batch
 	err := b.db.activeMem.putBatch(b.pendingWrites, batchId, options)

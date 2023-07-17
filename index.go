@@ -2,8 +2,7 @@ package lotusdb
 
 const (
 	// indexFileExt is the file extension for index files.
-	indexFileExt        = "%09d.INDEX"
-	defaultPartitionNum = 1
+	indexFileExt = "INDEX.%d"
 )
 
 // Index is the interface for index implementations.
@@ -14,10 +13,10 @@ const (
 // But you can implement your own index if you want.
 type Index interface {
 	// PutBatch put batch records to index
-	PutBatch([]*IndexRecord) error
+	PutBatch([]*KeyPosition) error
 
 	// Get chunk position by key
-	Get([]byte) (*partPosition, error)
+	Get([]byte) (*KeyPosition, error)
 
 	// DeleteBatch delete batch records from index
 	DeleteBatch([][]byte) error

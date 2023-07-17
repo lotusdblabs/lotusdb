@@ -85,7 +85,7 @@ func openAllMemtables(options Options) ([]*memtable, error) {
 			dirPath:         options.DirPath,
 			tableId:         uint32(table),
 			memSize:         options.MemtableSize,
-			maxBatchSize:    0, // todo
+			maxBatchSize:    1000, // todo
 			walSync:         options.Sync,
 			walBytesPerSync: options.BytesPerSync,
 			walBlockCache:   options.BlockCache,
@@ -204,7 +204,14 @@ func (mt *memtable) get(key []byte) (bool, []byte) {
 }
 
 func (mt *memtable) isFull() bool {
-	return mt.skl.MemSize() >= int64(mt.options.memSize)
+	return mt.skl.MemSize()+mt.options.maxBatchSize >= int64(mt.options.memSize)
+}
+
+func (mt *memtable) deleteWAl() error {
+	if mt.wal != nil {
+		return mt.wal.Delete()
+	}
+	return nil
 }
 
 func (mt *memtable) close() error {

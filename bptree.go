@@ -56,52 +56,53 @@ func openIndexBoltDB(options indexOptions) (*BPTree, error) {
 	return &BPTree{trees: trees, options: options}, nil
 }
 
-func (bt *BPTree) Get(key []byte) (*partPosition, error) {
-	treeIndex := bt.getKeyPartition(key)
-	tree := bt.trees[treeIndex]
-	var position *partPosition
+func (bt *BPTree) Get(key []byte) (*KeyPosition, error) {
+	p := bt.getKeyPartition(key)
+	tree := bt.trees[p]
+	var keyPos *KeyPosition
 
 	if err := tree.View(func(tx *bbolt.Tx) error {
 		bucket := tx.Bucket(boltBucketName)
 		value := bucket.Get(key)
 		if len(value) != 0 {
-			position.walPosition = wal.DecodeChunkPosition(value)
+			keyPos = new(KeyPosition)
+			keyPos.key, keyPos.partition = key, p
+			keyPos.position = wal.DecodeChunkPosition(value)
 		}
 		return nil
 	}); err != nil {
 		return nil, err
 	}
 
-	position.partIndex = treeIndex
-
-	return position, nil
+	return keyPos, nil
 }
 
-func (bt *BPTree) PutBatch(records []*IndexRecord) error {
-	if len(records) == 0 {
+func (bt *BPTree) PutBatch(positions []*KeyPosition) error {
+	if len(positions) == 0 {
 		return nil
 	}
 
-	partitionRecords := make([][]*IndexRecord, bt.options.partitionNum)
-	for _, record := range records {
-		p := record.position.partIndex
-		partitionRecords[p] = append(partitionRecords[p], record)
+	partitionRecords := make([][]*KeyPosition, bt.options.partitionNum)
+	for _, pos := range positions {
+		p := pos.partition
+		partitionRecords[p] = append(partitionRecords[p], pos)
 	}
 
-	errG := make([]errgroup.Group, len(partitionRecords))
+	groups := make([]errgroup.Group, len(partitionRecords))
 	for i := 0; i < len(partitionRecords); i++ {
 		if len(partitionRecords[i]) == 0 {
 			continue
 		}
+
 		part := i
-		errG[part].Go(func() error {
+		groups[i].Go(func() error {
 			// get the bolt db instance for this partition
 			tree := bt.trees[part]
 			return tree.Update(func(tx *bbolt.Tx) error {
 				bucket := tx.Bucket(boltBucketName)
 				// put each record into the bucket
 				for _, record := range partitionRecords[part] {
-					encPos := record.position.walPosition.Encode()
+					encPos := record.position.Encode()
 					if err := bucket.Put(record.key, encPos); err != nil {
 						return err
 					}
@@ -112,7 +113,7 @@ func (bt *BPTree) PutBatch(records []*IndexRecord) error {
 	}
 
 	for i := 0; i < len(partitionRecords); i++ {
-		if err := errG[i].Wait(); err != nil {
+		if err := groups[i].Wait(); err != nil {
 			return err
 		}
 	}

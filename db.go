@@ -2,6 +2,7 @@ package lotusdb
 
 import (
 	"errors"
+	"log"
 	"os"
 	"os/signal"
 	"path/filepath"
@@ -172,7 +173,7 @@ func (db *DB) Get(key []byte) ([]byte, error) {
 		ReadOnly: true,
 	})
 	defer func() {
-		batch.Commit(nil)
+		_ = batch.Commit(nil)
 	}()
 	return batch.Get(key)
 }
@@ -194,7 +195,7 @@ func (db *DB) Exist(key []byte) (bool, error) {
 		ReadOnly: true,
 	})
 	defer func() {
-		batch.Commit(nil)
+		_ = batch.Commit(nil)
 	}()
 	return batch.Exist(key)
 }
@@ -266,8 +267,7 @@ func (db *DB) flushMemtables() {
 		case table := <-db.flushChan:
 			sklIter := table.skl.NewIterator()
 			var deletedKeys [][]byte
-			indexRecords := []*IndexRecord{}
-			logRecords := []*ValueLogRecord{}
+			var logRecords []*ValueLogRecord
 			for sklIter.SeekToFirst(); sklIter.Valid(); sklIter.Next() {
 				key, valueStruct := sklIter.Key(), sklIter.Value()
 				if valueStruct.Meta == LogRecordDeleted {
@@ -279,22 +279,37 @@ func (db *DB) flushMemtables() {
 			}
 			_ = sklIter.Close()
 
-			// flush to vlog
+			// write to value log, get the positions of keys
 			keyPos, err := db.vlog.writeBatch(logRecords)
 			if err != nil {
-				panic("vlog writeBatch failed!\n")
+				log.Println("vlog writeBatch failed:", err)
+				continue
+			}
+			// sync the value log
+			if err := db.vlog.sync(); err != nil {
+				log.Println("vlog sync failed:", err)
+				continue
 			}
 
-			// flush to index
-			for i := 0; i < len(keyPos); i++ {
-				indexRec := IndexRecord{key: keyPos[i].key, position: keyPos[i].pos}
-				indexRecords = append(indexRecords, &indexRec)
-			}
-			if err := db.index.PutBatch(indexRecords); err != nil {
-				panic("index PutBatch failed!\n")
+			// write all keys and positions to index
+			if err := db.index.PutBatch(keyPos); err != nil {
+				log.Println("index PutBatch failed:", err)
+				continue
 			}
 			if err := db.index.DeleteBatch(deletedKeys); err != nil {
-				panic("index DeleteBatch failed!\n")
+				log.Println("index DeleteBatch failed:", err)
+				continue
+			}
+			// sync the index
+			if err := db.index.Sync(); err != nil {
+				log.Println("index sync failed:", err)
+				continue
+			}
+
+			// delete the wal
+			if err := table.deleteWAl(); err != nil {
+				log.Println("delete wal failed:", err)
+				continue
 			}
 
 			// delete old memtable keeped in memory
