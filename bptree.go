@@ -181,5 +181,5 @@ func (bt *BPTree) Sync() error {
 
 func (bt *BPTree) getKeyPartition(key []byte) uint32 {
 	hashFn := bt.options.hashKeyFunction
-	return hashFn(string(key)) % uint32(bt.options.partitionNum)
+	return hashFn(key) % uint32(bt.options.partitionNum)
 }

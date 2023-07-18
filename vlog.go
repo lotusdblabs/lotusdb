@@ -34,7 +34,7 @@ type valueLogOptions struct {
 	partitionNum uint32
 
 	// hash function for sharding
-	hashKeyFunction func(string) uint32
+	hashKeyFunction func([]byte) uint32
 }
 
 func openValueLog(options valueLogOptions) (*valueLog, error) {
@@ -134,5 +134,5 @@ func (vlog *valueLog) close() error {
 }
 
 func (vlog *valueLog) getKeyPartition(key []byte) int {
-	return int(vlog.options.hashKeyFunction(string(key)) % vlog.options.partitionNum)
+	return int(vlog.options.hashKeyFunction(key) % vlog.options.partitionNum)
 }

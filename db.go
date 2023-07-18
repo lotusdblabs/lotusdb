@@ -63,9 +63,10 @@ func Open(options Options) (*DB, error) {
 
 	// open index
 	index, err := openIndex(indexOptions{
-		indexType:    indexBoltDB,
-		dirPath:      options.DirPath,
-		partitionNum: options.PartitionNum,
+		indexType:       indexBoltDB,
+		dirPath:         options.DirPath,
+		partitionNum:    options.PartitionNum,
+		hashKeyFunction: options.KeyHashFunction,
 	})
 	if err != nil {
 		return nil, err
@@ -73,10 +74,11 @@ func Open(options Options) (*DB, error) {
 
 	// open value log
 	vlog, err := openValueLog(valueLogOptions{
-		dirPath:      options.DirPath,
-		segmentSize:  options.ValueLogFileSize,
-		blockCache:   options.BlockCache,
-		partitionNum: uint32(options.PartitionNum),
+		dirPath:         options.DirPath,
+		segmentSize:     options.ValueLogFileSize,
+		blockCache:      options.BlockCache,
+		partitionNum:    uint32(options.PartitionNum),
+		hashKeyFunction: options.KeyHashFunction,
 	})
 	if err != nil {
 		return nil, err

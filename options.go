@@ -1,6 +1,9 @@
 package lotusdb
 
-import "os"
+import (
+	"github.com/lotusdblabs/lotusdb/v2/util"
+	"os"
+)
 
 type Options struct {
 	// DirPath specifies the directory path where all the database files will be stored.
@@ -35,6 +38,8 @@ type Options struct {
 
 	// PartitionNum specifies the number of partitions to use for the index and value log.
 	PartitionNum int
+
+	KeyHashFunction func([]byte) uint32
 
 	// ValueLogFileSize size of a single value log file.
 	// Default value is 1GB.
@@ -96,6 +101,7 @@ var DefaultOptions = Options{
 	Sync:             false,
 	BytesPerSync:     0,
 	PartitionNum:     5,
+	KeyHashFunction:  util.FNV32Hash,
 	ValueLogFileSize: 1 * GB,
 }
 

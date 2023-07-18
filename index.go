@@ -51,5 +51,5 @@ type indexOptions struct {
 
 	partitionNum int // index partition nums for sharding
 
-	hashKeyFunction func(string) uint32 // hash function for sharding
+	hashKeyFunction func([]byte) uint32 // hash function for sharding
 }
