@@ -1,7 +1,7 @@
 package lotusdb
 
 import (
-	"github.com/lotusdblabs/lotusdb/v2/util"
+	"github.com/cespare/xxhash/v2"
 	"os"
 )
 
@@ -39,7 +39,7 @@ type Options struct {
 	// PartitionNum specifies the number of partitions to use for the index and value log.
 	PartitionNum int
 
-	KeyHashFunction func([]byte) uint32
+	KeyHashFunction func([]byte) uint64
 
 	// ValueLogFileSize size of a single value log file.
 	// Default value is 1GB.
@@ -101,7 +101,7 @@ var DefaultOptions = Options{
 	Sync:             false,
 	BytesPerSync:     0,
 	PartitionNum:     5,
-	KeyHashFunction:  util.FNV32Hash,
+	KeyHashFunction:  xxhash.Sum64,
 	ValueLogFileSize: 1 * GB,
 }
 

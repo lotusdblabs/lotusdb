@@ -1,7 +1,6 @@
 package util
 
 import (
-	"hash/fnv"
 	"math/rand"
 )
 
@@ -15,10 +14,4 @@ func RandomValue(n int) []byte {
 		b[i] = letters[rand.Intn(len(letters))]
 	}
 	return []byte("lotusdb-test-value-" + string(b))
-}
-
-func FNV32Hash(key []byte) uint32 {
-	hash := fnv.New32a()
-	_, _ = hash.Write(key)
-	return hash.Sum32()
 }

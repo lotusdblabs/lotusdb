@@ -66,7 +66,7 @@ func (bt *BPTree) Get(key []byte) (*KeyPosition, error) {
 		value := bucket.Get(key)
 		if len(value) != 0 {
 			keyPos = new(KeyPosition)
-			keyPos.key, keyPos.partition = key, p
+			keyPos.key, keyPos.partition = key, uint32(p)
 			keyPos.position = wal.DecodeChunkPosition(value)
 		}
 		return nil
@@ -179,7 +179,7 @@ func (bt *BPTree) Sync() error {
 	return nil
 }
 
-func (bt *BPTree) getKeyPartition(key []byte) uint32 {
+func (bt *BPTree) getKeyPartition(key []byte) int {
 	hashFn := bt.options.hashKeyFunction
-	return hashFn(key) % uint32(bt.options.partitionNum)
+	return int(hashFn(key) % uint64(bt.options.partitionNum))
 }
