@@ -1,6 +1,7 @@
 package lotusdb
 
 import (
+	"context"
 	"fmt"
 	"path/filepath"
 
@@ -88,23 +89,27 @@ func (bt *BPTree) PutBatch(positions []*KeyPosition) error {
 		partitionRecords[p] = append(partitionRecords[p], pos)
 	}
 
-	groups := make([]errgroup.Group, len(partitionRecords))
-	for i := 0; i < len(partitionRecords); i++ {
+	g, ctx := errgroup.WithContext(context.Background())
+	for i := range partitionRecords {
+		i := i
 		if len(partitionRecords[i]) == 0 {
 			continue
 		}
-
-		part := i
-		groups[i].Go(func() error {
+		g.Go(func() error {
 			// get the bolt db instance for this partition
-			tree := bt.trees[part]
+			tree := bt.trees[i]
 			return tree.Update(func(tx *bbolt.Tx) error {
 				bucket := tx.Bucket(boltBucketName)
 				// put each record into the bucket
-				for _, record := range partitionRecords[part] {
-					encPos := record.position.Encode()
-					if err := bucket.Put(record.key, encPos); err != nil {
-						return err
+				for _, record := range partitionRecords[i] {
+					select {
+					case <-ctx.Done():
+						return ctx.Err()
+					default:
+						encPos := record.position.Encode()
+						if err := bucket.Put(record.key, encPos); err != nil {
+							return err
+						}
 					}
 				}
 				return nil
@@ -112,10 +117,8 @@ func (bt *BPTree) PutBatch(positions []*KeyPosition) error {
 		})
 	}
 
-	for i := 0; i < len(partitionRecords); i++ {
-		if err := groups[i].Wait(); err != nil {
-			return err
-		}
+	if err := g.Wait(); err != nil {
+		return err
 	}
 
 	return nil
@@ -131,29 +134,35 @@ func (bt *BPTree) DeleteBatch(keys [][]byte) error {
 		p := bt.getKeyPartition(key)
 		partitionKeys[p] = append(partitionKeys[p], key)
 	}
-
-	for i, pk := range partitionKeys {
-		if len(pk) == 0 {
+	g, ctx := errgroup.WithContext(context.Background())
+	for i := range partitionKeys {
+		i := i
+		if len(partitionKeys[i]) == 0 {
 			continue
 		}
-		g := new(errgroup.Group)
 		g.Go(func() error {
 			tree := bt.trees[i]
 			return tree.Update(func(tx *bbolt.Tx) error {
 				// get the bolt db instance for this partition
 				bucket := tx.Bucket(boltBucketName)
 				// delete each key from the bucket
-				for _, key := range pk {
-					if err := bucket.Delete(key); err != nil {
-						return err
+				for _, key := range partitionKeys[i] {
+					select {
+					case <-ctx.Done():
+						return ctx.Err()
+					default:
+						if err := bucket.Delete(key); err != nil {
+							return err
+						}
 					}
 				}
 				return nil
 			})
 		})
-		if err := g.Wait(); err != nil {
-			return err
-		}
+	}
+
+	if err := g.Wait(); err != nil {
+		return err
 	}
 
 	return nil
