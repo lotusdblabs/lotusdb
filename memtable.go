@@ -67,7 +67,8 @@ func openAllMemtables(options Options) ([]*memtable, error) {
 			continue
 		}
 		var id int
-		_, err := fmt.Sscanf(entry.Name(), walFileExt, &id)
+		var prefix int
+		_, err := fmt.Sscanf(entry.Name(), "%d"+walFileExt, &prefix, &id)
 		if err != nil {
 			continue
 		}

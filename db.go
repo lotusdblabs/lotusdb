@@ -10,6 +10,7 @@ import (
 	"syscall"
 	"time"
 
+	"github.com/dgraph-io/badger/v4/y"
 	"github.com/gofrs/flock"
 )
 
@@ -271,7 +272,7 @@ func (db *DB) flushMemtables() {
 			var deletedKeys [][]byte
 			var logRecords []*ValueLogRecord
 			for sklIter.SeekToFirst(); sklIter.Valid(); sklIter.Next() {
-				key, valueStruct := sklIter.Key(), sklIter.Value()
+				key, valueStruct := y.ParseKey(sklIter.Key()), sklIter.Value()
 				if valueStruct.Meta == LogRecordDeleted {
 					deletedKeys = append(deletedKeys, key)
 				} else {

@@ -121,14 +121,14 @@ func (b *Batch) Get(key []byte) ([]byte, error) {
 	}
 
 	// get from index
-	partPosition, err := b.db.index.Get(key)
+	position, err := b.db.index.Get(key)
 	if err != nil {
 		return nil, err
 	}
-	if partPosition == nil {
+	if position == nil {
 		return nil, ErrKeyNotFound
 	}
-	record, err := b.db.vlog.read(partPosition)
+	record, err := b.db.vlog.read(position)
 	if err != nil {
 		return nil, err
 	}

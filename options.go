@@ -100,7 +100,7 @@ var DefaultOptions = Options{
 	BlockCache:       64 * MB,
 	Sync:             false,
 	BytesPerSync:     0,
-	PartitionNum:     5,
+	PartitionNum:     3,
 	KeyHashFunction:  xxhash.Sum64,
 	ValueLogFileSize: 1 * GB,
 }
