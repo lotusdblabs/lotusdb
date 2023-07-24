@@ -91,17 +91,17 @@ func (bt *BPTree) PutBatch(positions []*KeyPosition) error {
 
 	g, ctx := errgroup.WithContext(context.Background())
 	for i := range partitionRecords {
-		i := i
-		if len(partitionRecords[i]) == 0 {
+		partition := i
+		if len(partitionRecords[partition]) == 0 {
 			continue
 		}
 		g.Go(func() error {
 			// get the bolt db instance for this partition
-			tree := bt.trees[i]
+			tree := bt.trees[partition]
 			return tree.Update(func(tx *bbolt.Tx) error {
 				bucket := tx.Bucket(boltBucketName)
 				// put each record into the bucket
-				for _, record := range partitionRecords[i] {
+				for _, record := range partitionRecords[partition] {
 					select {
 					case <-ctx.Done():
 						return ctx.Err()
@@ -116,12 +116,7 @@ func (bt *BPTree) PutBatch(positions []*KeyPosition) error {
 			})
 		})
 	}
-
-	if err := g.Wait(); err != nil {
-		return err
-	}
-
-	return nil
+	return g.Wait()
 }
 
 func (bt *BPTree) DeleteBatch(keys [][]byte) error {
@@ -136,17 +131,17 @@ func (bt *BPTree) DeleteBatch(keys [][]byte) error {
 	}
 	g, ctx := errgroup.WithContext(context.Background())
 	for i := range partitionKeys {
-		i := i
-		if len(partitionKeys[i]) == 0 {
+		partition := i
+		if len(partitionKeys[partition]) == 0 {
 			continue
 		}
 		g.Go(func() error {
-			tree := bt.trees[i]
+			tree := bt.trees[partition]
 			return tree.Update(func(tx *bbolt.Tx) error {
 				// get the bolt db instance for this partition
 				bucket := tx.Bucket(boltBucketName)
 				// delete each key from the bucket
-				for _, key := range partitionKeys[i] {
+				for _, key := range partitionKeys[partition] {
 					select {
 					case <-ctx.Done():
 						return ctx.Err()
@@ -160,12 +155,7 @@ func (bt *BPTree) DeleteBatch(keys [][]byte) error {
 			})
 		})
 	}
-
-	if err := g.Wait(); err != nil {
-		return err
-	}
-
-	return nil
+	return g.Wait()
 }
 
 func (bt *BPTree) Close() error {
