@@ -30,6 +30,7 @@ type option struct {
 	file           io.Writer
 	timeLayout     string
 	disableConsole bool
+	highlighting   bool
 }
 
 func WithDebugLevel() Option {
@@ -75,6 +76,12 @@ func WithDisableConsole() Option {
 	}
 }
 
+func WithEnableHighlighting() Option {
+	return func(opt *option) {
+		opt.highlighting = true
+	}
+}
+
 // WithFile set file path
 func WithFile(file string) Option {
 	dir := filepath.Dir(file)
@@ -101,17 +108,17 @@ func WithFileRotation(file string) Option {
 
 	return func(opt *option) {
 		opt.file = &lumberjack.Logger{ // concurrent-safed
-			Filename:   file, // 文件路径
-			MaxSize:    128,  // 单个文件最大尺寸，默认单位 M
-			MaxBackups: 300,  // 最多保留 300 个备份
-			MaxAge:     30,   // 最大时间，默认单位 day
-			LocalTime:  true, // 使用本地时间
-			Compress:   true, // 是否压缩 disabled by default
+			Filename:   file,
+			MaxSize:    128, // max size of a file,default MB
+			MaxBackups: 300, // 300 backups max
+			MaxAge:     30,  // maximum number of days to retain old log files
+			LocalTime:  true,
+			Compress:   true, // whether to compress
 		}
 	}
 }
 
-// NewJSONLogger return a json-encoder zap logger,
+// NewJSONLogger return json zap logger
 func NewJSONLogger(opts ...Option) (*zap.Logger, error) {
 	opt := &option{level: DefaultLevel, fields: make(map[string]string)}
 	for _, f := range opts {
@@ -132,12 +139,16 @@ func NewJSONLogger(opts ...Option) (*zap.Logger, error) {
 		MessageKey:    "msg",
 		StacktraceKey: "stacktrace", // use by zap.AddStacktrace; optional; useless
 		LineEnding:    zapcore.DefaultLineEnding,
-		EncodeLevel:   zapcore.LowercaseLevelEncoder, // 小写编码器
+		EncodeLevel:   zapcore.LowercaseLevelEncoder,
 		EncodeTime: func(t time.Time, enc zapcore.PrimitiveArrayEncoder) {
 			enc.AppendString(t.Format(timeLayout))
 		},
 		EncodeDuration: zapcore.MillisDurationEncoder,
-		EncodeCaller:   zapcore.ShortCallerEncoder, // 全路径编码器
+		EncodeCaller:   zapcore.ShortCallerEncoder,
+	}
+
+	if opt.highlighting {
+		encoderConfig.EncodeLevel = zapcore.LowercaseColorLevelEncoder
 	}
 
 	jsonEncoder := zapcore.NewJSONEncoder(encoderConfig)
@@ -239,32 +250,6 @@ func WrapMeta(err error, metas ...Meta) (fields []zap.Field) {
 	}
 
 	return
-}
-
-func setLogger() {
-	if logger == nil {
-		logger, _ = NewJSONLogger()
-	}
-}
-
-func Info(msg string, fields ...zap.Field) {
-	setLogger()
-	logger.Info(msg, fields...)
-}
-
-func Debug(msg string, fields ...zap.Field) {
-	setLogger()
-	logger.Debug(msg, fields...)
-}
-
-func Warn(msg string, fields ...zap.Field) {
-	setLogger()
-	logger.Warn(msg, fields...)
-}
-
-func Error(msg string, fields ...zap.Field) {
-	setLogger()
-	logger.Error(msg, fields...)
 }
 
 // Sync calls the underlying Core's Sync method, flushing any buffered log
