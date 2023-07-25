@@ -7,12 +7,18 @@ require (
 	github.com/dgraph-io/badger/v4 v4.1.0
 	github.com/rosedblabs/wal v1.2.1-0.20230720135650-d5d56517e0a3
 	github.com/stretchr/testify v1.8.4
+	go.uber.org/zap v1.24.0
 	golang.org/x/exp v0.0.0-20230713183714-613f0c0eb8a1
+	gopkg.in/natefinch/lumberjack.v2 v2.2.1
 )
 
 require golang.org/x/sys v0.10.0 // indirect
 
-require github.com/kr/text v0.2.0 // indirect
+require (
+	github.com/kr/text v0.2.0 // indirect
+	go.uber.org/atomic v1.7.0 // indirect
+	go.uber.org/multierr v1.6.0 // indirect
+)
 
 require (
 	github.com/cespare/xxhash/v2 v2.2.0
