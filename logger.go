@@ -119,7 +119,7 @@ func WithFileRotation(file string) Option {
 }
 
 // NewJSONLogger return json zap logger
-func NewJSONLogger(opts ...Option) (*zap.Logger, error) {
+func NewJSONLogger(opts ...Option) error {
 	opt := &option{level: DefaultLevel, fields: make(map[string]string)}
 	for _, f := range opts {
 		f(opt)
@@ -201,10 +201,13 @@ func NewJSONLogger(opts ...Option) (*zap.Logger, error) {
 		log = log.WithOptions(zap.Fields(zapcore.Field{Key: key, Type: zapcore.StringType, String: value}))
 	}
 
-	// 给全局logger对象
 	logger = log
+	return nil
+}
 
-	return log, nil
+// GetLogger to use native zap logger
+func GetLogger() *zap.Logger {
+	return logger
 }
 
 var _ Meta = (*meta)(nil)
@@ -250,6 +253,32 @@ func WrapMeta(err error, metas ...Meta) (fields []zap.Field) {
 	}
 
 	return
+}
+
+func setLogger() {
+	if logger == nil {
+		_ = NewJSONLogger()
+	}
+}
+
+func Info(msg string, fields ...zap.Field) {
+	setLogger()
+	logger.Info(msg, fields...)
+}
+
+func Debug(msg string, fields ...zap.Field) {
+	setLogger()
+	logger.Debug(msg, fields...)
+}
+
+func Warn(msg string, fields ...zap.Field) {
+	setLogger()
+	logger.Warn(msg, fields...)
+}
+
+func Error(msg string, fields ...zap.Field) {
+	setLogger()
+	logger.Error(msg, fields...)
 }
 
 // Sync calls the underlying Core's Sync method, flushing any buffered log
