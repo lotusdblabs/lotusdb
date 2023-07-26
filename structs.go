@@ -93,15 +93,15 @@ func decodeLogRecord(buf []byte) *LogRecord {
 		BatchId: batchId, Type: recordType}
 }
 
-type ValueLogRecord struct {
-	key   []byte
-	value []byte
-}
-
 type KeyPosition struct {
 	key       []byte
 	partition uint32
 	position  *wal.ChunkPosition
+}
+
+type ValueLogRecord struct {
+	key   []byte
+	value []byte
 }
 
 func encodeValueLogRecord(record *ValueLogRecord) []byte {
