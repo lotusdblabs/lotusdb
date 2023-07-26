@@ -12,11 +12,10 @@ import (
 )
 
 const (
-	// DefaultLevel the default log level
-	DefaultLevel = zapcore.InfoLevel
-
-	// DefaultTimeLayout the default time layout;
-	DefaultTimeLayout = time.RFC3339
+	DefaultLevel       = zapcore.InfoLevel
+	DefaultTimeLayout  = time.RFC3339
+	DefaultLogDir      = "./log/"
+	DefaultLogFileName = "log_info.log"
 )
 
 var logger *zap.Logger
@@ -82,8 +81,8 @@ func WithEnableHighlighting() Option {
 	}
 }
 
-// WithFile set file path
-func WithFile(file string) Option {
+// WithFilePath set file path
+func WithFilePath(file string) Option {
 	dir := filepath.Dir(file)
 	if err := os.MkdirAll(dir, 0766); err != nil {
 		panic(err)
@@ -99,8 +98,8 @@ func WithFile(file string) Option {
 	}
 }
 
-// WithFileRotation write log with rotation
-func WithFileRotation(file string) Option {
+// WithFileRotationPath write log files with rotation
+func WithFileRotationPath(file string) Option {
 	dir := filepath.Dir(file)
 	if err := os.MkdirAll(dir, 0766); err != nil {
 		panic(err)

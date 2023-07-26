@@ -2,9 +2,10 @@ package lotusdb
 
 import (
 	"errors"
-	"log"
+	"go.uber.org/zap"
 	"os"
 	"os/signal"
+	"path"
 	"path/filepath"
 	"sync"
 	"syscall"
@@ -33,8 +34,25 @@ type Stat struct {
 }
 
 func Open(options Options) (*DB, error) {
+	// banner
+
+	// logger
+	logPath := path.Join(DefaultLogDir, time.Now().Format("2006-01-02")+"_"+DefaultLogFileName)
+	err := NewJSONLogger(
+		WithInfoLevel(),
+		WithFileRotationPath(logPath),
+		WithDisableConsole(),
+		WithTimeLayout("2006-01-02 15:04:05"),
+		WithEnableHighlighting(),
+	)
+	if err != nil {
+		Error("open db failed", zap.Error(err))
+	}
+	defer Sync()
+
 	// check whether all options are valid
 	if err := validateOptions(&options); err != nil {
+		Error("db opens failed", zap.Error(err))
 		return nil, err
 	}
 
@@ -42,23 +60,28 @@ func Open(options Options) (*DB, error) {
 	// create data directory if not exist
 	if _, err := os.Stat(options.DirPath); err != nil {
 		if err := os.MkdirAll(options.DirPath, os.ModePerm); err != nil {
+			Error("create data directory failed", zap.Error(err))
 			return nil, err
 		}
+		Info("create data directory success", zap.String("data path", options.DirPath))
 	}
 
 	// create file lock, prevent multiple processes from using the same database directory
 	fileLock := flock.New(filepath.Join(options.DirPath, fileLockName))
 	hold, err := fileLock.TryLock()
 	if err != nil {
+		Error("open db failed", zap.Error(err))
 		return nil, err
 	}
 	if !hold {
+		Error("open db failed", zap.Error(ErrDatabaseIsUsing))
 		return nil, ErrDatabaseIsUsing
 	}
 
 	// open all memtables
 	memtables, err := openAllMemtables(options)
 	if err != nil {
+		Error("open db failed", zap.Error(err))
 		return nil, err
 	}
 
@@ -70,6 +93,7 @@ func Open(options Options) (*DB, error) {
 		hashKeyFunction: options.KeyHashFunction,
 	})
 	if err != nil {
+		Error("open db failed", zap.Error(err))
 		return nil, err
 	}
 
@@ -82,6 +106,7 @@ func Open(options Options) (*DB, error) {
 		hashKeyFunction: options.KeyHashFunction,
 	})
 	if err != nil {
+		Error("open db failed", zap.Error(err))
 		return nil, err
 	}
 
@@ -107,22 +132,27 @@ func (db *DB) Close() error {
 	// close all memtables
 	for _, table := range db.immuMems {
 		if err := table.close(); err != nil {
+			Error("close memtables failed", zap.Error(err))
 			return err
 		}
 	}
 	if err := db.activeMem.close(); err != nil {
+		Error("close memtables failed", zap.Error(err))
 		return err
 	}
 	// close index
 	if err := db.index.Close(); err != nil {
+		Error("close index failed", zap.Error(err))
 		return err
 	}
 	// close value log
 	if err := db.vlog.close(); err != nil {
+		Error("close value log failed", zap.Error(err))
 		return err
 	}
 	// release file lock
 	if err := db.fileLock.Unlock(); err != nil {
+		Error("release file lock failed", zap.Error(err))
 		return err
 	}
 
@@ -137,18 +167,22 @@ func (db *DB) Sync() error {
 	// sync all wal of memtables
 	for _, table := range db.immuMems {
 		if err := table.sync(); err != nil {
+			Error("sync wal failed", zap.Error(err))
 			return err
 		}
 	}
 	if err := db.activeMem.sync(); err != nil {
+		Error("sync wal failed", zap.Error(err))
 		return err
 	}
 	// sync index
 	if err := db.index.Sync(); err != nil {
+		Error("sync index failed", zap.Error(err))
 		return err
 	}
 	// sync value log
 	if err := db.vlog.sync(); err != nil {
+		Error("sync value log failed", zap.Error(err))
 		return err
 	}
 
@@ -285,33 +319,33 @@ func (db *DB) flushMemtables() {
 			// write to value log, get the positions of keys
 			keyPos, err := db.vlog.writeBatch(logRecords)
 			if err != nil {
-				log.Println("vlog writeBatch failed:", err)
+				Error("vlog writeBatch failed:", zap.Error(err))
 				continue
 			}
 			// sync the value log
 			if err := db.vlog.sync(); err != nil {
-				log.Println("vlog sync failed:", err)
+				Error("vlog sync failed:", zap.Error(err))
 				continue
 			}
 
 			// write all keys and positions to index
 			if err := db.index.PutBatch(keyPos); err != nil {
-				log.Println("index PutBatch failed:", err)
+				Error("index PutBatch failed:", zap.Error(err))
 				continue
 			}
 			if err := db.index.DeleteBatch(deletedKeys); err != nil {
-				log.Println("index DeleteBatch failed:", err)
+				Error("index DeleteBatch failed:", zap.Error(err))
 				continue
 			}
 			// sync the index
 			if err := db.index.Sync(); err != nil {
-				log.Println("index sync failed:", err)
+				Error("index sync failed:", zap.Error(err))
 				continue
 			}
 
 			// delete the wal
 			if err := table.deleteWAl(); err != nil {
-				log.Println("delete wal failed:", err)
+				Error("delete wal failed:", zap.Error(err))
 				continue
 			}
 
