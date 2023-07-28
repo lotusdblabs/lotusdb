@@ -1,8 +1,9 @@
 package lotusdb
 
 import (
-	"github.com/cespare/xxhash/v2"
 	"os"
+
+	"github.com/cespare/xxhash/v2"
 )
 
 type Options struct {
@@ -17,6 +18,9 @@ type Options struct {
 	// MemtableNums represents maximum number of memtables to keep in memory before flushing.
 	// Default value is 5.
 	MemtableNums int
+
+	// SegmentSize specifies the maximum size of each segment file in bytes.
+	SegmentSize int64
 
 	// BlockCache specifies the size of the block cache in number of bytes.
 	// A block cache is used to store recently accessed data blocks, improving read performance.
@@ -97,6 +101,7 @@ var DefaultOptions = Options{
 	DirPath:          tempDBDir(),
 	MemtableSize:     64 * MB,
 	MemtableNums:     15,
+	SegmentSize:      GB,
 	BlockCache:       64 * MB,
 	Sync:             false,
 	BytesPerSync:     0,
