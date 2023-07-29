@@ -1,5 +1,25 @@
 package lotusdb
 
+// ----------------------------------------------
+// | case 1 | TestOpenValueLog				    |
+// ----------------------------------------------
+// | case 2 | TestValueLogWriteAllKindsEntries  |
+// ----------------------------------------------
+// | case 3 | TestValueLogWriteBatch			|
+// ----------------------------------------------
+// | case 4 | TestValueLogWriteBatchReopen		|
+// ----------------------------------------------
+// | case 5 | TestValueLogRead					|
+// ----------------------------------------------
+// | case 6 | TestValueLogReadReopen			|
+// ----------------------------------------------
+// | case 7 | TestValueLogSync					|
+// ---------------------------------------------=
+// | case 8 | TestValueLogClose					|
+// ---------------------------------------------=
+// | case 9 | TestValueLogCompaction			|
+// ---------------------------------------------=
+
 import (
 	"os"
 	"testing"
