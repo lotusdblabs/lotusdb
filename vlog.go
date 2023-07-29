@@ -126,7 +126,7 @@ func (vlog *valueLog) sync() error {
 
 func (vlog *valueLog) close() error {
 	for _, walFile := range vlog.walFiles {
-		if err := walFile.Sync(); err != nil {
+		if err := walFile.Close(); err != nil {
 			return err
 		}
 	}

@@ -1,8 +1,9 @@
 package lotusdb
 
 import (
-	"github.com/cespare/xxhash/v2"
 	"os"
+
+	"github.com/cespare/xxhash/v2"
 )
 
 type Options struct {
@@ -39,6 +40,9 @@ type Options struct {
 	// PartitionNum specifies the number of partitions to use for the index and value log.
 	PartitionNum int
 
+	// KeyHashFunction specifies the hash function for sharding.
+	// It is used to determine which partition a key belongs to.
+	// Default value is xxhash.
 	KeyHashFunction func([]byte) uint64
 
 	// ValueLogFileSize size of a single value log file.

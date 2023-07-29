@@ -2,6 +2,7 @@ package lotusdb
 
 import (
 	"encoding/binary"
+
 	"github.com/rosedblabs/wal"
 )
 
@@ -93,12 +94,14 @@ func decodeLogRecord(buf []byte) *LogRecord {
 		BatchId: batchId, Type: recordType}
 }
 
+// KeyPosition is the position of the key in the value log.
 type KeyPosition struct {
 	key       []byte
 	partition uint32
 	position  *wal.ChunkPosition
 }
 
+// ValueLogRecord is the record of the key/value pair in the value log.
 type ValueLogRecord struct {
 	key   []byte
 	value []byte
