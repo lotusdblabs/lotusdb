@@ -40,9 +40,15 @@ func TestValueLogWriteAllKindsEntries(t *testing.T) {
 		os.RemoveAll(path)
 	}()
 
-	DefaultVlogOptions := valueLogOptions{path, DefaultOptions.SegmentSize, DefaultOptions.BlockCache, uint32(DefaultOptions.PartitionNum), DefaultOptions.KeyHashFunction}
+	opts := valueLogOptions{
+		dirPath:         path,
+		segmentSize:     GB,
+		blockCache:      DefaultOptions.BlockCache,
+		partitionNum:    uint32(DefaultOptions.PartitionNum),
+		hashKeyFunction: DefaultOptions.KeyHashFunction,
+	}
 	t.Run("open vlog files", func(t *testing.T) {
-		vlog, err := openValueLog(DefaultVlogOptions)
+		vlog, err := openValueLog(opts)
 		assert.Nil(t, err)
 		vlog.close()
 	})

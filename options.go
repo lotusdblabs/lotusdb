@@ -19,9 +19,6 @@ type Options struct {
 	// Default value is 5.
 	MemtableNums int
 
-	// SegmentSize specifies the maximum size of each segment file in bytes.
-	SegmentSize int64
-
 	// BlockCache specifies the size of the block cache in number of bytes.
 	// A block cache is used to store recently accessed data blocks, improving read performance.
 	// If BlockCache is set to 0, no block cache will be used.
@@ -104,7 +101,6 @@ var DefaultOptions = Options{
 	DirPath:          tempDBDir(),
 	MemtableSize:     64 * MB,
 	MemtableNums:     15,
-	SegmentSize:      GB,
 	BlockCache:       64 * MB,
 	Sync:             false,
 	BytesPerSync:     0,
