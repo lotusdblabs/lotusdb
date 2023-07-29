@@ -5,9 +5,8 @@ go 1.19
 require (
 	github.com/bwmarrin/snowflake v0.3.0
 	github.com/dgraph-io/badger/v4 v4.1.0
-	github.com/rosedblabs/wal v1.2.1-0.20230720135650-d5d56517e0a3
+	github.com/rosedblabs/wal v1.2.1-0.20230729134732-14a4140bc0f6
 	github.com/stretchr/testify v1.8.4
-	golang.org/x/exp v0.0.0-20230713183714-613f0c0eb8a1
 )
 
 require golang.org/x/sys v0.10.0 // indirect
