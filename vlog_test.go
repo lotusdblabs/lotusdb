@@ -21,9 +21,15 @@ func TestOpenValueLog(t *testing.T) {
 		os.RemoveAll(path)
 	}()
 
-	DefaultVlogOptions := valueLogOptions{path, DefaultOptions.SegmentSize, DefaultOptions.BlockCache, uint32(DefaultOptions.PartitionNum), DefaultOptions.KeyHashFunction}
+	opts := valueLogOptions{
+		dirPath:         path,
+		segmentSize:     GB,
+		blockCache:      DefaultOptions.BlockCache,
+		partitionNum:    uint32(DefaultOptions.PartitionNum),
+		hashKeyFunction: DefaultOptions.KeyHashFunction,
+	}
 	t.Run("open vlog files", func(t *testing.T) {
-		vlog, err := openValueLog(DefaultVlogOptions)
+		vlog, err := openValueLog(opts)
 		assert.Nil(t, err)
 		vlog.close()
 	})
@@ -35,7 +41,7 @@ func TestValueLogWriteAllKindsEntries(t *testing.T) {
 	assert.Nil(t, err)
 	opts := valueLogOptions{
 		dirPath:         path,
-		segmentSize:     DefaultOptions.SegmentSize,
+		segmentSize:     GB,
 		blockCache:      DefaultOptions.BlockCache,
 		partitionNum:    uint32(DefaultOptions.PartitionNum),
 		hashKeyFunction: DefaultOptions.KeyHashFunction,
@@ -119,7 +125,7 @@ func TestValueLogWriteBatch(t *testing.T) {
 
 	opts := valueLogOptions{
 		dirPath:         path,
-		segmentSize:     DefaultOptions.SegmentSize,
+		segmentSize:     GB,
 		blockCache:      DefaultOptions.BlockCache,
 		partitionNum:    uint32(DefaultOptions.PartitionNum),
 		hashKeyFunction: DefaultOptions.KeyHashFunction,
@@ -150,7 +156,7 @@ func TestValueLogWriteReopen(t *testing.T) {
 
 	opts := valueLogOptions{
 		dirPath:         path,
-		segmentSize:     DefaultOptions.SegmentSize,
+		segmentSize:     GB,
 		blockCache:      DefaultOptions.BlockCache,
 		partitionNum:    uint32(DefaultOptions.PartitionNum),
 		hashKeyFunction: DefaultOptions.KeyHashFunction,
@@ -197,7 +203,7 @@ func TestValueLogRead(t *testing.T) {
 	assert.Nil(t, err)
 	opts := valueLogOptions{
 		dirPath:         path,
-		segmentSize:     DefaultOptions.SegmentSize,
+		segmentSize:     GB,
 		blockCache:      DefaultOptions.BlockCache,
 		partitionNum:    uint32(DefaultOptions.PartitionNum),
 		hashKeyFunction: DefaultOptions.KeyHashFunction,
@@ -272,7 +278,7 @@ func TestValueLogReadReopen(t *testing.T) {
 	assert.Nil(t, err)
 	opts := valueLogOptions{
 		dirPath:         path,
-		segmentSize:     DefaultOptions.SegmentSize,
+		segmentSize:     GB,
 		blockCache:      DefaultOptions.BlockCache,
 		partitionNum:    uint32(DefaultOptions.PartitionNum),
 		hashKeyFunction: DefaultOptions.KeyHashFunction,
@@ -318,7 +324,7 @@ func TestValueLogSync(t *testing.T) {
 	assert.Nil(t, err)
 	opts := valueLogOptions{
 		dirPath:         path,
-		segmentSize:     DefaultOptions.SegmentSize,
+		segmentSize:     GB,
 		blockCache:      DefaultOptions.BlockCache,
 		partitionNum:    uint32(DefaultOptions.PartitionNum),
 		hashKeyFunction: DefaultOptions.KeyHashFunction,
@@ -347,7 +353,7 @@ func TestValueLogClose(t *testing.T) {
 	assert.Nil(t, err)
 	opts := valueLogOptions{
 		dirPath:         path,
-		segmentSize:     DefaultOptions.SegmentSize,
+		segmentSize:     GB,
 		blockCache:      DefaultOptions.BlockCache,
 		partitionNum:    uint32(DefaultOptions.PartitionNum),
 		hashKeyFunction: DefaultOptions.KeyHashFunction,
