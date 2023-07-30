@@ -84,3 +84,33 @@ func BenchmarkLotusLoggerInfoFile(B *testing.B) {
 		return nil
 	})
 }
+
+type demo struct {
+	name string
+	age  int
+	desc string
+}
+
+func TestUseDemo(t *testing.T) {
+	log := NewLotusLogger(nil)
+	demo1 := &demo{
+		name: "demo1",
+		age:  1,
+		desc: "demo1 desc",
+	}
+	// use Debug with normal kv
+	log.logger.Debug("debug-demo",
+		zap.String("k1", "v1"),
+		zap.Int("k2", 2),
+		zap.Int16("k3", 3),
+		zap.Int32("k4", 4),
+		zap.Float32("f1", 5.00),
+		zap.Float64("f2", 6.45),
+		// strings
+		zap.Strings("string-array", []string{"a", "b", "c"}),
+		// ints
+		zap.Ints("int-array", []int{1, 2, 3}),
+		// any
+		zap.Any("any-demo", demo1),
+	)
+}
