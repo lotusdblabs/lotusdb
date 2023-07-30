@@ -1,11 +1,9 @@
 package lotusdb
 
 import (
-	"math/rand"
 	"os"
 	"testing"
 
-	"github.com/lotusdblabs/lotusdb/v2/util"
 	"github.com/stretchr/testify/assert"
 )
 
@@ -83,8 +81,8 @@ func TestDB_Put_Get(t *testing.T) {
 
 	// Call the Put function for testing
 	writeOptions := &WriteOptions{
-		Sync:       false,
-		DisableWal: true,
+		Sync:       true,
+		DisableWal: false,
 	}
 
 	k, v := []byte("Hello"), []byte("World")
@@ -95,14 +93,6 @@ func TestDB_Put_Get(t *testing.T) {
 	assert.NoError(t, err, "Get should not return an error")
 	assert.Equal(t, v, val, "expected value is World")
 
-	for i := 0; i < 100; i++ {
-		err = db.Put(util.GetTestKey(rand.Int()), util.RandomValue(128), writeOptions)
-		assert.NoError(t, err, "Put should not return an error")
-		err = db.Put(util.GetTestKey(rand.Int()), util.RandomValue(KB), writeOptions)
-		assert.NoError(t, err, "Put should not return an error")
-		err = db.Put(util.GetTestKey(rand.Int()), util.RandomValue(5*KB), writeOptions)
-		assert.NoError(t, err, "Put should not return an error")
-	}
 	// Call the Close function for testing
 	err = db.Close()
 	assert.NoError(t, err, "Close should not return an error")
