@@ -143,6 +143,10 @@ func TestDB_Delete_Exist(t *testing.T) {
 	assert.NoError(t, err, "Exist should not return an error")
 	assert.Equal(t, false, isExist, "expected isExist is false")
 
+	val, err := db.Get(k)
+	assert.EqualError(t, err, ErrKeyNotFound.Error(), "expected key not found")
+	assert.Nil(t, val, "expected val nil")
+
 	// Delete an not exist key
 	err = db.Delete([]byte("Hello"), writeOptions)
 	assert.NoError(t, err, "Delete should not return an error")

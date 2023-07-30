@@ -149,13 +149,21 @@ func (b *Batch) Delete(key []byte) error {
 	}
 
 	b.mu.Lock()
-
-	// write to pendingWrites if the key exists
-	b.pendingWrites[string(key)] = &LogRecord{
-		Key:  key,
-		Type: LogRecordDeleted,
+	position, err := b.db.index.Get(key)
+	if err != nil {
+		b.mu.Unlock()
+		return err
 	}
-
+	isDel, _ := b.db.activeMem.get(key)
+	if position != nil || !isDel {
+		// write to pendingWrites if the key exists
+		b.pendingWrites[string(key)] = &LogRecord{
+			Key:  key,
+			Type: LogRecordDeleted,
+		}
+	} else {
+		delete(b.pendingWrites, string(key))
+	}
 	b.mu.Unlock()
 
 	return nil
