@@ -75,11 +75,10 @@ func NewLotusLogger(cfg *LotusLoggerConfig) *LotusLogger {
 	// log output to Stdout
 	if cfg == nil || cfg.OutputType == OutputTypeStd {
 		log := &LotusLogger{}
-		debugLv := zap.LevelEnablerFunc(isAllLevel)
 		encoder := createEncoderConfig()
 		core := zapcore.NewTee(
 			zapcore.NewCore(encoder,
-				zapcore.AddSync(os.Stdout), debugLv),
+				zapcore.AddSync(os.Stdout), zap.LevelEnablerFunc(isAllLevel)),
 		)
 		log.logger = zap.New(core)
 		return log
