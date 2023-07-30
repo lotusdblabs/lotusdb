@@ -3,6 +3,7 @@ package lotusdb
 import (
 	"os"
 	"path/filepath"
+	"strconv"
 	"testing"
 
 	"github.com/cespare/xxhash/v2"
@@ -19,17 +20,35 @@ func Test_openIndexBoltDB(t *testing.T) {
 		want    *BPTree
 		wantErr bool
 	}{
-		{"normal",
+		{"normal_1",
 			indexOptions{
 				indexType:       indexBoltDB,
-				dirPath:         filepath.Join("/tmp", "bptree-open"),
+				dirPath:         filepath.Join(os.TempDir(), "bptree-open-1"),
+				partitionNum:    1,
+				hashKeyFunction: xxhash.Sum64,
+			},
+			&BPTree{
+				options: indexOptions{
+					indexType:       indexBoltDB,
+					dirPath:         filepath.Join(os.TempDir(), "bptree-open-1"),
+					partitionNum:    1,
+					hashKeyFunction: xxhash.Sum64,
+				},
+				trees: make([]*bbolt.DB, 1),
+			},
+			false,
+		},
+		{"normal_3",
+			indexOptions{
+				indexType:       indexBoltDB,
+				dirPath:         filepath.Join(os.TempDir(), "bptree-open-3"),
 				partitionNum:    3,
 				hashKeyFunction: xxhash.Sum64,
 			},
 			&BPTree{
 				options: indexOptions{
 					indexType:       indexBoltDB,
-					dirPath:         filepath.Join("/tmp", "bptree-open"),
+					dirPath:         filepath.Join(os.TempDir(), "bptree-open-3"),
 					partitionNum:    3,
 					hashKeyFunction: xxhash.Sum64,
 				},
@@ -40,7 +59,8 @@ func Test_openIndexBoltDB(t *testing.T) {
 	}
 	for _, tt := range tests {
 		t.Run(tt.name, func(t *testing.T) {
-			_ = os.MkdirAll(tt.options.dirPath, os.ModePerm)
+			err := os.MkdirAll(tt.options.dirPath, os.ModePerm)
+			assert.Nil(t, err)
 			defer func() {
 				_ = os.RemoveAll(tt.options.dirPath)
 			}()
@@ -58,15 +78,24 @@ func Test_openIndexBoltDB(t *testing.T) {
 	}
 }
 
-func TestBPTree_Get(t *testing.T) {
+func TestBPTree_Get_1(t *testing.T) {
+	testBPTree_Get(t, 1)
+}
+
+func TestBPTree_Get_3(t *testing.T) {
+	testBPTree_Get(t, 3)
+}
+
+func testBPTree_Get(t *testing.T, partitionNum int) {
 	options := indexOptions{
 		indexType:       indexBoltDB,
-		dirPath:         filepath.Join("/tmp", "bptree-get"),
-		partitionNum:    3,
+		dirPath:         filepath.Join(os.TempDir(), "bptree-get-"+strconv.Itoa(partitionNum)),
+		partitionNum:    partitionNum,
 		hashKeyFunction: xxhash.Sum64,
 	}
 
-	_ = os.MkdirAll(options.dirPath, os.ModePerm)
+	err := os.MkdirAll(options.dirPath, os.ModePerm)
+	assert.Nil(t, err)
 	defer func() {
 		_ = os.RemoveAll(options.dirPath)
 	}()
@@ -99,21 +128,29 @@ func TestBPTree_Get(t *testing.T) {
 				t.Errorf("BPTree.Get() error = %v, wantErr %v", err, tt.wantErr)
 				return
 			}
-			t.Log(got)
 			assert.Equal(t, got != nil, tt.exist)
 		})
 	}
 }
 
-func TestBPTree_PutBatch(t *testing.T) {
+func TestBPTree_PutBatch_1(t *testing.T) {
+	testBPTree_PutBatch(t, 1)
+}
+
+func TestBPTree_PutBatch_3(t *testing.T) {
+	testBPTree_PutBatch(t, 3)
+}
+
+func testBPTree_PutBatch(t *testing.T, partitionNum int) {
 	options := indexOptions{
 		indexType:       indexBoltDB,
-		dirPath:         filepath.Join("/tmp", "bptree-putBatch"),
-		partitionNum:    3,
+		dirPath:         filepath.Join(os.TempDir(), "bptree-putBatch-"+strconv.Itoa(partitionNum)),
+		partitionNum:    partitionNum,
 		hashKeyFunction: xxhash.Sum64,
 	}
 
-	_ = os.MkdirAll(options.dirPath, os.ModePerm)
+	err := os.MkdirAll(options.dirPath, os.ModePerm)
+	assert.Nil(t, err)
 	defer func() {
 		_ = os.RemoveAll(options.dirPath)
 	}()
@@ -152,15 +189,24 @@ func TestBPTree_PutBatch(t *testing.T) {
 	}
 }
 
-func TestBPTree_DeleteBatch(t *testing.T) {
+func TestBPTree_DeleteBatch_1(t *testing.T) {
+	testBPTree_DeleteBatch(t, 1)
+}
+
+func TestBPTree_DeleteBatch_3(t *testing.T) {
+	testBPTree_DeleteBatch(t, 3)
+}
+
+func testBPTree_DeleteBatch(t *testing.T, partitionNum int) {
 	options := indexOptions{
 		indexType:       indexBoltDB,
-		dirPath:         filepath.Join("/tmp", "bptree-deleteBatch"),
-		partitionNum:    3,
+		dirPath:         filepath.Join(os.TempDir(), "bptree-deleteBatch-"+strconv.Itoa(partitionNum)),
+		partitionNum:    partitionNum,
 		hashKeyFunction: xxhash.Sum64,
 	}
 
-	_ = os.MkdirAll(options.dirPath, os.ModePerm)
+	err := os.MkdirAll(options.dirPath, os.ModePerm)
+	assert.Nil(t, err)
 	defer func() {
 		_ = os.RemoveAll(options.dirPath)
 	}()
@@ -198,15 +244,24 @@ func TestBPTree_DeleteBatch(t *testing.T) {
 	}
 }
 
-func TestBPTree_Close(t *testing.T) {
+func TestBPTree_Close_1(t *testing.T) {
+	testBPTree_Close(t, 1)
+}
+
+func TestBPTree_Close_3(t *testing.T) {
+	testBPTree_Close(t, 3)
+}
+
+func testBPTree_Close(t *testing.T, partitionNum int) {
 	options := indexOptions{
 		indexType:       indexBoltDB,
-		dirPath:         filepath.Join("/tmp", "bptree-close"),
-		partitionNum:    3,
+		dirPath:         filepath.Join(os.TempDir(), "bptree-close-"+strconv.Itoa(partitionNum)),
+		partitionNum:    partitionNum,
 		hashKeyFunction: xxhash.Sum64,
 	}
 
-	_ = os.MkdirAll(options.dirPath, os.ModePerm)
+	err := os.MkdirAll(options.dirPath, os.ModePerm)
+	assert.Nil(t, err)
 	defer func() {
 		_ = os.RemoveAll(options.dirPath)
 	}()
@@ -217,16 +272,24 @@ func TestBPTree_Close(t *testing.T) {
 	err = bt.Close()
 	assert.Nil(t, err)
 }
+func TestBPTree_getKeyPartition_1(t *testing.T) {
+	testBPTree_getKeyPartition(t, 1)
+}
 
-func TestBPTree_getKeyPartition(t *testing.T) {
+func TestBPTree_getKeyPartition_3(t *testing.T) {
+	testBPTree_getKeyPartition(t, 3)
+}
+
+func testBPTree_getKeyPartition(t *testing.T, partitionNum int) {
 	options := indexOptions{
 		indexType:       indexBoltDB,
-		dirPath:         filepath.Join("/tmp", "bptree-getKeyPartition"),
-		partitionNum:    3,
+		dirPath:         filepath.Join(os.TempDir(), "bptree-getKeyPartition-"+strconv.Itoa(partitionNum)),
+		partitionNum:    partitionNum,
 		hashKeyFunction: xxhash.Sum64,
 	}
 
-	_ = os.MkdirAll(options.dirPath, os.ModePerm)
+	err := os.MkdirAll(options.dirPath, os.ModePerm)
+	assert.Nil(t, err)
 	defer func() {
 		_ = os.RemoveAll(options.dirPath)
 	}()
@@ -257,15 +320,24 @@ func TestBPTree_getKeyPartition(t *testing.T) {
 	}
 }
 
-func TestBPTree_Sync(t *testing.T) {
+func TestBPTree_Sync_1(t *testing.T) {
+	testBPTree_Sync(t, 1)
+}
+
+func TestBPTree_Sync_3(t *testing.T) {
+	testBPTree_Sync(t, 3)
+}
+
+func testBPTree_Sync(t *testing.T, partitionNum int) {
 	options := indexOptions{
 		indexType:       indexBoltDB,
-		dirPath:         filepath.Join("/tmp", "bptree-sync"),
-		partitionNum:    3,
+		dirPath:         filepath.Join(os.TempDir(), "bptree-sync-"+strconv.Itoa(partitionNum)),
+		partitionNum:    partitionNum,
 		hashKeyFunction: xxhash.Sum64,
 	}
 
-	_ = os.MkdirAll(options.dirPath, os.ModePerm)
+	err := os.MkdirAll(options.dirPath, os.ModePerm)
+	assert.Nil(t, err)
 	defer func() {
 		_ = os.RemoveAll(options.dirPath)
 	}()
