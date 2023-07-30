@@ -106,6 +106,7 @@ func (b *Batch) Get(key []byte) ([]byte, error) {
 			b.mu.RUnlock()
 			return record.Value, nil
 		}
+		b.mu.RUnlock()
 	}
 
 	// get from memtables
