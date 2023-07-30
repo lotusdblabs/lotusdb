@@ -11,7 +11,11 @@ require (
 
 require golang.org/x/sys v0.10.0 // indirect
 
-require github.com/kr/text v0.2.0 // indirect
+require (
+	github.com/kr/text v0.2.0 // indirect
+	go.uber.org/atomic v1.7.0 // indirect
+	go.uber.org/multierr v1.6.0 // indirect
+)
 
 require (
 	github.com/cespare/xxhash/v2 v2.2.0
@@ -30,6 +34,8 @@ require (
 	github.com/klauspost/compress v1.16.7 // indirect
 	github.com/pkg/errors v0.9.1 // indirect
 	go.etcd.io/bbolt v1.3.7
+	go.uber.org/zap v1.24.0
 	golang.org/x/net v0.12.0 // indirect
 	golang.org/x/sync v0.3.0
+	gopkg.in/natefinch/lumberjack.v2 v2.2.1
 )

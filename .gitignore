@@ -5,3 +5,9 @@ lotusdb.iml
 codecov.yaml
 coverage.txt
 benchmark/
+
+
+# other
+node_modules
+package-lock.json
+package.json
