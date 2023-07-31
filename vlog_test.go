@@ -1,44 +1,43 @@
 package lotusdb
 
-// ----------------------------------------------
-// | case 1 | TestOpenValueLog				    |
-// ----------------------------------------------
-// | case 2 | TestValueLogWriteAllKindsEntries  |
-// ----------------------------------------------
-// | case 3 | TestValueLogWriteBatch			|
-// ----------------------------------------------
-// | case 4 | TestValueLogWriteBatchReopen		|
-// ----------------------------------------------
-// | case 5 | TestValueLogRead					|
-// ----------------------------------------------
-// | case 6 | TestValueLogReadReopen			|
-// ----------------------------------------------
-// | case 7 | TestValueLogSync					|
-// ---------------------------------------------=
-// | case 8 | TestValueLogClose					|
-// ---------------------------------------------=
-// | case 9 | TestValueLogCompaction			|
-// ---------------------------------------------=
-
 import (
-	"fmt"
 	"os"
-	"path/filepath"
-	"strings"
 	"testing"
-	"time"
 
+	"github.com/lotusdblabs/lotusdb/v2/util"
 	"github.com/stretchr/testify/assert"
 )
 
+// tool: golint todo
+
+// ----------------------------------------------
+// | case 1 | TestOpenValueLog                  |
+// ----------------------------------------------
+// | case 2 | TestValueLogWriteAllKindsEntries  |
+// ----------------------------------------------
+// | case 3 | TestValueLogWriteBatch            |
+// ----------------------------------------------
+// | case 4 | TestValueLogWriteBatchReopen      |
+// ----------------------------------------------
+// | case 5 | TestValueLogRead                  |
+// ----------------------------------------------
+// | case 6 | TestValueLogReadReopen            |
+// ----------------------------------------------
+// | case 7 | TestValueLogSync                  |
+// ----------------------------------------------
+// | case 8 | TestValueLogClose                 |
+// ----------------------------------------------
+// | case 9 | TestValueLogMultiSegmentFiles     |
+// ----------------------------------------------
+
 func TestOpenValueLog(t *testing.T) {
-	path, err := filepath.Abs(filepath.Join("/tmp", "vlog-test"))
+	path, err := os.MkdirTemp("", "vlog-test-open")
 	assert.Nil(t, err)
 	err = os.MkdirAll(path, os.ModePerm)
 	assert.Nil(t, err)
 
 	defer func() {
-		os.RemoveAll(path)
+		_ = os.RemoveAll(path)
 	}()
 
 	opts := valueLogOptions{
@@ -51,13 +50,13 @@ func TestOpenValueLog(t *testing.T) {
 	t.Run("open vlog files", func(t *testing.T) {
 		vlog, err := openValueLog(opts)
 		assert.Nil(t, err)
-		vlog.close()
+		err = vlog.close()
+		assert.Nil(t, err)
 	})
-
 }
 
 func TestValueLogWriteAllKindsEntries(t *testing.T) {
-	path, err := filepath.Abs(filepath.Join("/tmp", "vlog-test"))
+	path, err := os.MkdirTemp("", "vlog-test-write-entries")
 	assert.Nil(t, err)
 	opts := valueLogOptions{
 		dirPath:         path,
@@ -71,7 +70,7 @@ func TestValueLogWriteAllKindsEntries(t *testing.T) {
 	assert.Nil(t, err)
 
 	defer func() {
-		os.RemoveAll(path)
+		_ = os.RemoveAll(path)
 	}()
 
 	logs := []*ValueLogRecord{
@@ -102,7 +101,6 @@ func TestValueLogWriteAllKindsEntries(t *testing.T) {
 	for _, tt := range tests {
 		t.Run(tt.name, func(t *testing.T) {
 			logs := []*ValueLogRecord{tt.args.log}
-
 			_, err := vlog.writeBatch(logs)
 			if (err != nil) != tt.wantErr {
 				t.Errorf("writeBatch() error = %v, wantErr = %v", err, tt.wantErr)
@@ -110,37 +108,16 @@ func TestValueLogWriteAllKindsEntries(t *testing.T) {
 		})
 	}
 
-	t.Run("write all kinds of entries", func(t *testing.T) {
-		_, err := vlog.writeBatch(logs)
-		assert.Nil(t, err)
-	})
-
-	vlog.close()
+	err = vlog.close()
+	assert.Nil(t, err)
 }
 
-// === RUN   TestValueLogWriteBatch
-// numRW:500000
-// PartitionNum:1 write:8.4933054s
-// PartitionNum:3 write:4.6630058s
-// PartitionNum:10 write:3.790305s
-// numRW:1000000
-// PartitionNum:1 write:18.2333748s
-// PartitionNum:3 write:8.5497644s
-// PartitionNum:10 write:8.0717735s
-// numRW:2000000
-// PartitionNum:1 write:34.7807686s
-// PartitionNum:3 write:17.3591007s
-// PartitionNum:10 write:15.194792s
-// --- PASS: TestValueLogWriteBatch (125.65s)
-// PASS
-// ok      github.com/lotusdblabs/lotusdb/v2       126.758s
-// Please set the go-test timeout threshold high enough before runing this test, about 360s.
 func TestValueLogWriteBatch(t *testing.T) {
-	path, err := filepath.Abs(filepath.Join("/tmp", "vlog-test"))
+	path, err := os.MkdirTemp("", "vlog-test-write-batch")
 	assert.Nil(t, err)
 
 	defer func() {
-		os.RemoveAll(path)
+		_ = os.RemoveAll(path)
 	}()
 
 	opts := valueLogOptions{
@@ -155,23 +132,42 @@ func TestValueLogWriteBatch(t *testing.T) {
 	numPartList := []int{1, 3, 10}
 	t.Run("writeBatch normally", func(t *testing.T) {
 		for _, numRW := range numRWList {
-			fmt.Printf("numRW:%d\n", numRW)
 			for _, numPart := range numPartList {
-				fmt.Printf("numPart:%d ", numPart)
-				err := RWBatch(opts, numRW, numPart)
+				err := writeBatch(opts, numRW, numPart)
 				assert.Nil(t, err)
 			}
 		}
 	})
 
+	tests := []struct {
+		name    string
+		numPart int
+		wantErr bool
+	}{
+		{"1-part", 1, false},
+		{"3-part", 3, false},
+		{"10-part", 10, false},
+	}
+
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			for _, numRW := range numRWList {
+				err := writeBatch(opts, numRW, tt.numPart)
+				if (err != nil) != tt.wantErr {
+					t.Errorf("writeBatch() error = %v, wantErr = %v", err, tt.wantErr)
+				}
+			}
+		})
+	}
+
 }
 
 func TestValueLogWriteBatchReopen(t *testing.T) {
-	path, err := filepath.Abs(filepath.Join("/tmp", "vlog-test"))
+	path, err := os.MkdirTemp("", "vlog-test-write-batch-reopen")
 	assert.Nil(t, err)
 
 	defer func() {
-		os.RemoveAll(path)
+		_ = os.RemoveAll(path)
 	}()
 
 	opts := valueLogOptions{
@@ -184,42 +180,39 @@ func TestValueLogWriteBatchReopen(t *testing.T) {
 
 	numRW := 50000
 	numPart := 10
-	err = RWBatch(opts, numRW, numPart)
+	err = writeBatch(opts, numRW, numPart)
 	assert.Nil(t, err)
 
-	t.Run("writeBatch after reopen", func(t *testing.T) {
-		err = RWBatch(opts, numRW, numPart)
+	t.Run("writeBatch after reopening", func(t *testing.T) {
+		err = writeBatch(opts, numRW, numPart)
 		assert.Nil(t, err)
 	})
 }
 
-func RWBatch(opts valueLogOptions, numRW int, numPart int) error {
+// todo change function name
+func writeBatch(opts valueLogOptions, numRW int, numPart int) error {
 	opts.partitionNum = uint32(numPart)
 	vlog, err := openValueLog(opts)
 	if err != nil {
 		return err
 	}
 
-	val := strings.Repeat("v", 512)
-	logs := []*ValueLogRecord{}
+	val := util.RandomValue(512)
+	var logs []*ValueLogRecord
 	for i := 0; i < numRW; i++ {
-		log := &ValueLogRecord{key: []byte(fmt.Sprintf("%d", i)), value: []byte(val)}
+		log := &ValueLogRecord{key: util.GetTestKey(i), value: val}
 		logs = append(logs, log)
 	}
-	start := time.Now()
+
 	_, err = vlog.writeBatch(logs)
 	if err != nil {
 		return err
 	}
-	end := time.Since(start)
-	fmt.Printf("write:%v\n", end)
-
-	vlog.close()
-	return nil
+	return vlog.close()
 }
 
 func TestValueLogRead(t *testing.T) {
-	path, err := filepath.Abs(filepath.Join("/tmp", "vlog-test"))
+	path, err := os.MkdirTemp("", "vlog-test-read")
 	assert.Nil(t, err)
 	opts := valueLogOptions{
 		dirPath:         path,
@@ -233,7 +226,7 @@ func TestValueLogRead(t *testing.T) {
 	assert.Nil(t, err)
 
 	defer func() {
-		os.RemoveAll(path)
+		_ = os.RemoveAll(path)
 	}()
 
 	logs := []*ValueLogRecord{
@@ -279,22 +272,12 @@ func TestValueLogRead(t *testing.T) {
 		})
 	}
 
-	t.Run("read after reopening vlog", func(t *testing.T) {
-		vlog.close()
-		vlog, err = openValueLog(opts)
-		assert.Nil(t, err)
-		for i := 0; i < len(logs); i++ {
-			readLogs, err := vlog.read(pos[i])
-			assert.Nil(t, err)
-			assert.Equal(t, kv[string(pos[i].key)], string(readLogs.value))
-		}
-	})
-
-	vlog.close()
+	err = vlog.close()
+	assert.Nil(t, err)
 }
 
 func TestValueLogReadReopen(t *testing.T) {
-	path, err := filepath.Abs(filepath.Join("/tmp", "vlog-test"))
+	path, err := os.MkdirTemp("", "vlog-test-read-reopen")
 	assert.Nil(t, err)
 	opts := valueLogOptions{
 		dirPath:         path,
@@ -308,7 +291,7 @@ func TestValueLogReadReopen(t *testing.T) {
 	assert.Nil(t, err)
 
 	defer func() {
-		os.RemoveAll(path)
+		_ = os.RemoveAll(path)
 	}()
 
 	logs := []*ValueLogRecord{
@@ -324,23 +307,24 @@ func TestValueLogReadReopen(t *testing.T) {
 
 	pos, err := vlog.writeBatch(logs[:])
 	assert.Nil(t, err)
+	err = vlog.close()
+	assert.Nil(t, err)
 
 	t.Run("read after reopening vlog", func(t *testing.T) {
-		vlog.close()
 		vlog, err = openValueLog(opts)
 		assert.Nil(t, err)
 		for i := 0; i < len(logs); i++ {
-			readLogs, err := vlog.read(pos[i])
+			record, err := vlog.read(pos[i])
 			assert.Nil(t, err)
-			assert.Equal(t, kv[string(pos[i].key)], string(readLogs.value))
+			assert.Equal(t, kv[string(pos[i].key)], string(record.value))
 		}
+		err = vlog.close()
+		assert.Nil(t, err)
 	})
-
-	vlog.close()
 }
 
 func TestValueLogSync(t *testing.T) {
-	path, err := filepath.Abs(filepath.Join("/tmp", "vlog-test"))
+	path, err := os.MkdirTemp("", "vlog-test-sync")
 	assert.Nil(t, err)
 	opts := valueLogOptions{
 		dirPath:         path,
@@ -351,7 +335,7 @@ func TestValueLogSync(t *testing.T) {
 	}
 
 	defer func() {
-		os.RemoveAll(path)
+		_ = os.RemoveAll(path)
 	}()
 
 	vlog, err := openValueLog(opts)
@@ -364,12 +348,12 @@ func TestValueLogSync(t *testing.T) {
 		err := vlog.sync()
 		assert.Nil(t, err)
 	})
-	vlog.close()
-
+	err = vlog.close()
+	assert.Nil(t, err)
 }
 
 func TestValueLogClose(t *testing.T) {
-	path, err := filepath.Abs(filepath.Join("/tmp", "vlog-test"))
+	path, err := os.MkdirTemp("", "vlog-test-close")
 	assert.Nil(t, err)
 	opts := valueLogOptions{
 		dirPath:         path,
@@ -383,7 +367,7 @@ func TestValueLogClose(t *testing.T) {
 	assert.Nil(t, err)
 
 	defer func() {
-		os.RemoveAll(path)
+		_ = os.RemoveAll(path)
 	}()
 
 	t.Run("test close value log", func(t *testing.T) {
@@ -392,6 +376,53 @@ func TestValueLogClose(t *testing.T) {
 	})
 }
 
-func TestValueLogCompaction(t *testing.T) {
+func TestValueLogMultiSegmentFiles(t *testing.T) {
+	path, err := os.MkdirTemp("", "vlog-test-multi-segment")
+	assert.Nil(t, err)
+	opts := valueLogOptions{
+		dirPath:         path,
+		segmentSize:     100 * MB,
+		blockCache:      DefaultOptions.BlockCache,
+		partitionNum:    1,
+		hashKeyFunction: DefaultOptions.KeyHashFunction,
+	}
+
+	tests := []struct {
+		name       string
+		wantNumSeg float64
+	}{
+		{"1 segment files", 1},
+		{"3 segment files", 3},
+		{"5 segment files", 5},
+	}
+
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			defer func() {
+				_ = os.RemoveAll(path)
+			}()
+
+			vlog, err := openValueLog(opts)
+			assert.Nil(t, err)
+
+			logs := []*ValueLogRecord{}
+			numLogs := (tt.wantNumSeg - 0.5) * 100
+			for i := 0; i < int(numLogs); i++ {
+				// the size of a logRecord is about 1MB (a little bigger than 1MB due to encode)
+				log := &ValueLogRecord{key: util.RandomValue(2 << 18), value: util.RandomValue(2 << 18)}
+				logs = append(logs, log)
+			}
+
+			_, err = vlog.writeBatch(logs)
+			assert.Nil(t, err)
+
+			entries, err := os.ReadDir(path)
+			assert.Nil(t, err)
+			assert.Equal(t, int(tt.wantNumSeg), len(entries))
+
+			err = vlog.close()
+			assert.Nil(t, err)
+		})
+	}
 
 }
