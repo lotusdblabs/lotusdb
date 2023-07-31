@@ -1,25 +1,5 @@
 package lotusdb
 
-// ----------------------------------------------
-// | case 1 | TestOpenValueLog				    |
-// ----------------------------------------------
-// | case 2 | TestValueLogWriteAllKindsEntries  |
-// ----------------------------------------------
-// | case 3 | TestValueLogWriteBatch			|
-// ----------------------------------------------
-// | case 4 | TestValueLogWriteBatchReopen		|
-// ----------------------------------------------
-// | case 5 | TestValueLogRead					|
-// ----------------------------------------------
-// | case 6 | TestValueLogReadReopen			|
-// ----------------------------------------------
-// | case 7 | TestValueLogSync					|
-// ---------------------------------------------=
-// | case 8 | TestValueLogClose					|
-// ---------------------------------------------=
-// | case 9 | TestValueLogCompaction			|
-// ---------------------------------------------=
-
 import (
 	"os"
 	"testing"
@@ -27,6 +7,28 @@ import (
 	"github.com/lotusdblabs/lotusdb/v2/util"
 	"github.com/stretchr/testify/assert"
 )
+
+// tool: golint todo
+
+// ----------------------------------------------
+// | case 1 | TestOpenValueLog                  |
+// ----------------------------------------------
+// | case 2 | TestValueLogWriteAllKindsEntries  |
+// ----------------------------------------------
+// | case 3 | TestValueLogWriteBatch            |
+// ----------------------------------------------
+// | case 4 | TestValueLogWriteBatchReopen      |
+// ----------------------------------------------
+// | case 5 | TestValueLogRead                  |
+// ----------------------------------------------
+// | case 6 | TestValueLogReadReopen            |
+// ----------------------------------------------
+// | case 7 | TestValueLogSync                  |
+// ----------------------------------------------
+// | case 8 | TestValueLogClose                 |
+// ----------------------------------------------
+// | case 9 | TestValueLogMultiSegmentFiles     |
+// ----------------------------------------------
 
 func TestOpenValueLog(t *testing.T) {
 	path, err := os.MkdirTemp("", "vlog-test-open")
@@ -56,8 +58,6 @@ func TestValueLogWriteAllKindsEntries(t *testing.T) {
 	opts := valueLogOptions{
 		dirPath:         path,
 		segmentSize:     GB,
-=======
-		os.RemoveAll(path)
 	}()
 
 	opts := valueLogOptions{
@@ -70,13 +70,13 @@ func TestValueLogWriteAllKindsEntries(t *testing.T) {
 	t.Run("open vlog files", func(t *testing.T) {
 		vlog, err := openValueLog(opts)
 		assert.Nil(t, err)
-		vlog.close()
+		err = vlog.close()
+		assert.Nil(t, err)
 	})
-
 }
 
 func TestValueLogWriteAllKindsEntries(t *testing.T) {
-	path, err := filepath.Abs(filepath.Join("/tmp", "vlog-test"))
+	path, err := os.MkdirTemp("", "vlog-test-write-entries")
 	assert.Nil(t, err)
 	opts := valueLogOptions{
 		dirPath:         path,
