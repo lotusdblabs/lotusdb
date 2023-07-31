@@ -142,7 +142,7 @@ func openMemtable(options memtableOptions) (*memtable, error) {
 			}
 			for _, idxRecord := range indexRecords[uint64(batchId)] {
 				table.skl.Put(y.KeyWithTs(idxRecord.Key, 0),
-					y.ValueStruct{Value: idxRecord.Value, Meta: idxRecord.Type})
+					y.ValueStruct{Value: idxRecord.Value, Meta: record.Type})
 			}
 			delete(indexRecords, uint64(batchId))
 		} else {
