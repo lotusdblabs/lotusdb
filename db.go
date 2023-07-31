@@ -21,6 +21,7 @@ const (
 type DB struct {
 	activeMem *memtable    // Active memtable for writing.
 	immuMems  []*memtable  // Immutable memtables, waiting to be flushed to disk.
+	batchPool sync.Pool    // batchPool is a pool for storing batches
 	index     Index        // index is multi-partition bptree to store key and chunk position.
 	vlog      *valueLog    // vlog is the value log.
 	fileLock  *flock.Flock // fileLock to prevent multiple processes from using the same database directory.
@@ -88,6 +89,7 @@ func Open(options Options) (*DB, error) {
 	db := &DB{
 		activeMem: memtables[len(memtables)-1],
 		immuMems:  memtables[:len(memtables)-1],
+		batchPool: sync.Pool{New: NewBatch},
 		index:     index,
 		vlog:      vlog,
 		fileLock:  fileLock,
@@ -160,10 +162,11 @@ func (db *DB) Stat() *Stat {
 }
 
 func (db *DB) Put(key []byte, value []byte, options *WriteOptions) error {
-	batch := db.NewBatch(BatchOptions{
-		Sync:     false,
-		ReadOnly: false,
-	})
+	batch := db.batchPool.Get().(*Batch)
+	batch.Init(WithSync(false),
+		WithReadOnly(false)).
+		WithDB(db)
+	defer db.batchPool.Put(batch)
 	if err := batch.Put(key, value); err != nil {
 		return err
 	}
@@ -171,10 +174,11 @@ func (db *DB) Put(key []byte, value []byte, options *WriteOptions) error {
 }
 
 func (db *DB) Get(key []byte) ([]byte, error) {
-	batch := db.NewBatch(BatchOptions{
-		Sync:     false,
-		ReadOnly: true,
-	})
+	batch := db.batchPool.Get().(*Batch)
+	batch.Init(WithSync(false),
+		WithReadOnly(true)).
+		WithDB(db)
+	defer db.batchPool.Put(batch)
 	defer func() {
 		_ = batch.Commit(nil)
 	}()
@@ -182,10 +186,11 @@ func (db *DB) Get(key []byte) ([]byte, error) {
 }
 
 func (db *DB) Delete(key []byte, options *WriteOptions) error {
-	batch := db.NewBatch(BatchOptions{
-		Sync:     false,
-		ReadOnly: false,
-	})
+	batch := db.batchPool.Get().(*Batch)
+	batch.Init(WithSync(false),
+		WithReadOnly(false)).
+		WithDB(db)
+	defer db.batchPool.Put(batch)
 	if err := batch.Delete(key); err != nil {
 		return err
 	}
@@ -193,10 +198,11 @@ func (db *DB) Delete(key []byte, options *WriteOptions) error {
 }
 
 func (db *DB) Exist(key []byte) (bool, error) {
-	batch := db.NewBatch(BatchOptions{
-		Sync:     false,
-		ReadOnly: true,
-	})
+	batch := db.batchPool.Get().(*Batch)
+	batch.Init(WithSync(false),
+		WithReadOnly(true)).
+		WithDB(db)
+	defer db.batchPool.Put(batch)
 	defer func() {
 		_ = batch.Commit(nil)
 	}()
