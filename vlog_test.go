@@ -8,28 +8,6 @@ import (
 	"github.com/stretchr/testify/assert"
 )
 
-// tool: golint todo
-
-// ----------------------------------------------
-// | case 1 | TestOpenValueLog                  |
-// ----------------------------------------------
-// | case 2 | TestValueLogWriteAllKindsEntries  |
-// ----------------------------------------------
-// | case 3 | TestValueLogWriteBatch            |
-// ----------------------------------------------
-// | case 4 | TestValueLogWriteBatchReopen      |
-// ----------------------------------------------
-// | case 5 | TestValueLogRead                  |
-// ----------------------------------------------
-// | case 6 | TestValueLogReadReopen            |
-// ----------------------------------------------
-// | case 7 | TestValueLogSync                  |
-// ----------------------------------------------
-// | case 8 | TestValueLogClose                 |
-// ----------------------------------------------
-// | case 9 | TestValueLogMultiSegmentFiles     |
-// ----------------------------------------------
-
 func TestOpenValueLog(t *testing.T) {
 	path, err := os.MkdirTemp("", "vlog-test-open")
 	assert.Nil(t, err)
@@ -38,26 +16,6 @@ func TestOpenValueLog(t *testing.T) {
 
 	defer func() {
 		_ = os.RemoveAll(path)
-		dirPath:         path,
-		segmentSize:     GB,
-		blockCache:      DefaultOptions.BlockCache,
-		partitionNum:    uint32(DefaultOptions.PartitionNum),
-		hashKeyFunction: DefaultOptions.KeyHashFunction,
-	}
-	t.Run("open vlog files", func(t *testing.T) {
-		vlog, err := openValueLog(opts)
-		assert.Nil(t, err)
-		err = vlog.close()
-		assert.Nil(t, err)
-	})
-}
-
-func TestValueLogWriteAllKindsEntries(t *testing.T) {
-	path, err := os.MkdirTemp("", "vlog-test-write-entries")
-	assert.Nil(t, err)
-	opts := valueLogOptions{
-		dirPath:         path,
-		segmentSize:     GB,
 	}()
 
 	opts := valueLogOptions{
@@ -80,8 +38,7 @@ func TestValueLogWriteAllKindsEntries(t *testing.T) {
 	assert.Nil(t, err)
 	opts := valueLogOptions{
 		dirPath:         path,
-		segmentSize:     DefaultOptions.SegmentSize,
->>>>>>> d639056 (value log tests)
+		segmentSize:     GB,
 		blockCache:      DefaultOptions.BlockCache,
 		partitionNum:    uint32(DefaultOptions.PartitionNum),
 		hashKeyFunction: DefaultOptions.KeyHashFunction,
