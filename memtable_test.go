@@ -20,13 +20,15 @@ import (
 // ----------------------------------------------
 // | case 5 | TestMemTablePutBatchReopen        |
 // ----------------------------------------------
-// | case 6 | TestMemTableGetReopen             |
+// | case 6 | TestMemTableGet                   |
 // ----------------------------------------------
-// | case 7 | TestMemTableDelWal                |
+// | case 7 | TestMemTableGetReopen             |
 // ----------------------------------------------
-// | case 8 | TestMemTableDelSync               |
+// | case 8 | TestMemTableDelWal                |
 // ----------------------------------------------
-// | case 9 | TestMemtableClose                 |
+// | case 9 | TestMemTableDelSync               |
+// ----------------------------------------------
+// | case 10| TestMemtableClose                 |
 // ----------------------------------------------
 
 func TestMemtableOpen(t *testing.T) {
