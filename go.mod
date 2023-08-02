@@ -11,7 +11,10 @@ require (
 
 require golang.org/x/sys v0.10.0 // indirect
 
-require github.com/kr/text v0.2.0 // indirect
+require (
+	github.com/kr/text v0.2.0 // indirect
+	github.com/stretchr/objx v0.5.0 // indirect
+)
 
 require (
 	github.com/cespare/xxhash/v2 v2.2.0
@@ -21,6 +24,7 @@ require (
 )
 
 require (
+	github.com/agiledragon/gomonkey/v2 v2.10.1
 	github.com/dgraph-io/ristretto v0.1.1 // indirect
 	github.com/dustin/go-humanize v1.0.1 // indirect
 	github.com/gofrs/flock v0.8.1
