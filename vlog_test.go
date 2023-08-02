@@ -8,28 +8,6 @@ import (
 	"github.com/stretchr/testify/assert"
 )
 
-// tool: golint todo
-
-// ----------------------------------------------
-// | case 1 | TestOpenValueLog                  |
-// ----------------------------------------------
-// | case 2 | TestValueLogWriteAllKindsEntries  |
-// ----------------------------------------------
-// | case 3 | TestValueLogWriteBatch            |
-// ----------------------------------------------
-// | case 4 | TestValueLogWriteBatchReopen      |
-// ----------------------------------------------
-// | case 5 | TestValueLogRead                  |
-// ----------------------------------------------
-// | case 6 | TestValueLogReadReopen            |
-// ----------------------------------------------
-// | case 7 | TestValueLogSync                  |
-// ----------------------------------------------
-// | case 8 | TestValueLogClose                 |
-// ----------------------------------------------
-// | case 9 | TestValueLogMultiSegmentFiles     |
-// ----------------------------------------------
-
 func TestOpenValueLog(t *testing.T) {
 	path, err := os.MkdirTemp("", "vlog-test-open")
 	assert.Nil(t, err)
@@ -405,7 +383,7 @@ func TestValueLogMultiSegmentFiles(t *testing.T) {
 			vlog, err := openValueLog(opts)
 			assert.Nil(t, err)
 
-			logs := []*ValueLogRecord{}
+			var logs []*ValueLogRecord
 			numLogs := (tt.wantNumSeg - 0.5) * 100
 			for i := 0; i < int(numLogs); i++ {
 				// the size of a logRecord is about 1MB (a little bigger than 1MB due to encode)
@@ -424,5 +402,4 @@ func TestValueLogMultiSegmentFiles(t *testing.T) {
 			assert.Nil(t, err)
 		})
 	}
-
 }

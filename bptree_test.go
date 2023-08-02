@@ -79,14 +79,14 @@ func Test_openIndexBoltDB(t *testing.T) {
 }
 
 func TestBPTree_Get_1(t *testing.T) {
-	testBPTree_Get(t, 1)
+	testbptreeGet(t, 1)
 }
 
 func TestBPTree_Get_3(t *testing.T) {
-	testBPTree_Get(t, 3)
+	testbptreeGet(t, 3)
 }
 
-func testBPTree_Get(t *testing.T, partitionNum int) {
+func testbptreeGet(t *testing.T, partitionNum int) {
 	options := indexOptions{
 		indexType:       indexBoltDB,
 		dirPath:         filepath.Join(os.TempDir(), "bptree-get-"+strconv.Itoa(partitionNum)),
@@ -134,14 +134,14 @@ func testBPTree_Get(t *testing.T, partitionNum int) {
 }
 
 func TestBPTree_PutBatch_1(t *testing.T) {
-	testBPTree_PutBatch(t, 1)
+	testbptreePutbatch(t, 1)
 }
 
 func TestBPTree_PutBatch_3(t *testing.T) {
-	testBPTree_PutBatch(t, 3)
+	testbptreePutbatch(t, 3)
 }
 
-func testBPTree_PutBatch(t *testing.T, partitionNum int) {
+func testbptreePutbatch(t *testing.T, partitionNum int) {
 	options := indexOptions{
 		indexType:       indexBoltDB,
 		dirPath:         filepath.Join(os.TempDir(), "bptree-putBatch-"+strconv.Itoa(partitionNum)),
@@ -190,14 +190,14 @@ func testBPTree_PutBatch(t *testing.T, partitionNum int) {
 }
 
 func TestBPTree_DeleteBatch_1(t *testing.T) {
-	testBPTree_DeleteBatch(t, 1)
+	testbptreeDeletebatch(t, 1)
 }
 
 func TestBPTree_DeleteBatch_3(t *testing.T) {
-	testBPTree_DeleteBatch(t, 3)
+	testbptreeDeletebatch(t, 3)
 }
 
-func testBPTree_DeleteBatch(t *testing.T, partitionNum int) {
+func testbptreeDeletebatch(t *testing.T, partitionNum int) {
 	options := indexOptions{
 		indexType:       indexBoltDB,
 		dirPath:         filepath.Join(os.TempDir(), "bptree-deleteBatch-"+strconv.Itoa(partitionNum)),
@@ -245,14 +245,14 @@ func testBPTree_DeleteBatch(t *testing.T, partitionNum int) {
 }
 
 func TestBPTree_Close_1(t *testing.T) {
-	testBPTree_Close(t, 1)
+	testbptreeClose(t, 1)
 }
 
 func TestBPTree_Close_3(t *testing.T) {
-	testBPTree_Close(t, 3)
+	testbptreeClose(t, 3)
 }
 
-func testBPTree_Close(t *testing.T, partitionNum int) {
+func testbptreeClose(t *testing.T, partitionNum int) {
 	options := indexOptions{
 		indexType:       indexBoltDB,
 		dirPath:         filepath.Join(os.TempDir(), "bptree-close-"+strconv.Itoa(partitionNum)),
@@ -273,14 +273,14 @@ func testBPTree_Close(t *testing.T, partitionNum int) {
 	assert.Nil(t, err)
 }
 func TestBPTree_getKeyPartition_1(t *testing.T) {
-	testBPTree_getKeyPartition(t, 1)
+	testbptreeGetkeypartition(t, 1)
 }
 
 func TestBPTree_getKeyPartition_3(t *testing.T) {
-	testBPTree_getKeyPartition(t, 3)
+	testbptreeGetkeypartition(t, 3)
 }
 
-func testBPTree_getKeyPartition(t *testing.T, partitionNum int) {
+func testbptreeGetkeypartition(t *testing.T, partitionNum int) {
 	options := indexOptions{
 		indexType:       indexBoltDB,
 		dirPath:         filepath.Join(os.TempDir(), "bptree-getKeyPartition-"+strconv.Itoa(partitionNum)),
@@ -321,14 +321,14 @@ func testBPTree_getKeyPartition(t *testing.T, partitionNum int) {
 }
 
 func TestBPTree_Sync_1(t *testing.T) {
-	testBPTree_Sync(t, 1)
+	testbptreeSync(t, 1)
 }
 
 func TestBPTree_Sync_3(t *testing.T) {
-	testBPTree_Sync(t, 3)
+	testbptreeSync(t, 3)
 }
 
-func testBPTree_Sync(t *testing.T, partitionNum int) {
+func testbptreeSync(t *testing.T, partitionNum int) {
 	options := indexOptions{
 		indexType:       indexBoltDB,
 		dirPath:         filepath.Join(os.TempDir(), "bptree-sync-"+strconv.Itoa(partitionNum)),
