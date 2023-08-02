@@ -26,7 +26,7 @@ import (
 // ----------------------------------------------
 // | case 8 | TestMemTableDelWal                |
 // ----------------------------------------------
-// | case 9 | TestMemTableSync               |
+// | case 9 | TestMemTableSync                  |
 // ----------------------------------------------
 // | case 10| TestMemtableClose                 |
 // ----------------------------------------------
@@ -416,13 +416,16 @@ func TestMemTableDelWal(t *testing.T) {
 	t.Run("test memtable delete wal", func(t *testing.T) {
 		err := table.deleteWAl()
 		assert.Nil(t, err)
+		entries, err := os.ReadDir(path)
+		assert.Nil(t, err)
+		assert.Equal(t, len(entries), 0)
 	})
 
 	err = table.close()
 	assert.Nil(t, err)
 }
 
-func TestMemTableDelSync(t *testing.T) {
+func TestMemTableSync(t *testing.T) {
 	path, err := os.MkdirTemp("", "memtable-test-sync")
 	assert.Nil(t, err)
 
