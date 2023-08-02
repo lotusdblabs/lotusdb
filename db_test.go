@@ -8,7 +8,7 @@ import (
 )
 
 // test Open function
-func TestOpen(t *testing.T) {
+func TestOpen_Sync_Close(t *testing.T) {
 	// Create a instance of Options struct to pass to the Open function.
 	options := DefaultOptions
 	options.DirPath = t.TempDir()
@@ -27,40 +27,15 @@ func TestOpen(t *testing.T) {
 	assert.NotNil(t, db.vlog, "DB vlog should not be nil")
 	assert.NotNil(t, db.fileLock, "DB fileLock should not be nil")
 	assert.NotNil(t, db.flushChan, "DB flushChan should not be nil")
-}
 
-// test Close function
-func TestClose(t *testing.T) {
-	// Create a instance of Options struct to pass to the Open function.
-	options := DefaultOptions
-	options.DirPath = t.TempDir()
-	defer os.RemoveAll(options.DirPath)
-
-	// Call the Open function for testing
-	db, err := Open(options)
-	assert.NoError(t, err, "Open should not return an error")
-	assert.NotNil(t, db, "db should not be nil")
+	// Call the Sync function for testing
+	err = db.Sync()
+	assert.NoError(t, err, "Sync should not return an error")
 
 	// Call the Close function for testing
 	err = db.Close()
 	assert.NoError(t, err, "Close should not return an error")
 	assert.True(t, db.closed, "db should be closed")
-}
-
-// test Sync function
-func TestSync(t *testing.T) {
-	// Create a instance of Options struct to pass to the Open function.
-	options := DefaultOptions
-	options.DirPath = t.TempDir()
-	defer os.RemoveAll(options.DirPath)
-	// Call the Open function for testing
-	db, err := Open(options)
-	assert.NoError(t, err, "Open should not return an error")
-	assert.NotNil(t, db, "db should not be nil")
-
-	// Call the Sync function for testing
-	err = db.Sync()
-	assert.NoError(t, err, "Sync should not return an error")
 }
 
 // test Put and Get function
