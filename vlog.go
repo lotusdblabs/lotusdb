@@ -129,9 +129,6 @@ func (vlog *valueLog) close() error {
 		if err := walFile.Close(); err != nil {
 			return err
 		}
-		if err := walFile.Close(); err != nil {
-			return err
-		}
 	}
 	return nil
 }
