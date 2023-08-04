@@ -53,3 +53,28 @@ type indexOptions struct {
 
 	hashKeyFunction func([]byte) uint64 // hash function for sharding
 }
+
+// Iterator is an interface for iterating the index.
+type indexIterator interface {
+	// Rewind seek the first key in the index iterator.
+	Rewind()
+
+	// Seek move the iterator to the key which is
+	// greater(less when reverse is true) than or equal to the specified key.
+	Seek(key []byte)
+
+	// Next moves the iterator to the next key.
+	Next()
+
+	// Key get the current key.
+	Key() []byte
+
+	// Value get the current value.
+	Value() *KeyPosition
+
+	// Valid returns whether the iterator is exhausted.
+	Valid() bool
+
+	// Close the iterator.
+	Close()
+}

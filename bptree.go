@@ -1,6 +1,8 @@
 package lotusdb
 
 import (
+	"bytes"
+	"container/heap"
 	"context"
 	"fmt"
 	"path/filepath"
@@ -66,9 +68,7 @@ func (bt *BPTree) Get(key []byte) (*KeyPosition, error) {
 		bucket := tx.Bucket(boltBucketName)
 		value := bucket.Get(key)
 		if len(value) != 0 {
-			keyPos = new(KeyPosition)
-			keyPos.key, keyPos.partition = key, uint32(p)
-			keyPos.position = wal.DecodeChunkPosition(value)
+			keyPos = DecodeKeyPosition(key, value, uint32(p))
 		}
 		return nil
 	}); err != nil {
@@ -181,4 +181,212 @@ func (bt *BPTree) Sync() error {
 func (bt *BPTree) getKeyPartition(key []byte) int {
 	hashFn := bt.options.hashKeyFunction
 	return int(hashFn(key) % uint64(bt.options.partitionNum))
+}
+
+func (bpt *BPTree) Iterator(reverse bool) indexIterator {
+	return openBptreeIterator(bpt.trees, reverse)
+}
+
+type bptreeIterator struct {
+	marks        []bool
+	txs          []*bbolt.Tx
+	cursors      []*bbolt.Cursor
+	h            *keyPositionHeap
+	partitionNum int
+	reverse      bool
+}
+
+func openBptreeIterator(trees []*bbolt.DB, reverse bool) *bptreeIterator {
+	partitionNum := len(trees)
+	mark := make([]bool, partitionNum)
+	cursors := make([]*bbolt.Cursor, 0, partitionNum)
+	txs := make([]*bbolt.Tx, 0, partitionNum)
+	h := NewKeyPositionHeap(reverse, partitionNum)
+
+	for i := 0; i < partitionNum; i++ {
+		tx, err := trees[i].Begin(false)
+		if err != nil {
+			panic("failed to begin a transaction")
+		}
+		txs = append(txs, tx)
+		cursors = append(cursors, tx.Bucket(boltBucketName).Cursor())
+	}
+
+	bpi := &bptreeIterator{
+		marks:        mark,
+		txs:          txs,
+		cursors:      cursors,
+		h:            h,
+		partitionNum: partitionNum,
+		reverse:      reverse,
+	}
+	bpi.Rewind()
+	return bpi
+}
+
+// Rewind seek the first key in the index iterator.
+func (bpi *bptreeIterator) Rewind() {
+	h := bpi.h
+	h.Clear()
+	var k, v []byte
+
+	for i, c := range bpi.cursors {
+		bpi.validCursor(i)
+		if bpi.reverse {
+			k, v = c.Last()
+		} else {
+			k, v = c.First()
+		}
+		if k == nil {
+			bpi.unValidCursor(uint32(i))
+			continue
+		}
+		heap.Push(h, DecodeKeyPosition(k, v, uint32(i)))
+	}
+}
+
+// Seek move the iterator to the key which is
+// greater(less when reverse is true) than or equal to the specified key.
+func (bpi *bptreeIterator) Seek(key []byte) {
+	h := bpi.h
+	h.Clear()
+
+	var k, v []byte
+	for i, c := range bpi.cursors {
+		bpi.validCursor(i)
+		k, v = c.Seek(key)
+		if bpi.reverse {
+			if k == nil || bytes.Compare(k, key) == 1 {
+				k, v = c.Prev()
+				if k == nil {
+					bpi.unValidCursor(uint32(i))
+					continue
+				}
+			}
+		}
+		if k == nil {
+			bpi.unValidCursor(uint32(i))
+			continue
+		}
+		heap.Push(h, DecodeKeyPosition(k, v, uint32(i)))
+	}
+}
+
+// Next moves the iterator to the next key.
+func (bpi *bptreeIterator) Next() {
+	h := bpi.h
+	top := heap.Pop(h).(*KeyPosition)
+	if !bpi.isCursorValid(int(top.partition)) {
+		return
+	}
+	var k, v []byte
+	c := bpi.cursors[top.partition]
+	if bpi.reverse {
+		k, v = c.Prev()
+	} else {
+		k, v = c.Next()
+	}
+	if k == nil {
+		bpi.unValidCursor(top.partition)
+		return
+	}
+	heap.Push(h, DecodeKeyPosition(k, v, top.partition))
+
+}
+
+// Key get the current key.
+func (bpi *bptreeIterator) Key() []byte {
+	k := bpi.h.Top()
+	if k == nil {
+		return nil
+	}
+	return k.(*KeyPosition).key
+}
+
+// Value get the current value.
+func (bpi *bptreeIterator) Value() *KeyPosition {
+	k := bpi.h.Top()
+	if k == nil {
+		return nil
+	}
+	return k.(*KeyPosition)
+}
+
+// Valid returns whether the iterator is exhausted.
+func (bpi *bptreeIterator) Valid() bool {
+	return bpi.h.Len() > 0
+}
+
+// Close the iterator.
+func (bpi *bptreeIterator) Close() {
+	for _, tx := range bpi.txs {
+		_ = tx.Rollback()
+	}
+}
+
+func (bpi *bptreeIterator) isCursorValid(idx int) bool {
+	return bpi.marks[idx]
+}
+
+func (bpi *bptreeIterator) unValidCursor(idx uint32) {
+	bpi.marks[idx] = false
+}
+
+func (bpi *bptreeIterator) validCursor(idx int) {
+	bpi.marks[idx] = true
+}
+
+type keyPositionHeap struct {
+	values  []*KeyPosition
+	reverse bool
+}
+
+func (h keyPositionHeap) Len() int { return len(h.values) }
+
+func (h keyPositionHeap) Less(i, j int) bool {
+	if bytes.Compare(h.values[i].key, h.values[j].key) == -1 {
+		return !h.reverse
+	} else {
+		return h.reverse
+	}
+}
+
+func (h keyPositionHeap) Swap(i, j int) { h.values[i], h.values[j] = h.values[j], h.values[i] }
+
+func (h *keyPositionHeap) Push(x any) {
+	h.values = append(h.values, x.(*KeyPosition))
+}
+
+func (h *keyPositionHeap) Pop() any {
+	old := h.values
+	n := len(old)
+	x := old[n-1]
+	h.values = old[0 : n-1]
+	return x
+}
+
+func (h *keyPositionHeap) Top() any {
+	if len(h.values) == 0 {
+		return nil
+	}
+	return h.values[0]
+}
+
+func (h *keyPositionHeap) Clear() {
+	h.values = h.values[:0]
+}
+
+func NewKeyPositionHeap(reverse bool, partitionNum int) *keyPositionHeap {
+	return &keyPositionHeap{
+		values:  make([]*KeyPosition, 0, partitionNum),
+		reverse: reverse,
+	}
+}
+
+func DecodeKeyPosition(key, value []byte, partition uint32) *KeyPosition {
+	return &KeyPosition{
+		key:       key,
+		partition: uint32(partition),
+		position:  wal.DecodeChunkPosition(value),
+	}
 }

@@ -1,8 +1,10 @@
 package lotusdb
 
 import (
+	"bytes"
 	"os"
 	"path/filepath"
+	"reflect"
 	"strconv"
 	"testing"
 
@@ -78,11 +80,8 @@ func Test_openIndexBoltDB(t *testing.T) {
 	}
 }
 
-func TestBPTree_Get_1(t *testing.T) {
+func TestBPTree_Get(t *testing.T) {
 	testbptreeGet(t, 1)
-}
-
-func TestBPTree_Get_3(t *testing.T) {
 	testbptreeGet(t, 3)
 }
 
@@ -133,12 +132,10 @@ func testbptreeGet(t *testing.T, partitionNum int) {
 	}
 }
 
-func TestBPTree_PutBatch_1(t *testing.T) {
+func TestBPTree_PutBatch(t *testing.T) {
 	testbptreePutbatch(t, 1)
-}
-
-func TestBPTree_PutBatch_3(t *testing.T) {
 	testbptreePutbatch(t, 3)
+
 }
 
 func testbptreePutbatch(t *testing.T, partitionNum int) {
@@ -189,11 +186,8 @@ func testbptreePutbatch(t *testing.T, partitionNum int) {
 	}
 }
 
-func TestBPTree_DeleteBatch_1(t *testing.T) {
+func TestBPTree_DeleteBatch(t *testing.T) {
 	testbptreeDeletebatch(t, 1)
-}
-
-func TestBPTree_DeleteBatch_3(t *testing.T) {
 	testbptreeDeletebatch(t, 3)
 }
 
@@ -244,11 +238,8 @@ func testbptreeDeletebatch(t *testing.T, partitionNum int) {
 	}
 }
 
-func TestBPTree_Close_1(t *testing.T) {
+func TestBPTree_Close(t *testing.T) {
 	testbptreeClose(t, 1)
-}
-
-func TestBPTree_Close_3(t *testing.T) {
 	testbptreeClose(t, 3)
 }
 
@@ -272,11 +263,9 @@ func testbptreeClose(t *testing.T, partitionNum int) {
 	err = bt.Close()
 	assert.Nil(t, err)
 }
-func TestBPTree_getKeyPartition_1(t *testing.T) {
-	testbptreeGetkeypartition(t, 1)
-}
 
-func TestBPTree_getKeyPartition_3(t *testing.T) {
+func TestBPTree_getKeyPartition(t *testing.T) {
+	testbptreeGetkeypartition(t, 1)
 	testbptreeGetkeypartition(t, 3)
 }
 
@@ -320,11 +309,8 @@ func testbptreeGetkeypartition(t *testing.T, partitionNum int) {
 	}
 }
 
-func TestBPTree_Sync_1(t *testing.T) {
+func TestBPTree_Sync(t *testing.T) {
 	testbptreeSync(t, 1)
-}
-
-func TestBPTree_Sync_3(t *testing.T) {
 	testbptreeSync(t, 3)
 }
 
@@ -345,4 +331,729 @@ func testbptreeSync(t *testing.T, partitionNum int) {
 	assert.Nil(t, err)
 	err = bt.Sync()
 	assert.Nil(t, err)
+}
+
+func TestBPTree_Iterator(t *testing.T) {
+	testBPTree_Iterator(t, 1)
+	testBPTree_Iterator(t, 3)
+}
+
+func testBPTree_Iterator(t *testing.T, partitionNum int) {
+	options := indexOptions{
+		indexType:       indexBoltDB,
+		dirPath:         filepath.Join(os.TempDir(), "bptree-iterator-"+strconv.Itoa(partitionNum)),
+		partitionNum:    partitionNum,
+		hashKeyFunction: xxhash.Sum64,
+	}
+
+	err := os.MkdirAll(options.dirPath, os.ModePerm)
+	assert.Nil(t, err)
+	defer func() {
+		_ = os.RemoveAll(options.dirPath)
+	}()
+
+	bt, err := openIndexBoltDB(options)
+	assert.Nil(t, err)
+
+	tests := []struct {
+		name    string
+		reverse bool
+	}{
+		{"normal", false},
+		{"normal", true},
+	}
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			got := bt.Iterator(tt.reverse).(*bptreeIterator)
+			assert.NotNil(t, got)
+			assert.NotNil(t, got.h)
+			assert.Equal(t, cap(got.marks), bt.options.partitionNum)
+			assert.Equal(t, cap(got.txs), bt.options.partitionNum)
+			assert.Equal(t, cap(got.cursors), bt.options.partitionNum)
+			assert.Equal(t, got.partitionNum, bt.options.partitionNum)
+			assert.Equal(t, got.reverse, tt.reverse)
+		})
+	}
+}
+
+func Test_bptreeIterator_Rewind(t *testing.T) {
+	test_bptreeIterator_Rewind(t, 1)
+	test_bptreeIterator_Rewind(t, 3)
+}
+
+func test_bptreeIterator_Rewind(t *testing.T, partitionNum int) {
+	tests := []struct {
+		name    string
+		reverse bool
+		options *indexOptions
+		keyNum  int
+	}{
+		{"empty", true, &indexOptions{
+			indexType:       indexBoltDB,
+			dirPath:         filepath.Join(os.TempDir(), "bptree-rewind-"+strconv.Itoa(partitionNum)),
+			partitionNum:    partitionNum,
+			hashKeyFunction: xxhash.Sum64,
+		}, 0},
+		{"empty", false, &indexOptions{
+			indexType:       indexBoltDB,
+			dirPath:         filepath.Join(os.TempDir(), "bptree-rewind-"+strconv.Itoa(partitionNum)),
+			partitionNum:    partitionNum,
+			hashKeyFunction: xxhash.Sum64,
+		}, 0},
+		{"normal", true, &indexOptions{
+			indexType:       indexBoltDB,
+			dirPath:         filepath.Join(os.TempDir(), "bptree-rewind-"+strconv.Itoa(partitionNum)),
+			partitionNum:    partitionNum,
+			hashKeyFunction: xxhash.Sum64,
+		}, 5},
+		{"normal", false, &indexOptions{
+			indexType:       indexBoltDB,
+			dirPath:         filepath.Join(os.TempDir(), "bptree-rewind-"+strconv.Itoa(partitionNum)),
+			partitionNum:    partitionNum,
+			hashKeyFunction: xxhash.Sum64,
+		}, 5},
+	}
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			tt.options.dirPath = filepath.Join(tt.options.dirPath, tt.name)
+			err := os.MkdirAll(tt.options.dirPath, os.ModePerm)
+			assert.Nil(t, err)
+			defer func() {
+				_ = os.RemoveAll(tt.options.dirPath)
+			}()
+
+			bt, err := openIndexBoltDB(*(tt.options))
+			assert.Nil(t, err)
+			var keyPositions []*KeyPosition
+			var minKey, maxKey []byte
+			for i := 0; i < tt.keyNum; i++ {
+				key := util.RandomValue(10)
+				if minKey == nil || bytes.Compare(key, minKey) == -1 {
+					minKey = key
+				}
+				if maxKey == nil || bytes.Compare(key, maxKey) == 1 {
+					maxKey = key
+				}
+				keyPositions = append(keyPositions, &KeyPosition{
+					key:       key,
+					partition: uint32(bt.getKeyPartition(key)),
+					position:  &wal.ChunkPosition{},
+				})
+			}
+			err = bt.PutBatch(keyPositions)
+			assert.Nil(t, err)
+			bpi := bt.Iterator(tt.reverse).(*bptreeIterator)
+			bpi.Rewind()
+
+			if tt.keyNum == 0 {
+				assert.Zero(t, bpi.h.Len())
+			} else {
+				if tt.reverse {
+					assert.Equal(t, maxKey, bpi.h.Top().(*KeyPosition).key)
+				} else {
+					assert.Equal(t, minKey, bpi.h.Top().(*KeyPosition).key)
+				}
+			}
+
+			bpi.Close()
+		})
+	}
+}
+
+func Test_bptreeIterator_Seek(t *testing.T) {
+	test_bptreeIterator_Seek(t, 1)
+	test_bptreeIterator_Seek(t, 3)
+}
+
+func test_bptreeIterator_Seek(t *testing.T, partitionNum int) {
+	// TODO
+	// options := indexOptions{
+	// 	indexType:       indexBoltDB,
+	// 	dirPath:         filepath.Join(os.TempDir(), "bptree-seek-"+strconv.Itoa(partitionNum)),
+	// 	partitionNum:    partitionNum,
+	// 	hashKeyFunction: xxhash.Sum64,
+	// }
+
+	// err := os.MkdirAll(options.dirPath, os.ModePerm)
+	// assert.Nil(t, err)
+	// defer func() {
+	// 	_ = os.RemoveAll(options.dirPath)
+	// }()
+
+	// bt, err := openIndexBoltDB(options)
+	// assert.Nil(t, err)
+
+	type fields struct {
+		mark         []bool
+		txs          []*bbolt.Tx
+		cursors      []*bbolt.Cursor
+		h            *keyPositionHeap
+		partitionNum int
+		reverse      bool
+	}
+	type args struct {
+		key []byte
+	}
+	tests := []struct {
+		name   string
+		fields fields
+		args   args
+	}{
+		// TODO: Add test cases.
+	}
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			bpi := &bptreeIterator{
+				marks:        tt.fields.mark,
+				txs:          tt.fields.txs,
+				cursors:      tt.fields.cursors,
+				h:            tt.fields.h,
+				partitionNum: tt.fields.partitionNum,
+				reverse:      tt.fields.reverse,
+			}
+			bpi.Seek(tt.args.key)
+		})
+	}
+}
+
+func Test_bptreeIterator_Next(t *testing.T) {
+	test_bptreeIterator_Next(t, 1)
+	test_bptreeIterator_Next(t, 3)
+}
+
+func test_bptreeIterator_Next(t *testing.T, partitionNum int) {
+	options := indexOptions{
+		indexType:       indexBoltDB,
+		dirPath:         filepath.Join(os.TempDir(), "bptree-next-"+strconv.Itoa(partitionNum)),
+		partitionNum:    partitionNum,
+		hashKeyFunction: xxhash.Sum64,
+	}
+
+	err := os.MkdirAll(options.dirPath, os.ModePerm)
+	assert.Nil(t, err)
+	defer func() {
+		_ = os.RemoveAll(options.dirPath)
+	}()
+	bt, err := openIndexBoltDB(options)
+	assert.Nil(t, err)
+	var keyPositions []*KeyPosition
+	for i := 0; i < 20; i++ {
+		key := util.RandomValue(10)
+		keyPositions = append(keyPositions, &KeyPosition{
+			key:       key,
+			partition: uint32(bt.getKeyPartition(key)),
+			position:  &wal.ChunkPosition{},
+		})
+	}
+	err = bt.PutBatch(keyPositions)
+	assert.Nil(t, err)
+	tests := []struct {
+		name    string
+		reverse bool
+	}{
+		{"ascend", false},
+		{"descend", true},
+	}
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			bpi := bt.Iterator(tt.reverse)
+			var prev []byte
+			for ; bpi.Valid(); bpi.Next() {
+				if prev != nil {
+					if tt.reverse {
+						assert.Less(t, bpi.Key(), prev)
+					} else {
+						assert.Greater(t, bpi.Key(), prev)
+					}
+				}
+				prev = bpi.Key()
+			}
+			bpi.Close()
+		})
+	}
+}
+
+func Test_bptreeIterator_Key(t *testing.T) {
+	test_bptreeIterator_Key(t, 1)
+	test_bptreeIterator_Key(t, 3)
+}
+
+func test_bptreeIterator_Key(t *testing.T, partitionNum int) {
+	options := indexOptions{
+		indexType:       indexBoltDB,
+		dirPath:         filepath.Join(os.TempDir(), "bptree-key-"+strconv.Itoa(partitionNum)),
+		partitionNum:    partitionNum,
+		hashKeyFunction: xxhash.Sum64,
+	}
+
+	err := os.MkdirAll(options.dirPath, os.ModePerm)
+	assert.Nil(t, err)
+	defer func() {
+		_ = os.RemoveAll(options.dirPath)
+	}()
+	bt, err := openIndexBoltDB(options)
+	assert.Nil(t, err)
+	var keyPositions []*KeyPosition
+	for i := 0; i < 20; i++ {
+		key := util.RandomValue(10)
+		keyPositions = append(keyPositions, &KeyPosition{
+			key:       key,
+			partition: uint32(bt.getKeyPartition(key)),
+			position:  &wal.ChunkPosition{},
+		})
+	}
+	err = bt.PutBatch(keyPositions)
+	assert.Nil(t, err)
+
+	tests := []struct {
+		name    string
+		reverse bool
+	}{
+		{"ascend", false},
+		{"descend", true},
+	}
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			bpi := bt.Iterator(tt.reverse)
+			assert.Equal(t, bpi.Key(), bpi.Key())
+			bpi.Next()
+			assert.Equal(t, bpi.Key(), bpi.Key())
+			bpi.Next()
+			assert.Equal(t, bpi.Key(), bpi.Key())
+			bpi.Rewind()
+			assert.Equal(t, bpi.Key(), bpi.Key())
+			bpi.Close()
+		})
+	}
+}
+
+func Test_bptreeIterator_Value(t *testing.T) {
+	test_bptreeIterator_Value(t, 1)
+	test_bptreeIterator_Value(t, 3)
+}
+
+func test_bptreeIterator_Value(t *testing.T, partitionNum int) {
+	options := indexOptions{
+		indexType:       indexBoltDB,
+		dirPath:         filepath.Join(os.TempDir(), "bptree-value-"+strconv.Itoa(partitionNum)),
+		partitionNum:    partitionNum,
+		hashKeyFunction: xxhash.Sum64,
+	}
+
+	err := os.MkdirAll(options.dirPath, os.ModePerm)
+	assert.Nil(t, err)
+	defer func() {
+		_ = os.RemoveAll(options.dirPath)
+	}()
+	bt, err := openIndexBoltDB(options)
+	assert.Nil(t, err)
+	var keyPositions []*KeyPosition
+	for i := 0; i < 20; i++ {
+		key := util.RandomValue(10)
+		keyPositions = append(keyPositions, &KeyPosition{
+			key:       key,
+			partition: uint32(bt.getKeyPartition(key)),
+			position:  &wal.ChunkPosition{},
+		})
+	}
+	err = bt.PutBatch(keyPositions)
+	assert.Nil(t, err)
+
+	tests := []struct {
+		name    string
+		reverse bool
+	}{
+		{"ascend", false},
+		{"descend", true},
+	}
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			bpi := bt.Iterator(tt.reverse)
+			assert.True(t, reflect.DeepEqual(bpi.Value(), bpi.Value()))
+			bpi.Next()
+			assert.True(t, reflect.DeepEqual(bpi.Value(), bpi.Value()))
+			bpi.Next()
+			assert.True(t, reflect.DeepEqual(bpi.Value(), bpi.Value()))
+			bpi.Rewind()
+			assert.True(t, reflect.DeepEqual(bpi.Value(), bpi.Value()))
+			bpi.Close()
+		})
+	}
+}
+
+func Test_bptreeIterator_Valid(t *testing.T) {
+	test_bptreeIterator_Valid(t, 1)
+	test_bptreeIterator_Valid(t, 3)
+}
+
+func test_bptreeIterator_Valid(t *testing.T, partitionNum int) {
+	tests := []struct {
+		name    string
+		reverse bool
+		options *indexOptions
+		keyNum  int
+		want    bool
+	}{
+		{"empty", true, &indexOptions{
+			indexType:       indexBoltDB,
+			dirPath:         filepath.Join(os.TempDir(), "bptree-valid-"+strconv.Itoa(partitionNum)),
+			partitionNum:    partitionNum,
+			hashKeyFunction: xxhash.Sum64,
+		}, 0, false},
+		{"empty", false, &indexOptions{
+			indexType:       indexBoltDB,
+			dirPath:         filepath.Join(os.TempDir(), "bptree-valid-"+strconv.Itoa(partitionNum)),
+			partitionNum:    partitionNum,
+			hashKeyFunction: xxhash.Sum64,
+		}, 0, false},
+		{"normal", true, &indexOptions{
+			indexType:       indexBoltDB,
+			dirPath:         filepath.Join(os.TempDir(), "bptree-valid-"+strconv.Itoa(partitionNum)),
+			partitionNum:    partitionNum,
+			hashKeyFunction: xxhash.Sum64,
+		}, 5, true},
+		{"normal", false, &indexOptions{
+			indexType:       indexBoltDB,
+			dirPath:         filepath.Join(os.TempDir(), "bptree-valid-"+strconv.Itoa(partitionNum)),
+			partitionNum:    partitionNum,
+			hashKeyFunction: xxhash.Sum64,
+		}, 5, true},
+	}
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			tt.options.dirPath = filepath.Join(tt.options.dirPath, tt.name)
+			err := os.MkdirAll(tt.options.dirPath, os.ModePerm)
+			assert.Nil(t, err)
+			defer func() {
+				_ = os.RemoveAll(tt.options.dirPath)
+			}()
+			bt, err := openIndexBoltDB(*(tt.options))
+			assert.Nil(t, err)
+			var keyPositions []*KeyPosition
+			for i := 0; i < tt.keyNum; i++ {
+				key := util.RandomValue(10)
+				keyPositions = append(keyPositions, &KeyPosition{
+					key:       key,
+					partition: uint32(bt.getKeyPartition(key)),
+					position:  &wal.ChunkPosition{},
+				})
+			}
+			err = bt.PutBatch(keyPositions)
+			assert.Nil(t, err)
+			bpi := bt.Iterator(tt.reverse).(*bptreeIterator)
+			assert.Equal(t, bpi.Valid(), tt.want)
+			bpi.Close()
+		})
+	}
+}
+
+func test_keyPositionHeap_Len(t *testing.T) {
+	var keyPositions []*KeyPosition
+	for i := 0; i < 10; i++ {
+		key := util.RandomValue(10)
+		keyPositions = append(keyPositions, &KeyPosition{
+			key:       key,
+			partition: uint32(0),
+			position:  &wal.ChunkPosition{},
+		})
+	}
+
+	tests := []struct {
+		name    string
+		values  []*KeyPosition
+		reverse bool
+		want    int
+	}{
+		{"empty-ascend", keyPositions[:0], false, 0},
+		{"empty-descend", keyPositions[:0], true, 0},
+		{"normal-ascend", keyPositions, false, 10},
+		{"normal-descend", keyPositions, true, 10},
+	}
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			h := keyPositionHeap{
+				values:  tt.values,
+				reverse: tt.reverse,
+			}
+			if got := h.Len(); got != tt.want {
+				t.Errorf("keyPositionHeap.Len() = %v, want %v", got, tt.want)
+			}
+		})
+	}
+}
+
+func Test_keyPositionHeap_Less(t *testing.T) {
+	var keyPositions []*KeyPosition
+	for i := 0; i < 10; i++ {
+		key := util.RandomValue(10)
+		keyPositions = append(keyPositions, &KeyPosition{
+			key:       key,
+			partition: uint32(0),
+			position:  &wal.ChunkPosition{},
+		})
+	}
+
+	type fields struct {
+		values  []*KeyPosition
+		reverse bool
+	}
+	type args struct {
+		i int
+		j int
+	}
+	tests := []struct {
+		name   string
+		fields fields
+		args   args
+	}{
+		{"ascend", fields{keyPositions, false}, args{0, 1}},
+		{"ascend", fields{keyPositions, false}, args{0, 9}},
+		{"descend", fields{keyPositions, true}, args{0, 1}},
+		{"descend", fields{keyPositions, true}, args{0, 9}},
+	}
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			h := keyPositionHeap{
+				values:  tt.fields.values,
+				reverse: tt.fields.reverse,
+			}
+			left, right := h.values[tt.args.i], h.values[tt.args.j]
+			if !tt.fields.reverse {
+				assert.Equal(t, bytes.Compare(left.key, right.key) == -1, h.Less(tt.args.i, tt.args.j))
+			} else {
+				assert.Equal(t, bytes.Compare(left.key, right.key) == 1, h.Less(tt.args.i, tt.args.j))
+			}
+
+		})
+	}
+}
+
+func Test_keyPositionHeap_Swap(t *testing.T) {
+	var keyPositions []*KeyPosition
+	for i := 0; i < 10; i++ {
+		key := util.RandomValue(10)
+		keyPositions = append(keyPositions, &KeyPosition{
+			key:       key,
+			partition: uint32(0),
+			position:  &wal.ChunkPosition{},
+		})
+	}
+	type fields struct {
+		values  []*KeyPosition
+		reverse bool
+	}
+	type args struct {
+		i int
+		j int
+	}
+	tests := []struct {
+		name   string
+		fields fields
+		args   args
+	}{
+		{"ascend", fields{keyPositions, false}, args{0, 1}},
+		{"ascend", fields{keyPositions, false}, args{0, 9}},
+		{"descend", fields{keyPositions, true}, args{0, 1}},
+		{"descend", fields{keyPositions, true}, args{0, 9}},
+	}
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			h := keyPositionHeap{
+				values:  tt.fields.values,
+				reverse: tt.fields.reverse,
+			}
+			left, right := h.values[tt.args.i], h.values[tt.args.j]
+			h.Swap(tt.args.i, tt.args.j)
+			assert.True(t, reflect.DeepEqual(left, h.values[tt.args.j]))
+			assert.True(t, reflect.DeepEqual(right, h.values[tt.args.i]))
+		})
+	}
+}
+
+func Test_keyPositionHeap_Push(t *testing.T) {
+	var keyPositions []*KeyPosition
+	for i := 0; i < 10; i++ {
+		key := util.RandomValue(10)
+		keyPositions = append(keyPositions, &KeyPosition{
+			key:       key,
+			partition: uint32(0),
+			position:  &wal.ChunkPosition{},
+		})
+	}
+	type fields struct {
+		values  []*KeyPosition
+		reverse bool
+	}
+	type args struct {
+		x any
+	}
+	tests := []struct {
+		name    string
+		fields  fields
+		args    args
+		wantIdx int
+	}{
+		{"empty", fields{keyPositions[:0], false}, args{&KeyPosition{
+			key:       util.RandomValue(10),
+			partition: uint32(0),
+			position:  &wal.ChunkPosition{},
+		}}, 0},
+		{"empty", fields{keyPositions[:0], true}, args{&KeyPosition{
+			key:       util.RandomValue(10),
+			partition: uint32(0),
+			position:  &wal.ChunkPosition{},
+		}}, 0},
+		{"normal", fields{keyPositions[:5], false}, args{&KeyPosition{
+			key:       util.RandomValue(10),
+			partition: uint32(0),
+			position:  &wal.ChunkPosition{},
+		}}, 5},
+		{"normal", fields{keyPositions[:5], true}, args{&KeyPosition{
+			key:       util.RandomValue(10),
+			partition: uint32(0),
+			position:  &wal.ChunkPosition{},
+		}}, 5},
+	}
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			h := &keyPositionHeap{
+				values:  tt.fields.values,
+				reverse: tt.fields.reverse,
+			}
+			h.Push(tt.args.x)
+			assert.True(t, reflect.DeepEqual(tt.args.x, h.values[tt.wantIdx]))
+		})
+	}
+}
+
+func Test_keyPositionHeap_Pop(t *testing.T) {
+	var keyPositions []*KeyPosition
+	for i := 0; i < 10; i++ {
+		key := util.RandomValue(10)
+		keyPositions = append(keyPositions, &KeyPosition{
+			key:       key,
+			partition: uint32(0),
+			position:  &wal.ChunkPosition{},
+		})
+	}
+	type fields struct {
+		values  []*KeyPosition
+		reverse bool
+	}
+	tests := []struct {
+		name    string
+		fields  fields
+		wantLen int
+		wantErr error
+	}{
+		{"normal", fields{keyPositions[:5], false}, 5, nil},
+		{"normal", fields{keyPositions[:5], true}, 5, nil},
+	}
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			h := &keyPositionHeap{
+				values:  tt.fields.values,
+				reverse: tt.fields.reverse,
+			}
+			assert.Equal(t, h.Len(), tt.wantLen)
+			got := h.Pop().(*KeyPosition)
+			assert.True(t, reflect.DeepEqual(keyPositions[tt.wantLen-1], got))
+			assert.Equal(t, h.Len(), tt.wantLen-1)
+		})
+	}
+}
+
+func Test_keyPositionHeap_Top(t *testing.T) {
+	var keyPositions []*KeyPosition
+	for i := 0; i < 10; i++ {
+		key := util.RandomValue(10)
+		keyPositions = append(keyPositions, &KeyPosition{
+			key:       key,
+			partition: uint32(0),
+			position:  &wal.ChunkPosition{},
+		})
+	}
+
+	type fields struct {
+		values  []*KeyPosition
+		reverse bool
+	}
+	tests := []struct {
+		name    string
+		fields  fields
+		wantIdx int
+	}{
+		{"normal", fields{keyPositions[:5], false}, 0},
+		{"normal", fields{keyPositions[:5], true}, 0},
+	}
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			h := &keyPositionHeap{
+				values:  tt.fields.values,
+				reverse: tt.fields.reverse,
+			}
+			if got := h.Top(); !reflect.DeepEqual(got, h.values[tt.wantIdx]) {
+				t.Errorf("keyPositionHeap.Top() = %v, want %v", got, h.values[tt.wantIdx])
+			}
+		})
+	}
+}
+
+func Test_keyPositionHeap_Clear(t *testing.T) {
+	var keyPositions []*KeyPosition
+	for i := 0; i < 10; i++ {
+		key := util.RandomValue(10)
+		keyPositions = append(keyPositions, &KeyPosition{
+			key:       key,
+			partition: uint32(0),
+			position:  &wal.ChunkPosition{},
+		})
+	}
+	type fields struct {
+		values  []*KeyPosition
+		reverse bool
+	}
+	tests := []struct {
+		name    string
+		fields  fields
+		oldLen  int
+		wantLen int
+	}{
+		{"empty", fields{keyPositions[:0], false}, 0, 0},
+		{"empty", fields{keyPositions[:0], true}, 0, 0},
+		{"normal", fields{keyPositions[:5], false}, 5, 0},
+		{"normal", fields{keyPositions[:5], true}, 5, 0},
+	}
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			h := &keyPositionHeap{
+				values:  tt.fields.values,
+				reverse: tt.fields.reverse,
+			}
+			assert.Equal(t, tt.oldLen, h.Len())
+			h.Clear()
+			assert.Equal(t, tt.wantLen, h.Len())
+		})
+	}
+}
+
+func TestNewKeyPositionHeap(t *testing.T) {
+	type args struct {
+		reverse      bool
+		partitionNum int
+	}
+	tests := []struct {
+		name string
+		args args
+		want *keyPositionHeap
+	}{
+		// TODO: Add test cases.
+	}
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			if got := NewKeyPositionHeap(tt.args.reverse, tt.args.partitionNum); !reflect.DeepEqual(got, tt.want) {
+				t.Errorf("NewKeyPositionHeap() = %v, want %v", got, tt.want)
+			}
+		})
+	}
 }
