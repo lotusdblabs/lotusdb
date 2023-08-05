@@ -9,28 +9,6 @@ import (
 	"github.com/stretchr/testify/assert"
 )
 
-// ----------------------------------------------
-// | case 1 | TestMemtableOpen                  |
-// ----------------------------------------------
-// | case 2 | TestMemtableOpenAll               |
-// ----------------------------------------------
-// | case 3 | TestMemTablePutAllKindsEntries    |
-// ----------------------------------------------
-// | case 4 | TestMemTablePutBatch              |
-// ----------------------------------------------
-// | case 5 | TestMemTablePutBatchReopen        |
-// ----------------------------------------------
-// | case 6 | TestMemTableGet                   |
-// ----------------------------------------------
-// | case 7 | TestMemTableGetReopen             |
-// ----------------------------------------------
-// | case 8 | TestMemTableDelWal                |
-// ----------------------------------------------
-// | case 9 | TestMemTableSync                  |
-// ----------------------------------------------
-// | case 10| TestMemtableClose                 |
-// ----------------------------------------------
-
 func TestMemtableOpen(t *testing.T) {
 	path, err := os.MkdirTemp("", "memtable-test-open")
 	assert.Nil(t, err)
@@ -82,7 +60,7 @@ func TestMemtableOpenAll(t *testing.T) {
 	}
 
 	t.Run("test open all memtables", func(t *testing.T) {
-		var opts Options = DefaultOptions
+		var opts = DefaultOptions
 		opts.DirPath = path
 		tables, err := openAllMemtables(opts)
 		assert.Nil(t, err)
