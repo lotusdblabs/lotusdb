@@ -705,25 +705,25 @@ func test_bptreeIterator_Valid(t *testing.T, partitionNum int) {
 	}{
 		{"empty", true, &indexOptions{
 			indexType:       indexBoltDB,
-			dirPath:         filepath.Join(os.TempDir(), "bptree-valid-"+strconv.Itoa(partitionNum)),
+			dirPath:         filepath.Join(os.TempDir(), "bptree-valid-"+strconv.Itoa(partitionNum)+"-empty-descend"),
 			partitionNum:    partitionNum,
 			hashKeyFunction: xxhash.Sum64,
 		}, 0, false},
 		{"empty", false, &indexOptions{
 			indexType:       indexBoltDB,
-			dirPath:         filepath.Join(os.TempDir(), "bptree-valid-"+strconv.Itoa(partitionNum)),
+			dirPath:         filepath.Join(os.TempDir(), "bptree-valid-"+strconv.Itoa(partitionNum)+"-empty-ascend"),
 			partitionNum:    partitionNum,
 			hashKeyFunction: xxhash.Sum64,
 		}, 0, false},
 		{"normal", true, &indexOptions{
 			indexType:       indexBoltDB,
-			dirPath:         filepath.Join(os.TempDir(), "bptree-valid-"+strconv.Itoa(partitionNum)),
+			dirPath:         filepath.Join(os.TempDir(), "bptree-valid-"+strconv.Itoa(partitionNum)+"-normal-descend"),
 			partitionNum:    partitionNum,
 			hashKeyFunction: xxhash.Sum64,
 		}, 5, true},
 		{"normal", false, &indexOptions{
 			indexType:       indexBoltDB,
-			dirPath:         filepath.Join(os.TempDir(), "bptree-valid-"+strconv.Itoa(partitionNum)),
+			dirPath:         filepath.Join(os.TempDir(), "bptree-valid-"+strconv.Itoa(partitionNum)+"-normal-ascend"),
 			partitionNum:    partitionNum,
 			hashKeyFunction: xxhash.Sum64,
 		}, 5, true},
@@ -756,7 +756,7 @@ func test_bptreeIterator_Valid(t *testing.T, partitionNum int) {
 	}
 }
 
-func test_keyPositionHeap_Len(t *testing.T) {
+func Test_keyPositionHeap_Len(t *testing.T) {
 	var keyPositions []*KeyPosition
 	for i := 0; i < 10; i++ {
 		key := util.RandomValue(10)
@@ -1042,27 +1042,6 @@ func Test_keyPositionHeap_Clear(t *testing.T) {
 			assert.Equal(t, tt.oldLen, h.Len())
 			h.Clear()
 			assert.Equal(t, tt.wantLen, h.Len())
-		})
-	}
-}
-
-func TestNewKeyPositionHeap(t *testing.T) {
-	type args struct {
-		reverse      bool
-		partitionNum int
-	}
-	tests := []struct {
-		name string
-		args args
-		want *keyPositionHeap
-	}{
-		// TODO: Add test cases.
-	}
-	for _, tt := range tests {
-		t.Run(tt.name, func(t *testing.T) {
-			if got := NewKeyPositionHeap(tt.args.reverse, tt.args.partitionNum); !reflect.DeepEqual(got, tt.want) {
-				t.Errorf("NewKeyPositionHeap() = %v, want %v", got, tt.want)
-			}
 		})
 	}
 }
