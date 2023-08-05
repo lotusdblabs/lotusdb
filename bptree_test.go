@@ -388,27 +388,27 @@ func test_bptreeIterator_Rewind(t *testing.T, partitionNum int) {
 		options *indexOptions
 		keyNum  int
 	}{
-		{"empty", true, &indexOptions{
+		{"empty-descend", true, &indexOptions{
 			indexType:       indexBoltDB,
-			dirPath:         filepath.Join(os.TempDir(), "bptree-rewind-"+strconv.Itoa(partitionNum)),
+			dirPath:         filepath.Join(os.TempDir(), "bptree-rewind-"+strconv.Itoa(partitionNum)+"-descend"),
 			partitionNum:    partitionNum,
 			hashKeyFunction: xxhash.Sum64,
 		}, 0},
-		{"empty", false, &indexOptions{
+		{"empty-ascend", false, &indexOptions{
 			indexType:       indexBoltDB,
-			dirPath:         filepath.Join(os.TempDir(), "bptree-rewind-"+strconv.Itoa(partitionNum)),
+			dirPath:         filepath.Join(os.TempDir(), "bptree-rewind-"+strconv.Itoa(partitionNum)+"-ascend"),
 			partitionNum:    partitionNum,
 			hashKeyFunction: xxhash.Sum64,
 		}, 0},
-		{"normal", true, &indexOptions{
+		{"normal-descend", true, &indexOptions{
 			indexType:       indexBoltDB,
-			dirPath:         filepath.Join(os.TempDir(), "bptree-rewind-"+strconv.Itoa(partitionNum)),
+			dirPath:         filepath.Join(os.TempDir(), "bptree-rewind-"+strconv.Itoa(partitionNum)+"-descend"),
 			partitionNum:    partitionNum,
 			hashKeyFunction: xxhash.Sum64,
 		}, 5},
-		{"normal", false, &indexOptions{
+		{"normal-ascend", false, &indexOptions{
 			indexType:       indexBoltDB,
-			dirPath:         filepath.Join(os.TempDir(), "bptree-rewind-"+strconv.Itoa(partitionNum)),
+			dirPath:         filepath.Join(os.TempDir(), "bptree-rewind-"+strconv.Itoa(partitionNum)+"-ascend"),
 			partitionNum:    partitionNum,
 			hashKeyFunction: xxhash.Sum64,
 		}, 5},
