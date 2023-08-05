@@ -466,52 +466,61 @@ func Test_bptreeIterator_Seek(t *testing.T) {
 }
 
 func test_bptreeIterator_Seek(t *testing.T, partitionNum int) {
-	// TODO
-	// options := indexOptions{
-	// 	indexType:       indexBoltDB,
-	// 	dirPath:         filepath.Join(os.TempDir(), "bptree-seek-"+strconv.Itoa(partitionNum)),
-	// 	partitionNum:    partitionNum,
-	// 	hashKeyFunction: xxhash.Sum64,
-	// }
-
-	// err := os.MkdirAll(options.dirPath, os.ModePerm)
-	// assert.Nil(t, err)
-	// defer func() {
-	// 	_ = os.RemoveAll(options.dirPath)
-	// }()
-
-	// bt, err := openIndexBoltDB(options)
-	// assert.Nil(t, err)
-
-	type fields struct {
-		mark         []bool
-		txs          []*bbolt.Tx
-		cursors      []*bbolt.Cursor
-		h            *keyPositionHeap
-		partitionNum int
-		reverse      bool
+	options := indexOptions{
+		indexType:       indexBoltDB,
+		dirPath:         filepath.Join(os.TempDir(), "bptree-seek-"+strconv.Itoa(partitionNum)),
+		partitionNum:    partitionNum,
+		hashKeyFunction: xxhash.Sum64,
 	}
-	type args struct {
-		key []byte
+
+	err := os.MkdirAll(options.dirPath, os.ModePerm)
+	assert.Nil(t, err)
+	defer func() {
+		_ = os.RemoveAll(options.dirPath)
+	}()
+
+	bt, err := openIndexBoltDB(options)
+	assert.Nil(t, err)
+	var keyPositions []*KeyPosition
+	minKey := []byte{}
+	var maxKey []byte
+	for i := 0; i < 20; i++ {
+		key := util.RandomValue(10)
+		keyPositions = append(keyPositions, &KeyPosition{
+			key:       key,
+			partition: uint32(bt.getKeyPartition(key)),
+			position:  &wal.ChunkPosition{},
+		})
+		if maxKey == nil || bytes.Compare(key, key) == 1 {
+			maxKey = key
+		}
 	}
+	err = bt.PutBatch(keyPositions[:10])
+	assert.Nil(t, err)
+	maxKey = append(maxKey, '1')
 	tests := []struct {
-		name   string
-		fields fields
-		args   args
+		name    string
+		reverse bool
+		key     []byte
 	}{
-		// TODO: Add test cases.
+		{"nil", true, minKey},
+		{"nil", false, maxKey},
+		{"equal", true, keyPositions[0].key},
+		{"equal", true, keyPositions[0].key},
 	}
 	for _, tt := range tests {
 		t.Run(tt.name, func(t *testing.T) {
-			bpi := &bptreeIterator{
-				marks:        tt.fields.mark,
-				txs:          tt.fields.txs,
-				cursors:      tt.fields.cursors,
-				h:            tt.fields.h,
-				partitionNum: tt.fields.partitionNum,
-				reverse:      tt.fields.reverse,
+			bpi := bt.Iterator(tt.reverse)
+			bpi.Seek(tt.key)
+			switch tt.name {
+			case "empty":
+				assert.False(t, bpi.Valid())
+			case "equal":
+				assert.True(t, bpi.Valid())
+				assert.True(t, reflect.DeepEqual(keyPositions[0], bpi.Value()))
+				assert.Equal(t, keyPositions[0].key, bpi.Key())
 			}
-			bpi.Seek(tt.args.key)
+			bpi.Close()
 		})
 	}
 }
