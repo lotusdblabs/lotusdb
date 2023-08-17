@@ -165,6 +165,7 @@ func (db *DB) Put(key []byte, value []byte, options *WriteOptions) error {
 		ReadOnly: false,
 	})
 	if err := batch.Put(key, value); err != nil {
+		batch.unlock()
 		return err
 	}
 	return batch.Commit(options)
@@ -187,6 +188,7 @@ func (db *DB) Delete(key []byte, options *WriteOptions) error {
 		ReadOnly: false,
 	})
 	if err := batch.Delete(key); err != nil {
+		batch.unlock()
 		return err
 	}
 	return batch.Commit(options)

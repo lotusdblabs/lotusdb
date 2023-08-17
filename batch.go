@@ -106,6 +106,7 @@ func (b *Batch) Get(key []byte) ([]byte, error) {
 			b.mu.RUnlock()
 			return record.Value, nil
 		}
+		b.mu.RUnlock()
 	}
 
 	// get from memtables
@@ -149,19 +150,9 @@ func (b *Batch) Delete(key []byte) error {
 	}
 
 	b.mu.Lock()
-	position, err := b.db.index.Get(key)
-	if err != nil {
-		b.mu.Unlock()
-		return err
-	}
-	if position != nil {
-		// write to pendingWrites if the key exists
-		b.pendingWrites[string(key)] = &LogRecord{
-			Key:  key,
-			Type: LogRecordDeleted,
-		}
-	} else {
-		delete(b.pendingWrites, string(key))
+	b.pendingWrites[string(key)] = &LogRecord{
+		Key:  key,
+		Type: LogRecordDeleted,
 	}
 	b.mu.Unlock()
 
