@@ -429,6 +429,9 @@ func TestDBMultiClients(t *testing.T) {
 						DisableWal: false,
 					})
 				}
+
+				err = dbCliPut.Close()
+				assert.Nil(t, err)
 			}(i)
 		}
 
@@ -443,6 +446,9 @@ func TestDBMultiClients(t *testing.T) {
 				for _, log := range logs[i] {
 					_, _ = dbCliGet.Get(log.key)
 				}
+
+				err = dbCliGet.Close()
+				assert.Nil(t, err)
 			}(i)
 		}
 
@@ -460,6 +466,9 @@ func TestDBMultiClients(t *testing.T) {
 						DisableWal: false,
 					})
 				}
+
+				err = dbCliDel.Close()
+				assert.Nil(t, err)
 			}(i)
 		}
 	})
