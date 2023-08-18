@@ -11,6 +11,14 @@ import (
 	"github.com/stretchr/testify/require"
 )
 
+func destroyDB(db *DB) {
+	err := db.Close()
+	if err != nil {
+		panic(err)
+	}
+	_ = os.RemoveAll(db.options.DirPath)
+}
+
 func TestDBOpen(t *testing.T) {
 	// Save the original function
 	t.Run("Valid options", func(t *testing.T) {
@@ -18,9 +26,9 @@ func TestDBOpen(t *testing.T) {
 		path, err := os.MkdirTemp("", "db-test-open")
 		assert.Nil(t, err)
 		options.DirPath = path
-		defer os.RemoveAll(options.DirPath)
 		db, err := Open(options)
 		assert.Nil(t, err)
+		defer destroyDB(db)
 
 		assert.NotNil(t, db, "DB should not be nil")
 		// Ensure that the properties of the DB are initialized correctly.
@@ -46,10 +54,8 @@ func TestDBClose(t *testing.T) {
 	path, err := os.MkdirTemp("", "db-test-close")
 	assert.Nil(t, err)
 	options.DirPath = path
-
-	defer os.RemoveAll(options.DirPath)
-
 	db, err := Open(options)
+	defer destroyDB(db)
 	assert.Nil(t, err)
 	t.Run("test close db", func(t *testing.T) {
 		err := db.Close()
@@ -62,11 +68,9 @@ func TestDBSync(t *testing.T) {
 	path, err := os.MkdirTemp("", "db-test-sync")
 	assert.Nil(t, err)
 	options.DirPath = path
-
-	defer os.RemoveAll(options.DirPath)
-
 	db, err := Open(options)
 	assert.Nil(t, err)
+	defer destroyDB(db)
 
 	t.Run("test sync db", func(t *testing.T) {
 		err := db.Sync()
@@ -82,9 +86,9 @@ func TestDBPut(t *testing.T) {
 	assert.Nil(t, err)
 	options.DirPath = path
 
-	defer os.RemoveAll(options.DirPath)
 	db, err := Open(options)
 	assert.Nil(t, err)
+	defer destroyDB(db)
 
 	type testLog struct {
 		key   []byte
@@ -136,9 +140,9 @@ func TestDBGet(t *testing.T) {
 	assert.Nil(t, err)
 	options.DirPath = path
 
-	defer os.RemoveAll(options.DirPath)
 	db, err := Open(options)
 	assert.Nil(t, err)
+	defer destroyDB(db)
 
 	type testLog struct {
 		key     []byte
@@ -204,9 +208,9 @@ func TestDBDelete(t *testing.T) {
 	assert.Nil(t, err)
 	options.DirPath = path
 
-	defer os.RemoveAll(options.DirPath)
 	db, err := Open(options)
 	assert.Nil(t, err)
+	defer destroyDB(db)
 
 	type testLog struct {
 		key   []byte
@@ -271,9 +275,9 @@ func TestDBExist(t *testing.T) {
 	assert.Nil(t, err)
 	options.DirPath = path
 
-	defer os.RemoveAll(options.DirPath)
 	db, err := Open(options)
 	assert.Nil(t, err)
+	defer destroyDB(db)
 
 	type testLog struct {
 		key     []byte
@@ -340,9 +344,9 @@ func TestDBFlushMemTables(t *testing.T) {
 	options.DirPath = path
 	options.MemtableSize = 5 * MB
 
-	defer os.RemoveAll(options.DirPath)
 	db, err := Open(options)
 	assert.Nil(t, err)
+	defer destroyDB(db)
 
 	type testLog struct {
 		key   []byte
@@ -417,9 +421,9 @@ func TestDBMultiClients(t *testing.T) {
 	path, err := os.MkdirTemp("", "db-test-multi-client")
 	assert.Nil(t, err)
 	options.DirPath = path
-	defer os.RemoveAll(options.DirPath)
 	db, err := Open(options)
 	assert.Nil(t, err)
+	defer destroyDB(db)
 
 	t.Run("multi client running", func(t *testing.T) {
 		var wg sync.WaitGroup

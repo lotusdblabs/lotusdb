@@ -27,9 +27,7 @@ type DB struct {
 	flushChan chan *memtable
 	mu        sync.RWMutex
 	closed    bool
-}
-
-type Stat struct {
+	options   Options
 }
 
 func Open(options Options) (*DB, error) {
@@ -38,7 +36,6 @@ func Open(options Options) (*DB, error) {
 		return nil, err
 	}
 
-	// create the directory if not exist
 	// create data directory if not exist
 	if _, err := os.Stat(options.DirPath); err != nil {
 		if err := os.MkdirAll(options.DirPath, os.ModePerm); err != nil {
@@ -92,6 +89,7 @@ func Open(options Options) (*DB, error) {
 		vlog:      vlog,
 		fileLock:  fileLock,
 		flushChan: make(chan *memtable, options.MemtableNums-1),
+		options:   options,
 	}
 
 	// start flush memtables goroutine
@@ -152,10 +150,6 @@ func (db *DB) Sync() error {
 		return err
 	}
 
-	return nil
-}
-
-func (db *DB) Stat() *Stat {
 	return nil
 }
 
