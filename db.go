@@ -226,9 +226,6 @@ func validateOptions(options *Options) error {
 }
 
 func (db *DB) getMemTables() []*memtable {
-	db.mu.RLock()
-	defer db.mu.RUnlock()
-
 	var tables []*memtable
 	tables = append(tables, db.activeMem)
 
