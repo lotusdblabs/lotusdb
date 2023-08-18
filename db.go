@@ -28,6 +28,7 @@ type DB struct {
 	mu        sync.RWMutex
 	closed    bool
 	options   Options
+	batchPool sync.Pool
 }
 
 func Open(options Options) (*DB, error) {
@@ -90,6 +91,7 @@ func Open(options Options) (*DB, error) {
 		fileLock:  fileLock,
 		flushChan: make(chan *memtable, options.MemtableNums-1),
 		options:   options,
+		batchPool: sync.Pool{New: makeBatch},
 	}
 
 	// start flush memtables goroutine
@@ -154,10 +156,12 @@ func (db *DB) Sync() error {
 }
 
 func (db *DB) Put(key []byte, value []byte, options *WriteOptions) error {
-	batch := db.NewBatch(BatchOptions{
-		Sync:     false,
-		ReadOnly: false,
-	})
+	batch := db.batchPool.Get().(*Batch)
+	defer func() {
+		batch.reset()
+		db.batchPool.Put(batch)
+	}()
+	batch.init(false, false, db).withPendingWrites()
 	if err := batch.Put(key, value); err != nil {
 		batch.unlock()
 		return err
@@ -166,21 +170,23 @@ func (db *DB) Put(key []byte, value []byte, options *WriteOptions) error {
 }
 
 func (db *DB) Get(key []byte) ([]byte, error) {
-	batch := db.NewBatch(BatchOptions{
-		Sync:     false,
-		ReadOnly: true,
-	})
+	batch := db.batchPool.Get().(*Batch)
+	batch.init(true, false, db)
 	defer func() {
 		_ = batch.Commit(nil)
+		batch.reset()
+		db.batchPool.Put(batch)
 	}()
 	return batch.Get(key)
 }
 
 func (db *DB) Delete(key []byte, options *WriteOptions) error {
-	batch := db.NewBatch(BatchOptions{
-		Sync:     false,
-		ReadOnly: false,
-	})
+	batch := db.batchPool.Get().(*Batch)
+	defer func() {
+		batch.reset()
+		db.batchPool.Put(batch)
+	}()
+	batch.init(false, false, db).withPendingWrites()
 	if err := batch.Delete(key); err != nil {
 		batch.unlock()
 		return err
@@ -189,12 +195,12 @@ func (db *DB) Delete(key []byte, options *WriteOptions) error {
 }
 
 func (db *DB) Exist(key []byte) (bool, error) {
-	batch := db.NewBatch(BatchOptions{
-		Sync:     false,
-		ReadOnly: true,
-	})
+	batch := db.batchPool.Get().(*Batch)
+	batch.init(true, false, db)
 	defer func() {
 		_ = batch.Commit(nil)
+		batch.reset()
+		db.batchPool.Put(batch)
 	}()
 	return batch.Exist(key)
 }
