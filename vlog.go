@@ -2,10 +2,7 @@ package lotusdb
 
 import (
 	"fmt"
-	"io"
-	"reflect"
 	"time"
-	"unsafe"
 
 	"github.com/rosedblabs/wal"
 	"golang.org/x/sync/errgroup"
@@ -40,17 +37,8 @@ type valueLogOptions struct {
 	// hash function for sharding
 	hashKeyFunction func([]byte) uint64
 
-	// index corresponding to vlog
-	index Index
-
-	// The maximum amount of storage (GB) that vlog is allowed to read into memory when compacting
-	maxMemoryCompact uint64
-
-	// check size of valieEntries after writing the specified number of entries.
-	numEntriesToCheck int
-
-	// the db vlog belongs to
-	db *DB
+	// writing validEntries to disk after reading the specified number of entries.
+	numEntriesToCompact int
 }
 
 func openValueLog(options valueLogOptions) (*valueLog, error) {
@@ -129,109 +117,6 @@ func (vlog *valueLog) writeBatch(records []*ValueLogRecord) ([]*KeyPosition, err
 	}
 
 	return keyPositions, nil
-}
-
-func (vlog *valueLog) compaction() error {
-	vlog.options.db.flushLock.Lock()
-	var maxMemory uint64 = vlog.options.maxMemoryCompact / uint64(vlog.options.partitionNum)
-	groups := make([]errgroup.Group, vlog.options.partitionNum)
-
-	for i := 0; i < int(vlog.options.partitionNum); i++ {
-		part := i
-		groups[part].Go(func() error {
-			newVLogWal, err := wal.Open(wal.Options{
-				DirPath:        vlog.options.dirPath,
-				SegmentSize:    vlog.options.segmentSize,
-				SegmentFileExt: fmt.Sprintf(valueLogFileExt, time.Now().Format("02-03-04-05-2006"), part),
-				BlockCache:     vlog.options.blockCache,
-				Sync:           false, // we will sync manually
-				BytesPerSync:   0,     // the same as Sync
-			})
-			if err != nil {
-				newVLogWal.Delete()
-				return err
-			}
-
-			validEntries := []*ValueLogRecord{}
-			reader := vlog.walFiles[part].NewReader()
-			var count = 0
-			for {
-				count++
-				content, chunkPos, err := reader.Next()
-				if err != nil {
-					if err == io.EOF {
-						break
-					}
-					newVLogWal.Delete()
-					return err
-				}
-				record := decodeValueLogRecord(content)
-				keyPos, err := vlog.options.index.Get(record.key)
-				if err != nil {
-					newVLogWal.Delete()
-					return err
-				}
-
-				if keyPos == nil {
-					continue
-				}
-				if keyPos.partition == uint32(part) && reflect.DeepEqual(keyPos.position, chunkPos) {
-					validEntries = append(validEntries, record)
-				}
-
-				// if validEntries occupy too much memory, we need to write it to disk and clear memory
-				if count%vlog.options.numEntriesToCheck == 0 {
-					if unsafe.Sizeof(validEntries) > uintptr(maxMemory) {
-						err := vlog.writeCompaction(newVLogWal, validEntries, part)
-						if err != nil {
-							newVLogWal.Delete()
-							return err
-						}
-						validEntries = validEntries[:0]
-					}
-				}
-			}
-
-			err = vlog.writeCompaction(newVLogWal, validEntries, part)
-			if err != nil {
-				newVLogWal.Delete()
-				return err
-			}
-
-			// replace the wal with the new one.
-			vlog.walFiles[part].Delete()
-			vlog.walFiles[part] = newVLogWal
-
-			return nil
-		})
-	}
-
-	for i := 0; i < int(vlog.options.partitionNum); i++ {
-		if err := groups[i].Wait(); err != nil {
-			vlog.options.db.flushLock.Unlock()
-			return err
-		}
-	}
-
-	vlog.options.db.flushLock.Unlock()
-	return nil
-}
-
-func (vlog *valueLog) writeCompaction(newWal *wal.WAL, validEntries []*ValueLogRecord, part int) error {
-	keyPos := []*KeyPosition{}
-	for _, record := range validEntries {
-		pos, err := newWal.Write(encodeValueLogRecord(record))
-		if err != nil {
-			return err
-		}
-		keyPos = append(keyPos, &KeyPosition{
-			key:       record.key,
-			partition: uint32(part),
-			position:  pos},
-		)
-	}
-	vlog.options.index.PutBatch(keyPos)
-	return nil
 }
 
 func (vlog *valueLog) sync() error {

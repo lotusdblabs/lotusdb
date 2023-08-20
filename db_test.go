@@ -1,6 +1,7 @@
 package lotusdb
 
 import (
+	"fmt"
 	"os"
 	"path/filepath"
 	"sync"
@@ -392,7 +393,7 @@ func TestDBCompact(t *testing.T) {
 	assert.Nil(t, err)
 	options.DirPath = path
 	options.MemtableSize = 5 * MB
-	options.maxMemoryCompact = 2 * MB
+	options.numEntriesToCompact = 2 << 9 * 5
 
 	db, err := Open(options)
 	assert.Nil(t, err)
@@ -439,7 +440,12 @@ func TestDBCompact(t *testing.T) {
 		time.Sleep(time.Millisecond * 500)
 		size, err := dirSize(db.options.DirPath)
 		assert.Nil(t, err)
-		db.Compact()
+
+		start := time.Now()
+		db.compact()
+		runTime := time.Since(start)
+		fmt.Printf("partionNum:%d, runTime:%v\n", options.PartitionNum, runTime)
+
 		sizeCompact, err := dirSize(db.options.DirPath)
 		assert.Nil(t, err)
 		assert.Greater(t, size, sizeCompact)

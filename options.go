@@ -52,11 +52,8 @@ type Options struct {
 	// indexType.
 	// default value is bptree.
 	IndexType IndexType
-	// The maximum amount of storage (MB) that vlog is allowed to read into memory when compacting
-	maxMemoryCompact uint64
-
-	// check size of valieEntries after writing the specified number of entries.
-	numEntriesToCheck int
+	// writing entries to disk after reading the specified number of entries.
+	numEntriesToCompact int
 }
 
 // BatchOptions specifies the options for creating a batch.
@@ -107,17 +104,17 @@ const (
 )
 
 var DefaultOptions = Options{
-	DirPath:           tempDBDir(),
-	MemtableSize:      64 * MB,
-	MemtableNums:      15,
-	BlockCache:        64 * MB,
-	Sync:              false,
-	BytesPerSync:      0,
-	PartitionNum:      3,
-	KeyHashFunction:   xxhash.Sum64,
-	ValueLogFileSize:  1 * GB,
-	IndexType:         indexBoltDB,
-	numEntriesToCheck: 1024,
+	DirPath:             tempDBDir(),
+	MemtableSize:        64 * MB,
+	MemtableNums:        15,
+	BlockCache:          64 * MB,
+	Sync:                false,
+	BytesPerSync:        0,
+	PartitionNum:        3,
+	KeyHashFunction:     xxhash.Sum64,
+	ValueLogFileSize:    1 * GB,
+	IndexType:           indexBoltDB,
+	numEntriesToCompact: 2 << 10,
 }
 
 var DefaultBatchOptions = BatchOptions{

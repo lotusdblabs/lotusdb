@@ -2,16 +2,21 @@ package lotusdb
 
 import (
 	"errors"
+	"fmt"
+	"io"
 	"log"
 	"os"
 	"os/signal"
 	"path/filepath"
+	"reflect"
 	"sync"
 	"syscall"
 	"time"
 
 	"github.com/dgraph-io/badger/v4/y"
 	"github.com/gofrs/flock"
+	"github.com/rosedblabs/wal"
+	"golang.org/x/sync/errgroup"
 )
 
 const (
@@ -74,14 +79,12 @@ func Open(options Options) (*DB, error) {
 
 	// open value log
 	vlog, err := openValueLog(valueLogOptions{
-		dirPath:           options.DirPath,
-		segmentSize:       options.ValueLogFileSize,
-		blockCache:        options.BlockCache,
-		partitionNum:      uint32(options.PartitionNum),
-		hashKeyFunction:   options.KeyHashFunction,
-		index:             index,
-		maxMemoryCompact:  options.maxMemoryCompact,
-		numEntriesToCheck: options.numEntriesToCheck,
+		dirPath:             options.DirPath,
+		segmentSize:         options.ValueLogFileSize,
+		blockCache:          options.BlockCache,
+		partitionNum:        uint32(options.PartitionNum),
+		hashKeyFunction:     options.KeyHashFunction,
+		numEntriesToCompact: options.numEntriesToCompact,
 	})
 	if err != nil {
 		return nil, err
@@ -97,8 +100,6 @@ func Open(options Options) (*DB, error) {
 		options:   options,
 		batchPool: sync.Pool{New: makeBatch},
 	}
-
-	vlog.options.db = db
 
 	// start flush memtables goroutine
 	go db.flushMemtables()
@@ -209,10 +210,6 @@ func (db *DB) Exist(key []byte) (bool, error) {
 		db.batchPool.Put(batch)
 	}()
 	return batch.Exist(key)
-}
-
-func (db *DB) Compact() error {
-	return db.vlog.compaction()
 }
 
 // validateOptions validates the given options.
@@ -346,4 +343,104 @@ func (db *DB) flushMemtables() {
 			return
 		}
 	}
+}
+
+func (db *DB) compact() error {
+	db.flushLock.Lock()
+	groups := make([]errgroup.Group, db.vlog.options.partitionNum)
+
+	for i := 0; i < int(db.vlog.options.partitionNum); i++ {
+		part := i
+		groups[part].Go(func() error {
+			newVLogWal, err := wal.Open(wal.Options{
+				DirPath:        db.vlog.options.dirPath,
+				SegmentSize:    db.vlog.options.segmentSize,
+				SegmentFileExt: fmt.Sprintf(valueLogFileExt, time.Now().Format("02-03-04-05-2006"), part),
+				BlockCache:     db.vlog.options.blockCache,
+				Sync:           false, // we will sync manually
+				BytesPerSync:   0,     // the same as Sync
+			})
+			if err != nil {
+				newVLogWal.Delete()
+				return err
+			}
+
+			validEntries := []*ValueLogRecord{}
+			reader := db.vlog.walFiles[part].NewReader()
+			var count = 0
+			for {
+				count++
+				content, chunkPos, err := reader.Next()
+				if err != nil {
+					if err == io.EOF {
+						break
+					}
+					newVLogWal.Delete()
+					return err
+				}
+				record := decodeValueLogRecord(content)
+				keyPos, err := db.index.Get(record.key)
+				if err != nil {
+					newVLogWal.Delete()
+					return err
+				}
+
+				if keyPos == nil {
+					continue
+				}
+				if keyPos.partition == uint32(part) && reflect.DeepEqual(keyPos.position, chunkPos) {
+					validEntries = append(validEntries, record)
+				}
+
+				// if validEntries occupy too much memory, we need to write it to disk and clear memory
+				if count%db.vlog.options.numEntriesToCompact == 0 {
+					err := db.writeCompaction(newVLogWal, validEntries, part)
+					if err != nil {
+						newVLogWal.Delete()
+						return err
+					}
+					validEntries = validEntries[:0]
+				}
+			}
+
+			err = db.writeCompaction(newVLogWal, validEntries, part)
+			if err != nil {
+				newVLogWal.Delete()
+				return err
+			}
+
+			// replace the wal with the new one.
+			db.vlog.walFiles[part].Delete()
+			db.vlog.walFiles[part] = newVLogWal
+
+			return nil
+		})
+	}
+
+	for i := 0; i < int(db.vlog.options.partitionNum); i++ {
+		if err := groups[i].Wait(); err != nil {
+			db.flushLock.Unlock()
+			return err
+		}
+	}
+
+	db.flushLock.Unlock()
+	return nil
+}
+
+func (db *DB) writeCompaction(newWal *wal.WAL, validEntries []*ValueLogRecord, part int) error {
+	keyPos := []*KeyPosition{}
+	for _, record := range validEntries {
+		pos, err := newWal.Write(encodeValueLogRecord(record))
+		if err != nil {
+			return err
+		}
+		keyPos = append(keyPos, &KeyPosition{
+			key:       record.key,
+			partition: uint32(part),
+			position:  pos},
+		)
+	}
+	db.index.PutBatch(keyPos)
+	return nil
 }
