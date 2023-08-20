@@ -2,6 +2,7 @@ package lotusdb
 
 import (
 	"os"
+	"path/filepath"
 	"sync"
 	"testing"
 	"time"
@@ -346,7 +347,7 @@ func TestDBFlushMemTables(t *testing.T) {
 
 	db, err := Open(options)
 	assert.Nil(t, err)
-	defer destroyDB(db)
+	// defer destroyDB(db)
 
 	type testLog struct {
 		key   []byte
@@ -383,6 +384,84 @@ func TestDBFlushMemTables(t *testing.T) {
 		}
 	})
 
+}
+
+func TestDBCompact(t *testing.T) {
+	options := DefaultOptions
+	path, err := os.MkdirTemp("", "db-test-compact")
+	assert.Nil(t, err)
+	options.DirPath = path
+	options.MemtableSize = 5 * MB
+	options.maxMemoryCompact = 2 * MB
+
+	db, err := Open(options)
+	assert.Nil(t, err)
+	defer destroyDB(db)
+
+	type testLog struct {
+		key   []byte
+		value []byte
+	}
+
+	testlogs := []*testLog{
+		{key: []byte("key 0"), value: []byte("value 0")},
+		{key: []byte("key 1"), value: []byte("value 1")},
+		{key: []byte("key 2"), value: []byte("value 2")},
+	}
+	for _, log := range testlogs {
+		_ = db.Put(log.key, log.value, &WriteOptions{
+			Sync:       true,
+			DisableWal: false,
+		})
+	}
+
+	numLogs := 2 << 9 * 7
+	logs := []*testLog{}
+	for i := 0; i < int(numLogs); i++ {
+		// the size of a logRecord is about 1kB (a little bigger than 1kB due to encode)
+		log := &testLog{key: util.RandomValue(2 << 8), value: util.RandomValue(2 << 8)}
+		logs = append(logs, log)
+	}
+	for _, log := range logs {
+		_ = db.Put(log.key, log.value, &WriteOptions{
+			Sync:       true,
+			DisableWal: false,
+		})
+	}
+	for _, log := range logs {
+		_ = db.Delete(log.key, &WriteOptions{
+			Sync:       true,
+			DisableWal: false,
+		})
+	}
+
+	t.Run("test compaction", func(t *testing.T) {
+		time.Sleep(time.Millisecond * 500)
+		size, err := dirSize(db.options.DirPath)
+		assert.Nil(t, err)
+		db.Compact()
+		sizeCompact, err := dirSize(db.options.DirPath)
+		assert.Nil(t, err)
+		assert.Greater(t, size, sizeCompact)
+
+		for _, log := range testlogs {
+			value, err := getValueFromVlog(db, log.key)
+			assert.Nil(t, err)
+			assert.Equal(t, log.value, value)
+		}
+	})
+
+}
+
+func dirSize(path string) (int64, error) {
+	var size int64
+	err := filepath.Walk(path, func(_ string, info os.FileInfo, err error) error {
+		if !info.IsDir() {
+			size += info.Size()
+		}
+		return err
+	})
+	return size, err
 }
 
 func getValueFromVlog(db *DB, key []byte) ([]byte, error) {

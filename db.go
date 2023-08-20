@@ -29,6 +29,7 @@ type DB struct {
 	closed    bool
 	options   Options
 	batchPool sync.Pool
+	flushLock sync.Mutex // flushLock is to prevent flush running while compaction doesn't occur
 }
 
 func Open(options Options) (*DB, error) {
@@ -73,11 +74,14 @@ func Open(options Options) (*DB, error) {
 
 	// open value log
 	vlog, err := openValueLog(valueLogOptions{
-		dirPath:         options.DirPath,
-		segmentSize:     options.ValueLogFileSize,
-		blockCache:      options.BlockCache,
-		partitionNum:    uint32(options.PartitionNum),
-		hashKeyFunction: options.KeyHashFunction,
+		dirPath:           options.DirPath,
+		segmentSize:       options.ValueLogFileSize,
+		blockCache:        options.BlockCache,
+		partitionNum:      uint32(options.PartitionNum),
+		hashKeyFunction:   options.KeyHashFunction,
+		index:             index,
+		maxMemoryCompact:  options.maxMemoryCompact,
+		numEntriesToCheck: options.numEntriesToCheck,
 	})
 	if err != nil {
 		return nil, err
@@ -93,6 +97,8 @@ func Open(options Options) (*DB, error) {
 		options:   options,
 		batchPool: sync.Pool{New: makeBatch},
 	}
+
+	vlog.options.db = db
 
 	// start flush memtables goroutine
 	go db.flushMemtables()
@@ -205,6 +211,10 @@ func (db *DB) Exist(key []byte) (bool, error) {
 	return batch.Exist(key)
 }
 
+func (db *DB) Compact() error {
+	return db.vlog.compaction()
+}
+
 // validateOptions validates the given options.
 func validateOptions(options *Options) error {
 	if options.DirPath == "" {
@@ -267,6 +277,7 @@ func (db *DB) flushMemtables() {
 	for {
 		select {
 		case table := <-db.flushChan:
+			db.flushLock.Lock()
 			sklIter := table.skl.NewIterator()
 			var deletedKeys [][]byte
 			var logRecords []*ValueLogRecord
@@ -285,32 +296,38 @@ func (db *DB) flushMemtables() {
 			keyPos, err := db.vlog.writeBatch(logRecords)
 			if err != nil {
 				log.Println("vlog writeBatch failed:", err)
+				db.flushLock.Unlock()
 				continue
 			}
 			// sync the value log
 			if err := db.vlog.sync(); err != nil {
 				log.Println("vlog sync failed:", err)
+				db.flushLock.Unlock()
 				continue
 			}
 
 			// write all keys and positions to index
 			if err := db.index.PutBatch(keyPos); err != nil {
 				log.Println("index PutBatch failed:", err)
+				db.flushLock.Unlock()
 				continue
 			}
 			if err := db.index.DeleteBatch(deletedKeys); err != nil {
 				log.Println("index DeleteBatch failed:", err)
+				db.flushLock.Unlock()
 				continue
 			}
 			// sync the index
 			if err := db.index.Sync(); err != nil {
 				log.Println("index sync failed:", err)
+				db.flushLock.Unlock()
 				continue
 			}
 
 			// delete the wal
 			if err := table.deleteWAl(); err != nil {
 				log.Println("delete wal failed:", err)
+				db.flushLock.Unlock()
 				continue
 			}
 
@@ -322,6 +339,8 @@ func (db *DB) flushMemtables() {
 				db.immuMems = db.immuMems[1:]
 			}
 			db.mu.Unlock()
+
+			db.flushLock.Unlock()
 
 		case <-sig:
 			return
