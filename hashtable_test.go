@@ -84,7 +84,7 @@ func TestHashTable_PutBatch(t *testing.T) {
 
 func testHashTable_PutBatch(t *testing.T, partitionNum int) {
 	options := indexOptions{
-		indexType:       indexBoltDB,
+		indexType:       indexHashTable,
 		dirPath:         filepath.Join(os.TempDir(), "hashtable-putBatch-"+strconv.Itoa(partitionNum)),
 		partitionNum:    partitionNum,
 		hashKeyFunction: xxhash.Sum64,
@@ -190,7 +190,7 @@ func TestHashTable_DeleteBatch(t *testing.T) {
 
 func testHashTable_DeleteBatch(t *testing.T, partitionNum int) {
 	options := indexOptions{
-		indexType:       indexBoltDB,
+		indexType:       indexHashTable,
 		dirPath:         filepath.Join(os.TempDir(), "hashtable-deleteBatch-"+strconv.Itoa(partitionNum)),
 		partitionNum:    partitionNum,
 		hashKeyFunction: xxhash.Sum64,
@@ -242,7 +242,7 @@ func TestHashTable_Close(t *testing.T) {
 
 func testHashTable_Close(t *testing.T, partitionNum int) {
 	options := indexOptions{
-		indexType:       indexBoltDB,
+		indexType:       indexHashTable,
 		dirPath:         filepath.Join(os.TempDir(), "hashtable-close-"+strconv.Itoa(partitionNum)),
 		partitionNum:    partitionNum,
 		hashKeyFunction: xxhash.Sum64,
