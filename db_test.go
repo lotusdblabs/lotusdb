@@ -12,20 +12,27 @@ import (
 )
 
 func destroyDB(db *DB) {
-	err := db.Close()
-	if err != nil {
-		panic(err)
-	}
+	// diskhash can't close twice
+	// err := db.Close()
+	// if err != nil {
+	// 	panic(err)
+	// }
 	_ = os.RemoveAll(db.options.DirPath)
 }
 
 func TestDBOpen(t *testing.T) {
+	testDBOpen(t, indexBoltDB)
+	testDBOpen(t, indexHashTable)
+}
+
+func testDBOpen(t *testing.T, indexType IndexType) {
 	// Save the original function
 	t.Run("Valid options", func(t *testing.T) {
 		options := DefaultOptions
 		path, err := os.MkdirTemp("", "db-test-open")
 		assert.Nil(t, err)
 		options.DirPath = path
+		options.IndexType = indexType
 		db, err := Open(options)
 		assert.Nil(t, err)
 		defer destroyDB(db)
@@ -44,16 +51,23 @@ func TestDBOpen(t *testing.T) {
 	t.Run("Invalid options - no directory path", func(t *testing.T) {
 		options := DefaultOptions
 		options.DirPath = ""
+		options.IndexType = indexType
 		_, err := Open(options)
 		require.Error(t, err, "Open should return an error")
 	})
 }
 
 func TestDBClose(t *testing.T) {
+	testDBClose(t, indexBoltDB)
+	testDBClose(t, indexHashTable)
+}
+
+func testDBClose(t *testing.T, indexType IndexType) {
 	options := DefaultOptions
 	path, err := os.MkdirTemp("", "db-test-close")
 	assert.Nil(t, err)
 	options.DirPath = path
+	options.IndexType = indexType
 	db, err := Open(options)
 	defer destroyDB(db)
 	assert.Nil(t, err)
@@ -64,10 +78,16 @@ func TestDBClose(t *testing.T) {
 }
 
 func TestDBSync(t *testing.T) {
+	testDBSync(t, indexBoltDB)
+	testDBSync(t, indexHashTable)
+}
+
+func testDBSync(t *testing.T, indexType IndexType) {
 	options := DefaultOptions
 	path, err := os.MkdirTemp("", "db-test-sync")
 	assert.Nil(t, err)
 	options.DirPath = path
+	options.IndexType = indexType
 	db, err := Open(options)
 	assert.Nil(t, err)
 	defer destroyDB(db)
@@ -81,11 +101,16 @@ func TestDBSync(t *testing.T) {
 }
 
 func TestDBPut(t *testing.T) {
+	testDBPut(t, indexBoltDB)
+	testDBPut(t, indexHashTable)
+}
+
+func testDBPut(t *testing.T, indexType IndexType) {
 	options := DefaultOptions
 	path, err := os.MkdirTemp("", "db-test-put")
 	assert.Nil(t, err)
 	options.DirPath = path
-
+	options.IndexType = indexType
 	db, err := Open(options)
 	assert.Nil(t, err)
 	defer destroyDB(db)
@@ -135,11 +160,16 @@ func TestDBPut(t *testing.T) {
 }
 
 func TestDBGet(t *testing.T) {
+	testDBGet(t, indexBoltDB)
+	testDBGet(t, indexHashTable)
+}
+
+func testDBGet(t *testing.T, indexType IndexType) {
 	options := DefaultOptions
 	path, err := os.MkdirTemp("", "db-test-get")
 	assert.Nil(t, err)
 	options.DirPath = path
-
+	options.IndexType = indexType
 	db, err := Open(options)
 	assert.Nil(t, err)
 	defer destroyDB(db)
@@ -203,11 +233,16 @@ func TestDBGet(t *testing.T) {
 }
 
 func TestDBDelete(t *testing.T) {
+	testDBDelete(t, indexBoltDB)
+	testDBDelete(t, indexHashTable)
+}
+
+func testDBDelete(t *testing.T, indexType IndexType) {
 	options := DefaultOptions
 	path, err := os.MkdirTemp("", "db-test-delete")
 	assert.Nil(t, err)
 	options.DirPath = path
-
+	options.IndexType = indexType
 	db, err := Open(options)
 	assert.Nil(t, err)
 	defer destroyDB(db)
@@ -270,11 +305,16 @@ func TestDBDelete(t *testing.T) {
 }
 
 func TestDBExist(t *testing.T) {
+	testDBExist(t, indexBoltDB)
+	testDBExist(t, indexHashTable)
+}
+
+func testDBExist(t *testing.T, indexType IndexType) {
 	options := DefaultOptions
 	path, err := os.MkdirTemp("", "db-test-exist")
 	assert.Nil(t, err)
 	options.DirPath = path
-
+	options.IndexType = indexType
 	db, err := Open(options)
 	assert.Nil(t, err)
 	defer destroyDB(db)
@@ -338,12 +378,17 @@ func TestDBExist(t *testing.T) {
 }
 
 func TestDBFlushMemTables(t *testing.T) {
+	testDBFlushMemTables(t, indexBoltDB)
+	testDBFlushMemTables(t, indexHashTable)
+}
+
+func testDBFlushMemTables(t *testing.T, indexType IndexType) {
 	options := DefaultOptions
 	path, err := os.MkdirTemp("", "db-test-flush")
 	assert.Nil(t, err)
 	options.DirPath = path
 	options.MemtableSize = 5 * MB
-
+	options.IndexType = indexType
 	db, err := Open(options)
 	assert.Nil(t, err)
 	defer destroyDB(db)
@@ -401,6 +446,11 @@ func getValueFromVlog(db *DB, key []byte) ([]byte, error) {
 }
 
 func TestDBMultiClients(t *testing.T) {
+	testDBMultiClients(t, indexBoltDB)
+	testDBMultiClients(t, indexHashTable)
+}
+
+func testDBMultiClients(t *testing.T, indexType IndexType) {
 	type testLog struct {
 		key   []byte
 		value []byte
@@ -421,6 +471,7 @@ func TestDBMultiClients(t *testing.T) {
 	path, err := os.MkdirTemp("", "db-test-multi-client")
 	assert.Nil(t, err)
 	options.DirPath = path
+	options.IndexType = indexType
 	db, err := Open(options)
 	assert.Nil(t, err)
 	defer destroyDB(db)

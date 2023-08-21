@@ -7,7 +7,6 @@ import (
 	"testing"
 
 	"github.com/cespare/xxhash/v2"
-	"github.com/lotusdblabs/lotusdb/v2/util"
 	"github.com/rosedblabs/wal"
 	"github.com/stretchr/testify/assert"
 	"go.etcd.io/bbolt"
@@ -105,7 +104,7 @@ func testbptreeGet(t *testing.T, partitionNum int) {
 	var keyPositions []*KeyPosition
 	keyPositions = append(keyPositions, &KeyPosition{
 		key:       []byte("exist"),
-		partition: uint32(bt.getKeyPartition([]byte("exist"))),
+		partition: uint32(bt.options.getKeyPartition([]byte("exist"))),
 		position:  &wal.ChunkPosition{},
 	})
 	err = bt.PutBatch(keyPositions)
@@ -167,7 +166,7 @@ func testbptreePutbatch(t *testing.T, partitionNum int) {
 
 	keyPositions = append(keyPositions, &KeyPosition{
 		key:       []byte("normal"),
-		partition: uint32(bt.getKeyPartition([]byte("normal"))),
+		partition: uint32(bt.options.getKeyPartition([]byte("normal"))),
 		position:  &wal.ChunkPosition{},
 	})
 
@@ -218,7 +217,7 @@ func testbptreeDeletebatch(t *testing.T, partitionNum int) {
 	var keyPositions []*KeyPosition
 	keyPositions = append(keyPositions, &KeyPosition{
 		key:       []byte("exist"),
-		partition: uint32(bt.getKeyPartition([]byte("exist"))),
+		partition: uint32(bt.options.getKeyPartition([]byte("exist"))),
 		position:  &wal.ChunkPosition{},
 	})
 
@@ -271,53 +270,6 @@ func testbptreeClose(t *testing.T, partitionNum int) {
 
 	err = bt.Close()
 	assert.Nil(t, err)
-}
-func TestBPTree_getKeyPartition_1(t *testing.T) {
-	testbptreeGetkeypartition(t, 1)
-}
-
-func TestBPTree_getKeyPartition_3(t *testing.T) {
-	testbptreeGetkeypartition(t, 3)
-}
-
-func testbptreeGetkeypartition(t *testing.T, partitionNum int) {
-	options := indexOptions{
-		indexType:       indexBoltDB,
-		dirPath:         filepath.Join(os.TempDir(), "bptree-getKeyPartition-"+strconv.Itoa(partitionNum)),
-		partitionNum:    partitionNum,
-		hashKeyFunction: xxhash.Sum64,
-	}
-
-	err := os.MkdirAll(options.dirPath, os.ModePerm)
-	assert.Nil(t, err)
-	defer func() {
-		_ = os.RemoveAll(options.dirPath)
-	}()
-
-	bt, err := openIndexBoltDB(options)
-	assert.Nil(t, err)
-	var keys [][]byte
-	for i := 0; i < 3; i++ {
-		keys = append(keys, util.GetTestKey(10))
-	}
-	tests := []struct {
-		name string
-		key  []byte
-		want int
-	}{
-		{"t0", keys[0], int(xxhash.Sum64(keys[0]) % uint64(bt.options.partitionNum))},
-		{"t1", keys[1], int(xxhash.Sum64(keys[1]) % uint64(bt.options.partitionNum))},
-		{"t2", keys[2], int(xxhash.Sum64(keys[2]) % uint64(bt.options.partitionNum))},
-	}
-	for _, tt := range tests {
-		t.Run(tt.name, func(t *testing.T) {
-			got := bt.getKeyPartition(tt.key)
-			if got != tt.want {
-				t.Errorf("BPTree.getKeyPartition() = %v, want %v", got, tt.want)
-			}
-			assert.True(t, got < bt.options.partitionNum)
-		})
-	}
 }
 
 func TestBPTree_Sync_1(t *testing.T) {

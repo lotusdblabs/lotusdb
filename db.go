@@ -62,7 +62,7 @@ func Open(options Options) (*DB, error) {
 
 	// open index
 	index, err := openIndex(indexOptions{
-		indexType:       indexBoltDB,
+		indexType:       options.IndexType,
 		dirPath:         options.DirPath,
 		partitionNum:    options.PartitionNum,
 		hashKeyFunction: options.KeyHashFunction,
