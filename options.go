@@ -53,7 +53,7 @@ type Options struct {
 	// default value is bptree.
 	IndexType IndexType
 	// writing entries to disk after reading the specified number of entries.
-	numEntriesToCompact int
+	CompactBatchCount int
 }
 
 // BatchOptions specifies the options for creating a batch.
@@ -104,17 +104,17 @@ const (
 )
 
 var DefaultOptions = Options{
-	DirPath:             tempDBDir(),
-	MemtableSize:        64 * MB,
-	MemtableNums:        15,
-	BlockCache:          64 * MB,
-	Sync:                false,
-	BytesPerSync:        0,
-	PartitionNum:        3,
-	KeyHashFunction:     xxhash.Sum64,
-	ValueLogFileSize:    1 * GB,
-	IndexType:           indexBoltDB,
-	numEntriesToCompact: 2 << 10,
+	DirPath:           tempDBDir(),
+	MemtableSize:      64 * MB,
+	MemtableNums:      15,
+	BlockCache:        64 * MB,
+	Sync:              false,
+	BytesPerSync:      0,
+	PartitionNum:      3,
+	KeyHashFunction:   xxhash.Sum64,
+	ValueLogFileSize:  1 * GB,
+	IndexType:         indexBoltDB,
+	CompactBatchCount: 2 << 20,
 }
 
 var DefaultBatchOptions = BatchOptions{

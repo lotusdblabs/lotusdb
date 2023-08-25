@@ -3,7 +3,6 @@ package lotusdb
 import (
 	"fmt"
 	"os"
-	"path/filepath"
 	"sync"
 	"testing"
 	"time"
@@ -393,7 +392,7 @@ func TestDBCompact(t *testing.T) {
 	assert.Nil(t, err)
 	options.DirPath = path
 	options.MemtableSize = 5 * MB
-	options.numEntriesToCompact = 2 << 9 * 5
+	options.CompactBatchCount = 2 << 9 * 5
 
 	db, err := Open(options)
 	assert.Nil(t, err)
@@ -438,7 +437,7 @@ func TestDBCompact(t *testing.T) {
 
 	t.Run("test compaction", func(t *testing.T) {
 		time.Sleep(time.Millisecond * 500)
-		size, err := dirSize(db.options.DirPath)
+		size, err := util.DirSize(db.options.DirPath)
 		assert.Nil(t, err)
 
 		start := time.Now()
@@ -446,7 +445,7 @@ func TestDBCompact(t *testing.T) {
 		runTime := time.Since(start)
 		fmt.Printf("partionNum:%d, runTime:%v\n", options.PartitionNum, runTime)
 
-		sizeCompact, err := dirSize(db.options.DirPath)
+		sizeCompact, err := util.DirSize(db.options.DirPath)
 		assert.Nil(t, err)
 		assert.Greater(t, size, sizeCompact)
 
@@ -457,17 +456,6 @@ func TestDBCompact(t *testing.T) {
 		}
 	})
 
-}
-
-func dirSize(path string) (int64, error) {
-	var size int64
-	err := filepath.Walk(path, func(_ string, info os.FileInfo, err error) error {
-		if !info.IsDir() {
-			size += info.Size()
-		}
-		return err
-	})
-	return size, err
 }
 
 func getValueFromVlog(db *DB, key []byte) ([]byte, error) {

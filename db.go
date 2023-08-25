@@ -79,12 +79,12 @@ func Open(options Options) (*DB, error) {
 
 	// open value log
 	vlog, err := openValueLog(valueLogOptions{
-		dirPath:             options.DirPath,
-		segmentSize:         options.ValueLogFileSize,
-		blockCache:          options.BlockCache,
-		partitionNum:        uint32(options.PartitionNum),
-		hashKeyFunction:     options.KeyHashFunction,
-		numEntriesToCompact: options.numEntriesToCompact,
+		dirPath:           options.DirPath,
+		segmentSize:       options.ValueLogFileSize,
+		blockCache:        options.BlockCache,
+		partitionNum:      uint32(options.PartitionNum),
+		hashKeyFunction:   options.KeyHashFunction,
+		CompactBatchCount: options.CompactBatchCount,
 	})
 	if err != nil {
 		return nil, err
@@ -352,7 +352,7 @@ func (db *DB) compact() error {
 	for i := 0; i < int(db.vlog.options.partitionNum); i++ {
 		part := i
 		groups[part].Go(func() error {
-			newVLogWal, err := wal.Open(wal.Options{
+			newValueFiles, err := wal.Open(wal.Options{
 				DirPath:        db.vlog.options.dirPath,
 				SegmentSize:    db.vlog.options.segmentSize,
 				SegmentFileExt: fmt.Sprintf(valueLogFileExt, time.Now().Format("02-03-04-05-2006"), part),
@@ -361,7 +361,10 @@ func (db *DB) compact() error {
 				BytesPerSync:   0,     // the same as Sync
 			})
 			if err != nil {
-				newVLogWal.Delete()
+				err2 := newValueFiles.Delete()
+				if err2 != nil {
+					panic(fmt.Sprintf("delete wal file failed: %v\n", err2))
+				}
 				return err
 			}
 
@@ -375,13 +378,13 @@ func (db *DB) compact() error {
 					if err == io.EOF {
 						break
 					}
-					newVLogWal.Delete()
+					newValueFiles.Delete()
 					return err
 				}
 				record := decodeValueLogRecord(content)
 				keyPos, err := db.index.Get(record.key)
 				if err != nil {
-					newVLogWal.Delete()
+					newValueFiles.Delete()
 					return err
 				}
 
@@ -393,25 +396,25 @@ func (db *DB) compact() error {
 				}
 
 				// if validEntries occupy too much memory, we need to write it to disk and clear memory
-				if count%db.vlog.options.numEntriesToCompact == 0 {
-					err := db.writeCompaction(newVLogWal, validEntries, part)
+				if count%db.vlog.options.CompactBatchCount == 0 {
+					err := db.writeCompactionEntries(newValueFiles, validEntries, part)
 					if err != nil {
-						newVLogWal.Delete()
+						newValueFiles.Delete()
 						return err
 					}
 					validEntries = validEntries[:0]
 				}
 			}
 
-			err = db.writeCompaction(newVLogWal, validEntries, part)
+			err = db.writeCompactionEntries(newValueFiles, validEntries, part)
 			if err != nil {
-				newVLogWal.Delete()
+				newValueFiles.Delete()
 				return err
 			}
 
 			// replace the wal with the new one.
 			db.vlog.walFiles[part].Delete()
-			db.vlog.walFiles[part] = newVLogWal
+			db.vlog.walFiles[part] = newValueFiles
 
 			return nil
 		})
@@ -428,7 +431,7 @@ func (db *DB) compact() error {
 	return nil
 }
 
-func (db *DB) writeCompaction(newWal *wal.WAL, validEntries []*ValueLogRecord, part int) error {
+func (db *DB) writeCompactionEntries(newWal *wal.WAL, validEntries []*ValueLogRecord, part int) error {
 	keyPos := []*KeyPosition{}
 	for _, record := range validEntries {
 		pos, err := newWal.Write(encodeValueLogRecord(record))
