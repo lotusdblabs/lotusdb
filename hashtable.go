@@ -89,7 +89,6 @@ func (ht *HashTable) PutBatch(positions []*KeyPosition) error {
 					}
 					encPos := ht.bytesBuffer.Get().([]byte)
 					copy(encPos, record.position.Encode())
-					fmt.Println(len(encPos), cap(encPos))
 					if err := table.Put(record.key, encPos, matchKey); err != nil {
 						return err
 					}
