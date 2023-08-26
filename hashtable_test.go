@@ -260,3 +260,29 @@ func testHashTable_Close(t *testing.T, partitionNum int) {
 	err = ht.Close()
 	assert.Nil(t, err)
 }
+
+func TestHashTable_Sync(t *testing.T) {
+	testHashTable_Sync(t, 1)
+	testHashTable_Sync(t, 3)
+}
+
+func testHashTable_Sync(t *testing.T, partitionNum int) {
+	options := indexOptions{
+		indexType:       indexHashTable,
+		dirPath:         filepath.Join(os.TempDir(), "hashtable-sync-"+strconv.Itoa(partitionNum)),
+		partitionNum:    partitionNum,
+		hashKeyFunction: xxhash.Sum64,
+	}
+
+	err := os.MkdirAll(options.dirPath, os.ModePerm)
+	assert.Nil(t, err)
+	defer func() {
+		_ = os.RemoveAll(options.dirPath)
+	}()
+
+	ht, err := OpenHashTable(options)
+	assert.Nil(t, err)
+
+	err = ht.Sync()
+	assert.Nil(t, err)
+}

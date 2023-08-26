@@ -33,7 +33,7 @@ require (
 	github.com/hashicorp/golang-lru/v2 v2.0.4 // indirect
 	github.com/klauspost/compress v1.16.7 // indirect
 	github.com/pkg/errors v0.9.1 // indirect
-	github.com/rosedblabs/diskhash v0.0.0-20230815141553-c19c6cb85625
+	github.com/rosedblabs/diskhash v0.0.0-20230825144203-2d051ecdb9a5
 	go.etcd.io/bbolt v1.3.7
 	golang.org/x/net v0.12.0 // indirect
 	golang.org/x/sync v0.3.0

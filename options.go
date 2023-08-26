@@ -50,7 +50,7 @@ type Options struct {
 	ValueLogFileSize int64
 
 	// indexType.
-	// default value is boltdb.
+	// default value is bptree.
 	IndexType IndexType
 }
 

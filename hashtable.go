@@ -6,6 +6,7 @@ import (
 	"errors"
 	"fmt"
 	"path/filepath"
+	"sync"
 
 	"github.com/rosedblabs/diskhash"
 	"github.com/rosedblabs/wal"
@@ -13,17 +14,30 @@ import (
 	"golang.org/x/sync/errgroup"
 )
 
+// diskhash requires fixed-size value, so we set the slotValueLength to `binary.MaxVarintLen32*3 + binary.MaxVarintLen64`. This is the maximum length after wal.chunkPosition encoding.
+const slotValueLength = binary.MaxVarintLen32*3 + binary.MaxVarintLen64
+
+// HashTable is the diskhash index implementation.
+// see: https://github.com/rosedblabs/diskhash
 type HashTable struct {
-	options indexOptions
-	tables  []*diskhash.Table
+	options     indexOptions
+	tables      []*diskhash.Table
+	bytesBuffer *sync.Pool
 }
 
+// OpenHashTable open a diskhash for each partition.
+// The partition number is specified by the index options.
 func OpenHashTable(options indexOptions) (*HashTable, error) {
 	tables := make([]*diskhash.Table, options.partitionNum)
+	bytesBuffer := &sync.Pool{
+		New: func() any {
+			return make([]byte, slotValueLength)
+		},
+	}
 	for i := 0; i < options.partitionNum; i++ {
 		dishHashOptions := diskhash.DefaultOptions
 		dishHashOptions.DirPath = filepath.Join(options.dirPath, fmt.Sprintf(indexFileExt, i))
-		dishHashOptions.SlotValueLength = binary.MaxVarintLen32*3 + binary.MaxVarintLen64
+		dishHashOptions.SlotValueLength = slotValueLength
 		table, err := diskhash.Open(dishHashOptions)
 		if err != nil {
 			return nil, err
@@ -32,8 +46,9 @@ func OpenHashTable(options indexOptions) (*HashTable, error) {
 	}
 
 	return &HashTable{
-		options: options,
-		tables:  tables,
+		options:     options,
+		tables:      tables,
+		bytesBuffer: bytesBuffer,
 	}, nil
 }
 
@@ -56,7 +71,7 @@ func (ht *HashTable) PutBatch(positions []*KeyPosition) error {
 			continue
 		}
 		g.Go(func() error {
-			// get the bolt db instance for this partition
+			// get the hashtable instance for this partition
 			table := ht.tables[partition]
 			for _, record := range partitionRecords[partition] {
 				select {
@@ -72,10 +87,13 @@ func (ht *HashTable) PutBatch(positions []*KeyPosition) error {
 						}
 						return false, nil
 					}
-					encPos := encodePosition(record.position)
+					encPos := ht.bytesBuffer.Get().([]byte)
+					copy(encPos, record.position.Encode())
+					fmt.Println(len(encPos), cap(encPos))
 					if err := table.Put(record.key, encPos, matchKey); err != nil {
 						return err
 					}
+					ht.bytesBuffer.Put(encPos)
 				}
 			}
 			return nil
@@ -154,6 +172,12 @@ func (ht *HashTable) DeleteBatch(keys [][]byte) error {
 
 // Sync sync index data to disk
 func (ht *HashTable) Sync() error {
+	for _, table := range ht.tables {
+		err := table.Sync()
+		if err != nil {
+			return err
+		}
+	}
 	return nil
 }
 
@@ -166,21 +190,4 @@ func (ht *HashTable) Close() error {
 		}
 	}
 	return nil
-}
-
-func encodePosition(cp *wal.ChunkPosition) []byte {
-	maxLen := binary.MaxVarintLen32*3 + binary.MaxVarintLen64
-	buf := make([]byte, maxLen)
-
-	var index = 0
-	// SegmentId
-	index += binary.PutUvarint(buf[index:], uint64(cp.SegmentId))
-	// BlockNumber
-	index += binary.PutUvarint(buf[index:], uint64(cp.BlockNumber))
-	// ChunkOffset
-	index += binary.PutUvarint(buf[index:], uint64(cp.ChunkOffset))
-	// ChunkSize
-	index += binary.PutUvarint(buf[index:], uint64(cp.ChunkSize))
-
-	return buf
 }
