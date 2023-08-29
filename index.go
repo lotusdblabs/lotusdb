@@ -32,6 +32,8 @@ func openIndex(options indexOptions) (Index, error) {
 	switch options.indexType {
 	case indexBoltDB:
 		return openIndexBoltDB(options)
+	case indexHashTable:
+		return OpenHashTable(options)
 	default:
 		panic("unknown index type")
 	}
@@ -42,6 +44,8 @@ type IndexType int8
 const (
 	// indexBoltDB is the BoltDB index type.
 	indexBoltDB IndexType = iota
+	// indexHashTable is the diskhash index type. see: https://github.com/rosedblabs/diskhash
+	indexHashTable
 )
 
 type indexOptions struct {
@@ -52,4 +56,9 @@ type indexOptions struct {
 	partitionNum int // index partition nums for sharding
 
 	hashKeyFunction func([]byte) uint64 // hash function for sharding
+}
+
+func (io *indexOptions) getKeyPartition(key []byte) int {
+	hashFn := io.hashKeyFunction
+	return int(hashFn(key) % uint64(io.partitionNum))
 }

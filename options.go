@@ -48,6 +48,10 @@ type Options struct {
 	// ValueLogFileSize size of a single value log file.
 	// Default value is 1GB.
 	ValueLogFileSize int64
+
+	// indexType.
+	// default value is bptree.
+	IndexType IndexType
 }
 
 // BatchOptions specifies the options for creating a batch.
@@ -107,6 +111,7 @@ var DefaultOptions = Options{
 	PartitionNum:     3,
 	KeyHashFunction:  xxhash.Sum64,
 	ValueLogFileSize: 1 * GB,
+	IndexType:        indexBoltDB,
 }
 
 var DefaultBatchOptions = BatchOptions{
