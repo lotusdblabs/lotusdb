@@ -1,6 +1,7 @@
 package lotusdb
 
 import (
+	"fmt"
 	"os"
 	"sync"
 	"testing"
@@ -346,7 +347,7 @@ func TestDBFlushMemTables(t *testing.T) {
 
 	db, err := Open(options)
 	assert.Nil(t, err)
-	defer destroyDB(db)
+	// defer destroyDB(db)
 
 	type testLog struct {
 		key   []byte
@@ -377,6 +378,78 @@ func TestDBFlushMemTables(t *testing.T) {
 	t.Run("test flushMemtables", func(t *testing.T) {
 		time.Sleep(time.Second * 1)
 		for _, log := range logs {
+			value, err := getValueFromVlog(db, log.key)
+			assert.Nil(t, err)
+			assert.Equal(t, log.value, value)
+		}
+	})
+
+}
+
+func TestDBCompact(t *testing.T) {
+	options := DefaultOptions
+	path, err := os.MkdirTemp("", "db-test-compact")
+	assert.Nil(t, err)
+	options.DirPath = path
+	options.MemtableSize = 5 * MB
+	options.CompactBatchCount = 2 << 9 * 5
+
+	db, err := Open(options)
+	assert.Nil(t, err)
+	defer destroyDB(db)
+
+	type testLog struct {
+		key   []byte
+		value []byte
+	}
+
+	testlogs := []*testLog{
+		{key: []byte("key 0"), value: []byte("value 0")},
+		{key: []byte("key 1"), value: []byte("value 1")},
+		{key: []byte("key 2"), value: []byte("value 2")},
+	}
+	for _, log := range testlogs {
+		_ = db.Put(log.key, log.value, &WriteOptions{
+			Sync:       true,
+			DisableWal: false,
+		})
+	}
+
+	numLogs := 2 << 9 * 7
+	logs := []*testLog{}
+	for i := 0; i < int(numLogs); i++ {
+		// the size of a logRecord is about 1kB (a little bigger than 1kB due to encode)
+		log := &testLog{key: util.RandomValue(2 << 8), value: util.RandomValue(2 << 8)}
+		logs = append(logs, log)
+	}
+	for _, log := range logs {
+		_ = db.Put(log.key, log.value, &WriteOptions{
+			Sync:       true,
+			DisableWal: false,
+		})
+	}
+	for _, log := range logs {
+		_ = db.Delete(log.key, &WriteOptions{
+			Sync:       true,
+			DisableWal: false,
+		})
+	}
+
+	t.Run("test compaction", func(t *testing.T) {
+		time.Sleep(time.Millisecond * 500)
+		size, err := util.DirSize(db.options.DirPath)
+		assert.Nil(t, err)
+
+		start := time.Now()
+		db.compact()
+		runTime := time.Since(start)
+		fmt.Printf("partionNum:%d, runTime:%v\n", options.PartitionNum, runTime)
+
+		sizeCompact, err := util.DirSize(db.options.DirPath)
+		assert.Nil(t, err)
+		assert.Greater(t, size, sizeCompact)
+
+		for _, log := range testlogs {
 			value, err := getValueFromVlog(db, log.key)
 			assert.Nil(t, err)
 			assert.Equal(t, log.value, value)

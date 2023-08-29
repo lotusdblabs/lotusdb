@@ -2,13 +2,14 @@ package lotusdb
 
 import (
 	"fmt"
+	"time"
 
 	"github.com/rosedblabs/wal"
 	"golang.org/x/sync/errgroup"
 )
 
 const (
-	valueLogFileExt = ".VLOG.%d"
+	valueLogFileExt = ".VLOG.%v.%d"
 )
 
 // valueLog value log is named after the concept in Wisckey paper
@@ -35,6 +36,9 @@ type valueLogOptions struct {
 
 	// hash function for sharding
 	hashKeyFunction func([]byte) uint64
+
+	// writing validEntries to disk after reading the specified number of entries.
+	CompactBatchCount int
 }
 
 func openValueLog(options valueLogOptions) (*valueLog, error) {
@@ -44,7 +48,7 @@ func openValueLog(options valueLogOptions) (*valueLog, error) {
 		vLogWal, err := wal.Open(wal.Options{
 			DirPath:        options.dirPath,
 			SegmentSize:    options.segmentSize,
-			SegmentFileExt: fmt.Sprintf(valueLogFileExt, i),
+			SegmentFileExt: fmt.Sprintf(valueLogFileExt, time.Now().Format("02-03-04-05-2006"), i),
 			BlockCache:     options.blockCache,
 			Sync:           false, // we will sync manually
 			BytesPerSync:   0,     // the same as Sync

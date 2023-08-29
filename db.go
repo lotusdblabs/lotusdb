@@ -2,16 +2,21 @@ package lotusdb
 
 import (
 	"errors"
+	"fmt"
+	"io"
 	"log"
 	"os"
 	"os/signal"
 	"path/filepath"
+	"reflect"
 	"sync"
 	"syscall"
 	"time"
 
 	"github.com/dgraph-io/badger/v4/y"
 	"github.com/gofrs/flock"
+	"github.com/rosedblabs/wal"
+	"golang.org/x/sync/errgroup"
 )
 
 const (
@@ -29,6 +34,7 @@ type DB struct {
 	closed    bool
 	options   Options
 	batchPool sync.Pool
+	flushLock sync.Mutex // flushLock is to prevent flush running while compaction doesn't occur
 }
 
 func Open(options Options) (*DB, error) {
@@ -73,11 +79,12 @@ func Open(options Options) (*DB, error) {
 
 	// open value log
 	vlog, err := openValueLog(valueLogOptions{
-		dirPath:         options.DirPath,
-		segmentSize:     options.ValueLogFileSize,
-		blockCache:      options.BlockCache,
-		partitionNum:    uint32(options.PartitionNum),
-		hashKeyFunction: options.KeyHashFunction,
+		dirPath:           options.DirPath,
+		segmentSize:       options.ValueLogFileSize,
+		blockCache:        options.BlockCache,
+		partitionNum:      uint32(options.PartitionNum),
+		hashKeyFunction:   options.KeyHashFunction,
+		CompactBatchCount: options.CompactBatchCount,
 	})
 	if err != nil {
 		return nil, err
@@ -267,6 +274,7 @@ func (db *DB) flushMemtables() {
 	for {
 		select {
 		case table := <-db.flushChan:
+			db.flushLock.Lock()
 			sklIter := table.skl.NewIterator()
 			var deletedKeys [][]byte
 			var logRecords []*ValueLogRecord
@@ -285,32 +293,38 @@ func (db *DB) flushMemtables() {
 			keyPos, err := db.vlog.writeBatch(logRecords)
 			if err != nil {
 				log.Println("vlog writeBatch failed:", err)
+				db.flushLock.Unlock()
 				continue
 			}
 			// sync the value log
 			if err := db.vlog.sync(); err != nil {
 				log.Println("vlog sync failed:", err)
+				db.flushLock.Unlock()
 				continue
 			}
 
 			// write all keys and positions to index
 			if err := db.index.PutBatch(keyPos); err != nil {
 				log.Println("index PutBatch failed:", err)
+				db.flushLock.Unlock()
 				continue
 			}
 			if err := db.index.DeleteBatch(deletedKeys); err != nil {
 				log.Println("index DeleteBatch failed:", err)
+				db.flushLock.Unlock()
 				continue
 			}
 			// sync the index
 			if err := db.index.Sync(); err != nil {
 				log.Println("index sync failed:", err)
+				db.flushLock.Unlock()
 				continue
 			}
 
 			// delete the wal
 			if err := table.deleteWAl(); err != nil {
 				log.Println("delete wal failed:", err)
+				db.flushLock.Unlock()
 				continue
 			}
 
@@ -323,8 +337,113 @@ func (db *DB) flushMemtables() {
 			}
 			db.mu.Unlock()
 
+			db.flushLock.Unlock()
+
 		case <-sig:
 			return
 		}
 	}
+}
+
+func (db *DB) compact() error {
+	db.flushLock.Lock()
+	groups := make([]errgroup.Group, db.vlog.options.partitionNum)
+
+	for i := 0; i < int(db.vlog.options.partitionNum); i++ {
+		part := i
+		groups[part].Go(func() error {
+			newValueFiles, err := wal.Open(wal.Options{
+				DirPath:        db.vlog.options.dirPath,
+				SegmentSize:    db.vlog.options.segmentSize,
+				SegmentFileExt: fmt.Sprintf(valueLogFileExt, time.Now().Format("02-03-04-05-2006"), part),
+				BlockCache:     db.vlog.options.blockCache,
+				Sync:           false, // we will sync manually
+				BytesPerSync:   0,     // the same as Sync
+			})
+			if err != nil {
+				err2 := newValueFiles.Delete()
+				if err2 != nil {
+					panic(fmt.Sprintf("delete wal file failed: %v\n", err2))
+				}
+				return err
+			}
+
+			validEntries := []*ValueLogRecord{}
+			reader := db.vlog.walFiles[part].NewReader()
+			var count = 0
+			for {
+				count++
+				content, chunkPos, err := reader.Next()
+				if err != nil {
+					if err == io.EOF {
+						break
+					}
+					newValueFiles.Delete()
+					return err
+				}
+				record := decodeValueLogRecord(content)
+				keyPos, err := db.index.Get(record.key)
+				if err != nil {
+					newValueFiles.Delete()
+					return err
+				}
+
+				if keyPos == nil {
+					continue
+				}
+				if keyPos.partition == uint32(part) && reflect.DeepEqual(keyPos.position, chunkPos) {
+					validEntries = append(validEntries, record)
+				}
+
+				// if validEntries occupy too much memory, we need to write it to disk and clear memory
+				if count%db.vlog.options.CompactBatchCount == 0 {
+					err := db.writeCompactionEntries(newValueFiles, validEntries, part)
+					if err != nil {
+						newValueFiles.Delete()
+						return err
+					}
+					validEntries = validEntries[:0]
+				}
+			}
+
+			err = db.writeCompactionEntries(newValueFiles, validEntries, part)
+			if err != nil {
+				newValueFiles.Delete()
+				return err
+			}
+
+			// replace the wal with the new one.
+			db.vlog.walFiles[part].Delete()
+			db.vlog.walFiles[part] = newValueFiles
+
+			return nil
+		})
+	}
+
+	for i := 0; i < int(db.vlog.options.partitionNum); i++ {
+		if err := groups[i].Wait(); err != nil {
+			db.flushLock.Unlock()
+			return err
+		}
+	}
+
+	db.flushLock.Unlock()
+	return nil
+}
+
+func (db *DB) writeCompactionEntries(newWal *wal.WAL, validEntries []*ValueLogRecord, part int) error {
+	keyPos := []*KeyPosition{}
+	for _, record := range validEntries {
+		pos, err := newWal.Write(encodeValueLogRecord(record))
+		if err != nil {
+			return err
+		}
+		keyPos = append(keyPos, &KeyPosition{
+			key:       record.key,
+			partition: uint32(part),
+			position:  pos},
+		)
+	}
+	db.index.PutBatch(keyPos)
+	return nil
 }
