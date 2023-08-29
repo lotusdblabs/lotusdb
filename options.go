@@ -52,6 +52,7 @@ type Options struct {
 	// indexType.
 	// default value is bptree.
 	IndexType IndexType
+
 	// writing entries to disk after reading the specified number of entries.
 	CompactBatchCount int
 }
@@ -113,18 +114,13 @@ var DefaultOptions = Options{
 	PartitionNum:      3,
 	KeyHashFunction:   xxhash.Sum64,
 	ValueLogFileSize:  1 * GB,
-	IndexType:         indexBoltDB,
+	IndexType:         BTree,
 	CompactBatchCount: 2 << 20,
 }
 
 var DefaultBatchOptions = BatchOptions{
 	Sync:     true,
 	ReadOnly: false,
-}
-
-var DefaultIteratorOptions = IteratorOptions{
-	Prefix:  nil,
-	Reverse: false,
 }
 
 func tempDBDir() string {

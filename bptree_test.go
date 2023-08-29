@@ -21,14 +21,14 @@ func Test_openIndexBoltDB(t *testing.T) {
 	}{
 		{"normal_1",
 			indexOptions{
-				indexType:       indexBoltDB,
+				indexType:       BTree,
 				dirPath:         filepath.Join(os.TempDir(), "bptree-open-1"),
 				partitionNum:    1,
 				hashKeyFunction: xxhash.Sum64,
 			},
 			&BPTree{
 				options: indexOptions{
-					indexType:       indexBoltDB,
+					indexType:       BTree,
 					dirPath:         filepath.Join(os.TempDir(), "bptree-open-1"),
 					partitionNum:    1,
 					hashKeyFunction: xxhash.Sum64,
@@ -39,14 +39,14 @@ func Test_openIndexBoltDB(t *testing.T) {
 		},
 		{"normal_3",
 			indexOptions{
-				indexType:       indexBoltDB,
+				indexType:       BTree,
 				dirPath:         filepath.Join(os.TempDir(), "bptree-open-3"),
 				partitionNum:    3,
 				hashKeyFunction: xxhash.Sum64,
 			},
 			&BPTree{
 				options: indexOptions{
-					indexType:       indexBoltDB,
+					indexType:       BTree,
 					dirPath:         filepath.Join(os.TempDir(), "bptree-open-3"),
 					partitionNum:    3,
 					hashKeyFunction: xxhash.Sum64,
@@ -63,7 +63,7 @@ func Test_openIndexBoltDB(t *testing.T) {
 			defer func() {
 				_ = os.RemoveAll(tt.options.dirPath)
 			}()
-			got, err := openIndexBoltDB(tt.options)
+			got, err := openBTreeIndex(tt.options)
 			if (err != nil) != tt.wantErr {
 				t.Errorf("openIndexBoltDB() error = %v, wantErr %v", err, tt.wantErr)
 				return
@@ -87,7 +87,7 @@ func TestBPTree_Get_3(t *testing.T) {
 
 func testbptreeGet(t *testing.T, partitionNum int) {
 	options := indexOptions{
-		indexType:       indexBoltDB,
+		indexType:       BTree,
 		dirPath:         filepath.Join(os.TempDir(), "bptree-get-"+strconv.Itoa(partitionNum)),
 		partitionNum:    partitionNum,
 		hashKeyFunction: xxhash.Sum64,
@@ -99,7 +99,7 @@ func testbptreeGet(t *testing.T, partitionNum int) {
 		_ = os.RemoveAll(options.dirPath)
 	}()
 
-	bt, err := openIndexBoltDB(options)
+	bt, err := openBTreeIndex(options)
 	assert.Nil(t, err)
 	var keyPositions []*KeyPosition
 	keyPositions = append(keyPositions, &KeyPosition{
@@ -142,7 +142,7 @@ func TestBPTree_PutBatch_3(t *testing.T) {
 
 func testbptreePutbatch(t *testing.T, partitionNum int) {
 	options := indexOptions{
-		indexType:       indexBoltDB,
+		indexType:       BTree,
 		dirPath:         filepath.Join(os.TempDir(), "bptree-putBatch-"+strconv.Itoa(partitionNum)),
 		partitionNum:    partitionNum,
 		hashKeyFunction: xxhash.Sum64,
@@ -154,7 +154,7 @@ func testbptreePutbatch(t *testing.T, partitionNum int) {
 		_ = os.RemoveAll(options.dirPath)
 	}()
 
-	bt, err := openIndexBoltDB(options)
+	bt, err := openBTreeIndex(options)
 	assert.Nil(t, err)
 
 	var keyPositions []*KeyPosition
@@ -198,7 +198,7 @@ func TestBPTree_DeleteBatch_3(t *testing.T) {
 
 func testbptreeDeletebatch(t *testing.T, partitionNum int) {
 	options := indexOptions{
-		indexType:       indexBoltDB,
+		indexType:       BTree,
 		dirPath:         filepath.Join(os.TempDir(), "bptree-deleteBatch-"+strconv.Itoa(partitionNum)),
 		partitionNum:    partitionNum,
 		hashKeyFunction: xxhash.Sum64,
@@ -210,7 +210,7 @@ func testbptreeDeletebatch(t *testing.T, partitionNum int) {
 		_ = os.RemoveAll(options.dirPath)
 	}()
 
-	bt, err := openIndexBoltDB(options)
+	bt, err := openBTreeIndex(options)
 	assert.Nil(t, err)
 	var keys [][]byte
 	keys = append(keys, nil, []byte("not-exist"), []byte("exist"))
@@ -253,7 +253,7 @@ func TestBPTree_Close_3(t *testing.T) {
 
 func testbptreeClose(t *testing.T, partitionNum int) {
 	options := indexOptions{
-		indexType:       indexBoltDB,
+		indexType:       BTree,
 		dirPath:         filepath.Join(os.TempDir(), "bptree-close-"+strconv.Itoa(partitionNum)),
 		partitionNum:    partitionNum,
 		hashKeyFunction: xxhash.Sum64,
@@ -265,7 +265,7 @@ func testbptreeClose(t *testing.T, partitionNum int) {
 		_ = os.RemoveAll(options.dirPath)
 	}()
 
-	bt, err := openIndexBoltDB(options)
+	bt, err := openBTreeIndex(options)
 	assert.Nil(t, err)
 
 	err = bt.Close()
@@ -282,7 +282,7 @@ func TestBPTree_Sync_3(t *testing.T) {
 
 func testbptreeSync(t *testing.T, partitionNum int) {
 	options := indexOptions{
-		indexType:       indexBoltDB,
+		indexType:       BTree,
 		dirPath:         filepath.Join(os.TempDir(), "bptree-sync-"+strconv.Itoa(partitionNum)),
 		partitionNum:    partitionNum,
 		hashKeyFunction: xxhash.Sum64,
@@ -293,7 +293,7 @@ func testbptreeSync(t *testing.T, partitionNum int) {
 	defer func() {
 		_ = os.RemoveAll(options.dirPath)
 	}()
-	bt, err := openIndexBoltDB(options)
+	bt, err := openBTreeIndex(options)
 	assert.Nil(t, err)
 	err = bt.Sync()
 	assert.Nil(t, err)

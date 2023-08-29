@@ -21,14 +21,14 @@ func TestOpenHashTable(t *testing.T) {
 	}{
 		{"normal_1",
 			indexOptions{
-				indexType:       indexHashTable,
+				indexType:       Hash,
 				dirPath:         filepath.Join(os.TempDir(), "hashtable-open-1"),
 				partitionNum:    1,
 				hashKeyFunction: xxhash.Sum64,
 			},
 			&HashTable{
 				options: indexOptions{
-					indexType:       indexHashTable,
+					indexType:       Hash,
 					dirPath:         filepath.Join(os.TempDir(), "hashtable-open-1"),
 					partitionNum:    1,
 					hashKeyFunction: xxhash.Sum64,
@@ -39,14 +39,14 @@ func TestOpenHashTable(t *testing.T) {
 		},
 		{"normal_3",
 			indexOptions{
-				indexType:       indexHashTable,
+				indexType:       Hash,
 				dirPath:         filepath.Join(os.TempDir(), "hashtable-open-3"),
 				partitionNum:    3,
 				hashKeyFunction: xxhash.Sum64,
 			},
 			&HashTable{
 				options: indexOptions{
-					indexType:       indexHashTable,
+					indexType:       Hash,
 					dirPath:         filepath.Join(os.TempDir(), "hashtable-open-3"),
 					partitionNum:    3,
 					hashKeyFunction: xxhash.Sum64,
@@ -63,7 +63,7 @@ func TestOpenHashTable(t *testing.T) {
 			defer func() {
 				_ = os.RemoveAll(tt.options.dirPath)
 			}()
-			got, err := OpenHashTable(tt.options)
+			got, err := openHashIndex(tt.options)
 			if (err != nil) != tt.wantErr {
 				t.Errorf("openHashTable() error = %v, wantErr %v", err, tt.wantErr)
 				return
@@ -78,13 +78,13 @@ func TestOpenHashTable(t *testing.T) {
 }
 
 func TestHashTable_PutBatch(t *testing.T) {
-	testHashTable_PutBatch(t, 1)
-	testHashTable_PutBatch(t, 3)
+	testhashtablePutbatch(t, 1)
+	testhashtablePutbatch(t, 3)
 }
 
-func testHashTable_PutBatch(t *testing.T, partitionNum int) {
+func testhashtablePutbatch(t *testing.T, partitionNum int) {
 	options := indexOptions{
-		indexType:       indexHashTable,
+		indexType:       Hash,
 		dirPath:         filepath.Join(os.TempDir(), "hashtable-putBatch-"+strconv.Itoa(partitionNum)),
 		partitionNum:    partitionNum,
 		hashKeyFunction: xxhash.Sum64,
@@ -96,7 +96,7 @@ func testHashTable_PutBatch(t *testing.T, partitionNum int) {
 		_ = os.RemoveAll(options.dirPath)
 	}()
 
-	ht, err := OpenHashTable(options)
+	ht, err := openHashIndex(options)
 	assert.Nil(t, err)
 
 	var keyPositions []*KeyPosition
@@ -131,14 +131,14 @@ func testHashTable_PutBatch(t *testing.T, partitionNum int) {
 }
 
 func TestHashTable_Get(t *testing.T) {
-	testHashTable_Get(t, 1)
-	testHashTable_Get(t, 3)
+	testhashtableGet(t, 1)
+	testhashtableGet(t, 3)
 
 }
 
-func testHashTable_Get(t *testing.T, partitionNum int) {
+func testhashtableGet(t *testing.T, partitionNum int) {
 	options := indexOptions{
-		indexType:       indexHashTable,
+		indexType:       Hash,
 		dirPath:         filepath.Join(os.TempDir(), "hashtable-get-"+strconv.Itoa(partitionNum)),
 		partitionNum:    partitionNum,
 		hashKeyFunction: xxhash.Sum64,
@@ -150,7 +150,7 @@ func testHashTable_Get(t *testing.T, partitionNum int) {
 		_ = os.RemoveAll(options.dirPath)
 	}()
 
-	ht, err := OpenHashTable(options)
+	ht, err := openHashIndex(options)
 	assert.Nil(t, err)
 	var keyPositions []*KeyPosition
 	keyPositions = append(keyPositions, &KeyPosition{
@@ -184,13 +184,13 @@ func testHashTable_Get(t *testing.T, partitionNum int) {
 }
 
 func TestHashTable_DeleteBatch(t *testing.T) {
-	testHashTable_DeleteBatch(t, 1)
-	testHashTable_DeleteBatch(t, 3)
+	testhashtableDeletebatch(t, 1)
+	testhashtableDeletebatch(t, 3)
 }
 
-func testHashTable_DeleteBatch(t *testing.T, partitionNum int) {
+func testhashtableDeletebatch(t *testing.T, partitionNum int) {
 	options := indexOptions{
-		indexType:       indexHashTable,
+		indexType:       Hash,
 		dirPath:         filepath.Join(os.TempDir(), "hashtable-deleteBatch-"+strconv.Itoa(partitionNum)),
 		partitionNum:    partitionNum,
 		hashKeyFunction: xxhash.Sum64,
@@ -202,7 +202,7 @@ func testHashTable_DeleteBatch(t *testing.T, partitionNum int) {
 		_ = os.RemoveAll(options.dirPath)
 	}()
 
-	ht, err := OpenHashTable(options)
+	ht, err := openHashIndex(options)
 	assert.Nil(t, err)
 	var keys [][]byte
 	keys = append(keys, nil, []byte("not-exist"), []byte("exist"))
@@ -236,13 +236,13 @@ func testHashTable_DeleteBatch(t *testing.T, partitionNum int) {
 }
 
 func TestHashTable_Close(t *testing.T) {
-	testHashTable_Close(t, 1)
-	testHashTable_Close(t, 3)
+	testhashtableClose(t, 1)
+	testhashtableClose(t, 3)
 }
 
-func testHashTable_Close(t *testing.T, partitionNum int) {
+func testhashtableClose(t *testing.T, partitionNum int) {
 	options := indexOptions{
-		indexType:       indexHashTable,
+		indexType:       Hash,
 		dirPath:         filepath.Join(os.TempDir(), "hashtable-close-"+strconv.Itoa(partitionNum)),
 		partitionNum:    partitionNum,
 		hashKeyFunction: xxhash.Sum64,
@@ -254,7 +254,7 @@ func testHashTable_Close(t *testing.T, partitionNum int) {
 		_ = os.RemoveAll(options.dirPath)
 	}()
 
-	ht, err := OpenHashTable(options)
+	ht, err := openHashIndex(options)
 	assert.Nil(t, err)
 
 	err = ht.Close()
@@ -262,13 +262,13 @@ func testHashTable_Close(t *testing.T, partitionNum int) {
 }
 
 func TestHashTable_Sync(t *testing.T) {
-	testHashTable_Sync(t, 1)
-	testHashTable_Sync(t, 3)
+	testhashtableSync(t, 1)
+	testhashtableSync(t, 3)
 }
 
-func testHashTable_Sync(t *testing.T, partitionNum int) {
+func testhashtableSync(t *testing.T, partitionNum int) {
 	options := indexOptions{
-		indexType:       indexHashTable,
+		indexType:       Hash,
 		dirPath:         filepath.Join(os.TempDir(), "hashtable-sync-"+strconv.Itoa(partitionNum)),
 		partitionNum:    partitionNum,
 		hashKeyFunction: xxhash.Sum64,
@@ -280,7 +280,7 @@ func testHashTable_Sync(t *testing.T, partitionNum int) {
 		_ = os.RemoveAll(options.dirPath)
 	}()
 
-	ht, err := OpenHashTable(options)
+	ht, err := openHashIndex(options)
 	assert.Nil(t, err)
 
 	err = ht.Sync()

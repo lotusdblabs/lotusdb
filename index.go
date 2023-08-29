@@ -30,10 +30,10 @@ type Index interface {
 
 func openIndex(options indexOptions) (Index, error) {
 	switch options.indexType {
-	case indexBoltDB:
-		return openIndexBoltDB(options)
-	case indexHashTable:
-		return OpenHashTable(options)
+	case BTree:
+		return openBTreeIndex(options)
+	case Hash:
+		return openHashIndex(options)
 	default:
 		panic("unknown index type")
 	}
@@ -42,10 +42,10 @@ func openIndex(options indexOptions) (Index, error) {
 type IndexType int8
 
 const (
-	// indexBoltDB is the BoltDB index type.
-	indexBoltDB IndexType = iota
-	// indexHashTable is the diskhash index type. see: https://github.com/rosedblabs/diskhash
-	indexHashTable
+	// BTree is the BoltDB index type.
+	BTree IndexType = iota
+	// Hash is the diskhash index type. see: https://github.com/rosedblabs/diskhash
+	Hash
 )
 
 type indexOptions struct {

@@ -368,7 +368,7 @@ func (db *DB) compact() error {
 				return err
 			}
 
-			validEntries := []*ValueLogRecord{}
+			var validEntries []*ValueLogRecord
 			reader := db.vlog.walFiles[part].NewReader()
 			var count = 0
 			for {
@@ -378,13 +378,13 @@ func (db *DB) compact() error {
 					if err == io.EOF {
 						break
 					}
-					newValueFiles.Delete()
+					_ = newValueFiles.Delete()
 					return err
 				}
 				record := decodeValueLogRecord(content)
 				keyPos, err := db.index.Get(record.key)
 				if err != nil {
-					newValueFiles.Delete()
+					_ = newValueFiles.Delete()
 					return err
 				}
 
@@ -399,7 +399,7 @@ func (db *DB) compact() error {
 				if count%db.vlog.options.CompactBatchCount == 0 {
 					err := db.writeCompactionEntries(newValueFiles, validEntries, part)
 					if err != nil {
-						newValueFiles.Delete()
+						_ = newValueFiles.Delete()
 						return err
 					}
 					validEntries = validEntries[:0]
@@ -408,12 +408,12 @@ func (db *DB) compact() error {
 
 			err = db.writeCompactionEntries(newValueFiles, validEntries, part)
 			if err != nil {
-				newValueFiles.Delete()
+				_ = newValueFiles.Delete()
 				return err
 			}
 
 			// replace the wal with the new one.
-			db.vlog.walFiles[part].Delete()
+			_ = db.vlog.walFiles[part].Delete()
 			db.vlog.walFiles[part] = newValueFiles
 
 			return nil
@@ -432,7 +432,7 @@ func (db *DB) compact() error {
 }
 
 func (db *DB) writeCompactionEntries(newWal *wal.WAL, validEntries []*ValueLogRecord, part int) error {
-	keyPos := []*KeyPosition{}
+	var keyPos []*KeyPosition
 	for _, record := range validEntries {
 		pos, err := newWal.Write(encodeValueLogRecord(record))
 		if err != nil {
@@ -444,6 +444,5 @@ func (db *DB) writeCompactionEntries(newWal *wal.WAL, validEntries []*ValueLogRe
 			position:  pos},
 		)
 	}
-	db.index.PutBatch(keyPos)
-	return nil
+	return db.index.PutBatch(keyPos)
 }

@@ -14,7 +14,8 @@ import (
 	"golang.org/x/sync/errgroup"
 )
 
-// diskhash requires fixed-size value, so we set the slotValueLength to `binary.MaxVarintLen32*3 + binary.MaxVarintLen64`. This is the maximum length after wal.chunkPosition encoding.
+// diskhash requires fixed-size value, so we set the slotValueLength to `binary.MaxVarintLen32*3 + binary.MaxVarintLen64`.
+// This is the maximum length after wal.chunkPosition encoding.
 const slotValueLength = binary.MaxVarintLen32*3 + binary.MaxVarintLen64
 
 // HashTable is the diskhash index implementation.
@@ -25,9 +26,9 @@ type HashTable struct {
 	bytesBuffer *sync.Pool
 }
 
-// OpenHashTable open a diskhash for each partition.
+// openHashIndex open a diskhash for each partition.
 // The partition number is specified by the index options.
-func OpenHashTable(options indexOptions) (*HashTable, error) {
+func openHashIndex(options indexOptions) (*HashTable, error) {
 	tables := make([]*diskhash.Table, options.partitionNum)
 	bytesBuffer := &sync.Pool{
 		New: func() any {

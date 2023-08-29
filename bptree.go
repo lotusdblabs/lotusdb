@@ -19,10 +19,10 @@ type BPTree struct {
 	trees   []*bbolt.DB
 }
 
-// openIndexBoltDB opens a BoltDB index.
+// openBTreeIndex opens a BoltDB(On-Disk BTree) index.
 // Actually, it opens a BoltDB for each partition.
 // The partition number is specified by the index options.
-func openIndexBoltDB(options indexOptions) (*BPTree, error) {
+func openBTreeIndex(options indexOptions) (*BPTree, error) {
 	trees := make([]*bbolt.DB, options.partitionNum)
 
 	for i := 0; i < options.partitionNum; i++ {
