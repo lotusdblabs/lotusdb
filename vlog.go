@@ -1,6 +1,7 @@
 package lotusdb
 
 import (
+	"context"
 	"fmt"
 	"time"
 
@@ -79,7 +80,7 @@ func (vlog *valueLog) writeBatch(records []*ValueLogRecord) ([]*KeyPosition, err
 	}
 
 	posChan := make(chan []*KeyPosition, vlog.options.partitionNum)
-	groups := make([]errgroup.Group, vlog.options.partitionNum)
+	g, ctx := errgroup.WithContext(context.Background())
 	for i := 0; i < int(vlog.options.partitionNum); i++ {
 		if len(partitionRecords[i]) == 0 {
 			posChan <- []*KeyPosition{}
@@ -87,19 +88,26 @@ func (vlog *valueLog) writeBatch(records []*ValueLogRecord) ([]*KeyPosition, err
 		}
 
 		part := i
-		groups[i].Go(func() error {
+		g.Go(func() error {
 			var positions []*KeyPosition
 			for _, record := range partitionRecords[part] {
-				pos, err := vlog.walFiles[part].Write(encodeValueLogRecord(record))
-				if err != nil {
+				select {
+				case <-ctx.Done():
 					posChan <- nil
-					return err
+					return ctx.Err()
+				default:
+					pos, err := vlog.walFiles[part].Write(encodeValueLogRecord(record))
+					if err != nil {
+						posChan <- nil
+						return err
+					}
+					positions = append(positions, &KeyPosition{
+						key:       record.key,
+						partition: uint32(part),
+						position:  pos},
+					)
 				}
-				positions = append(positions, &KeyPosition{
-					key:       record.key,
-					partition: uint32(part),
-					position:  pos},
-				)
+
 			}
 			posChan <- positions
 			return nil
@@ -109,11 +117,12 @@ func (vlog *valueLog) writeBatch(records []*ValueLogRecord) ([]*KeyPosition, err
 	var keyPositions []*KeyPosition
 
 	for i := 0; i < int(vlog.options.partitionNum); i++ {
-		if err := groups[i].Wait(); err != nil {
-			return nil, err
-		}
 		pos := <-posChan
 		keyPositions = append(keyPositions, pos...)
+	}
+
+	if err := g.Wait(); err != nil {
+		return nil, err
 	}
 
 	return keyPositions, nil

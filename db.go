@@ -1,6 +1,7 @@
 package lotusdb
 
 import (
+	"context"
 	"errors"
 	"fmt"
 	"io"
@@ -347,11 +348,12 @@ func (db *DB) flushMemtables() {
 
 func (db *DB) compact() error {
 	db.flushLock.Lock()
-	groups := make([]errgroup.Group, db.vlog.options.partitionNum)
+	defer db.flushLock.Unlock()
 
+	g, _ := errgroup.WithContext(context.Background())
 	for i := 0; i < int(db.vlog.options.partitionNum); i++ {
 		part := i
-		groups[part].Go(func() error {
+		g.Go(func() error {
 			newValueFiles, err := wal.Open(wal.Options{
 				DirPath:        db.vlog.options.dirPath,
 				SegmentSize:    db.vlog.options.segmentSize,
@@ -420,15 +422,7 @@ func (db *DB) compact() error {
 		})
 	}
 
-	for i := 0; i < int(db.vlog.options.partitionNum); i++ {
-		if err := groups[i].Wait(); err != nil {
-			db.flushLock.Unlock()
-			return err
-		}
-	}
-
-	db.flushLock.Unlock()
-	return nil
+	return g.Wait()
 }
 
 func (db *DB) writeCompactionEntries(newWal *wal.WAL, validEntries []*ValueLogRecord, part int) error {

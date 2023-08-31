@@ -107,15 +107,6 @@ func TestValueLogWriteBatch(t *testing.T) {
 	}
 
 	numRWList := []int{500000, 1000000, 2000000}
-	numPartList := []int{1, 3, 10}
-	t.Run("writeBatch normally", func(t *testing.T) {
-		for _, numRW := range numRWList {
-			for _, numPart := range numPartList {
-				err := writeBatch(opts, numRW, numPart)
-				assert.Nil(t, err)
-			}
-		}
-	})
 
 	tests := []struct {
 		name    string
