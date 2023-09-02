@@ -85,7 +85,7 @@ func Open(options Options) (*DB, error) {
 		blockCache:        options.BlockCache,
 		partitionNum:      uint32(options.PartitionNum),
 		hashKeyFunction:   options.KeyHashFunction,
-		CompactBatchCount: options.CompactBatchCount,
+		compactBatchCount: options.CompactBatchCount,
 	})
 	if err != nil {
 		return nil, err
@@ -215,6 +215,9 @@ func (db *DB) Exist(key []byte) (bool, error) {
 
 // validateOptions validates the given options.
 func validateOptions(options *Options) error {
+	if options.IndexType == Hash {
+		return errors.New("hash index is not supported yet")
+	}
 	if options.DirPath == "" {
 		return errors.New("dir path is empty")
 	}
@@ -329,7 +332,7 @@ func (db *DB) flushMemtables() {
 				continue
 			}
 
-			// delete old memtable keeped in memory
+			// delete old memtable kept in memory
 			db.mu.Lock()
 			if len(db.immuMems) == 1 {
 				db.immuMems = db.immuMems[:0]
@@ -346,7 +349,9 @@ func (db *DB) flushMemtables() {
 	}
 }
 
-func (db *DB) compact() error {
+// Compact will iterate all values in vlog, and write the valid values to a new vlog file.
+// Then replace the old vlog file with the new one, and delete the old one.
+func (db *DB) Compact() error {
 	db.flushLock.Lock()
 	defer db.flushLock.Unlock()
 
@@ -354,7 +359,7 @@ func (db *DB) compact() error {
 	for i := 0; i < int(db.vlog.options.partitionNum); i++ {
 		part := i
 		g.Go(func() error {
-			newValueFiles, err := wal.Open(wal.Options{
+			newVlogFile, err := wal.Open(wal.Options{
 				DirPath:        db.vlog.options.dirPath,
 				SegmentSize:    db.vlog.options.segmentSize,
 				SegmentFileExt: fmt.Sprintf(valueLogFileExt, time.Now().Format("02-03-04-05-2006"), part),
@@ -363,60 +368,60 @@ func (db *DB) compact() error {
 				BytesPerSync:   0,     // the same as Sync
 			})
 			if err != nil {
-				err2 := newValueFiles.Delete()
-				if err2 != nil {
-					panic(fmt.Sprintf("delete wal file failed: %v\n", err2))
-				}
+				_ = newVlogFile.Delete()
 				return err
 			}
 
-			var validEntries []*ValueLogRecord
+			validRecords := make([]*ValueLogRecord, 0, db.vlog.options.compactBatchCount)
 			reader := db.vlog.walFiles[part].NewReader()
 			var count = 0
+			// iterate all records in wal, find the valid records
 			for {
 				count++
-				content, chunkPos, err := reader.Next()
+				chunk, pos, err := reader.Next()
 				if err != nil {
 					if err == io.EOF {
 						break
 					}
-					_ = newValueFiles.Delete()
+					_ = newVlogFile.Delete()
 					return err
 				}
-				record := decodeValueLogRecord(content)
+
+				record := decodeValueLogRecord(chunk)
 				keyPos, err := db.index.Get(record.key)
 				if err != nil {
-					_ = newValueFiles.Delete()
+					_ = newVlogFile.Delete()
 					return err
 				}
 
 				if keyPos == nil {
 					continue
 				}
-				if keyPos.partition == uint32(part) && reflect.DeepEqual(keyPos.position, chunkPos) {
-					validEntries = append(validEntries, record)
+				if keyPos.partition == uint32(part) && reflect.DeepEqual(keyPos.position, pos) {
+					validRecords = append(validRecords, record)
 				}
 
-				// if validEntries occupy too much memory, we need to write it to disk and clear memory
-				if count%db.vlog.options.CompactBatchCount == 0 {
-					err := db.writeCompactionEntries(newValueFiles, validEntries, part)
+				if count%db.vlog.options.compactBatchCount == 0 {
+					err := db.rewriteValidRecords(newVlogFile, validRecords, part)
 					if err != nil {
-						_ = newValueFiles.Delete()
+						_ = newVlogFile.Delete()
 						return err
 					}
-					validEntries = validEntries[:0]
+					validRecords = validRecords[:0]
 				}
 			}
 
-			err = db.writeCompactionEntries(newValueFiles, validEntries, part)
-			if err != nil {
-				_ = newValueFiles.Delete()
-				return err
+			if len(validRecords) > 0 {
+				err = db.rewriteValidRecords(newVlogFile, validRecords, part)
+				if err != nil {
+					_ = newVlogFile.Delete()
+					return err
+				}
 			}
 
 			// replace the wal with the new one.
 			_ = db.vlog.walFiles[part].Delete()
-			db.vlog.walFiles[part] = newValueFiles
+			db.vlog.walFiles[part] = newVlogFile
 
 			return nil
 		})
@@ -425,18 +430,19 @@ func (db *DB) compact() error {
 	return g.Wait()
 }
 
-func (db *DB) writeCompactionEntries(newWal *wal.WAL, validEntries []*ValueLogRecord, part int) error {
-	var keyPos []*KeyPosition
-	for _, record := range validEntries {
-		pos, err := newWal.Write(encodeValueLogRecord(record))
+func (db *DB) rewriteValidRecords(walFile *wal.WAL, validRecords []*ValueLogRecord, part int) error {
+	var positions []*KeyPosition
+	for _, record := range validRecords {
+		pos, err := walFile.Write(encodeValueLogRecord(record))
 		if err != nil {
 			return err
 		}
-		keyPos = append(keyPos, &KeyPosition{
+
+		positions = append(positions, &KeyPosition{
 			key:       record.key,
 			partition: uint32(part),
 			position:  pos},
 		)
 	}
-	return db.index.PutBatch(keyPos)
+	return db.index.PutBatch(positions)
 }

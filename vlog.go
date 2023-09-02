@@ -39,7 +39,7 @@ type valueLogOptions struct {
 	hashKeyFunction func([]byte) uint64
 
 	// writing validEntries to disk after reading the specified number of entries.
-	CompactBatchCount int
+	compactBatchCount int
 }
 
 func openValueLog(options valueLogOptions) (*valueLog, error) {

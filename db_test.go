@@ -366,7 +366,7 @@ func TestDBFlushMemTables(t *testing.T) {
 			DisableWal: false,
 		})
 	}
-	for i := 0; i < int(numLogs); i++ {
+	for i := 0; i < numLogs; i++ {
 		// the size of a logRecord is about 1kB (a little bigger than 1kB due to encode)
 		log := &testLog{key: util.RandomValue(2 << 8), value: util.RandomValue(2 << 8)}
 		_ = db.Put(log.key, log.value, &WriteOptions{
@@ -416,8 +416,8 @@ func TestDBCompact(t *testing.T) {
 	}
 
 	numLogs := 2 << 9 * 7
-	logs := []*testLog{}
-	for i := 0; i < int(numLogs); i++ {
+	var logs []*testLog
+	for i := 0; i < numLogs; i++ {
 		// the size of a logRecord is about 1kB (a little bigger than 1kB due to encode)
 		log := &testLog{key: util.RandomValue(2 << 8), value: util.RandomValue(2 << 8)}
 		logs = append(logs, log)
@@ -441,7 +441,8 @@ func TestDBCompact(t *testing.T) {
 		assert.Nil(t, err)
 
 		start := time.Now()
-		db.compact()
+		err = db.Compact()
+		assert.Nil(t, err)
 		runTime := time.Since(start)
 		fmt.Printf("partionNum:%d, runTime:%v\n", options.PartitionNum, runTime)
 
@@ -483,7 +484,7 @@ func TestDBMultiClients(t *testing.T) {
 	var logs [][]*testLog
 	for i := 0; i < 2; i++ {
 		logs = append(logs, []*testLog{})
-		for j := 0; j < int(numLogs); j++ {
+		for j := 0; j < numLogs; j++ {
 			// the size of a logRecord is about 1kB (a little bigger than 1kB due to encode)
 			log := &testLog{key: util.RandomValue(2 << 8), value: util.RandomValue(2 << 8)}
 			logs[i] = append(logs[i], log)

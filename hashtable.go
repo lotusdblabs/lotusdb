@@ -35,6 +35,7 @@ func openHashIndex(options indexOptions) (*HashTable, error) {
 			return make([]byte, slotValueLength)
 		},
 	}
+
 	for i := 0; i < options.partitionNum; i++ {
 		dishHashOptions := diskhash.DefaultOptions
 		dishHashOptions.DirPath = filepath.Join(options.dirPath, fmt.Sprintf(indexFileExt, i))
