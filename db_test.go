@@ -365,7 +365,7 @@ func TestDBFlushMemTables(t *testing.T) {
 		})
 	}
 	for i := 0; i < numLogs; i++ {
-		// the size of a logRecord is about 1kB (a little bigger than 1kB due to encode)
+		// the size of a logRecord is about 1MB (a little bigger than 1MB due to encode)
 		log := &testLog{key: util.RandomValue(2 << 18), value: util.RandomValue(2 << 18)}
 		_ = db.Put(log.key, log.value, &WriteOptions{
 			Sync:       true,
