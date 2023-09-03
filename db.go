@@ -109,8 +109,8 @@ func Open(options Options) (*DB, error) {
 		}
 	}
 
-	// start flush memtables goroutine asynchronously, 
-	// memtables with new coming writes will be flushed to disk if the active memtable is full
+	// start flush memtables goroutine asynchronously,
+	// memtables with new coming writes will be flushed to disk if the active memtable is full.
 	go db.listenMemtableFlush()
 
 	return db, nil
