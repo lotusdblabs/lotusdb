@@ -342,7 +342,6 @@ func TestDBFlushMemTables(t *testing.T) {
 	path, err := os.MkdirTemp("", "db-test-flush")
 	assert.Nil(t, err)
 	options.DirPath = path
-	options.MemtableSize = 5 * MB
 
 	db, err := Open(options)
 	assert.Nil(t, err)
@@ -353,7 +352,7 @@ func TestDBFlushMemTables(t *testing.T) {
 		value []byte
 	}
 
-	numLogs := 2 << 9 * 7
+	numLogs := 100
 	logs := []*testLog{
 		{key: []byte("key 0"), value: []byte("value 0")},
 		{key: []byte("key 1"), value: []byte("value 1")},
@@ -366,8 +365,8 @@ func TestDBFlushMemTables(t *testing.T) {
 		})
 	}
 	for i := 0; i < numLogs; i++ {
-		// the size of a logRecord is about 1kB (a little bigger than 1kB due to encode)
-		log := &testLog{key: util.RandomValue(2 << 8), value: util.RandomValue(2 << 8)}
+		// the size of a logRecord is about 1MB (a little bigger than 1MB due to encode)
+		log := &testLog{key: util.RandomValue(2 << 18), value: util.RandomValue(2 << 18)}
 		_ = db.Put(log.key, log.value, &WriteOptions{
 			Sync:       true,
 			DisableWal: false,
@@ -390,8 +389,7 @@ func TestDBCompact(t *testing.T) {
 	path, err := os.MkdirTemp("", "db-test-compact")
 	assert.Nil(t, err)
 	options.DirPath = path
-	options.MemtableSize = 5 * MB
-	options.CompactBatchCount = 2 << 9 * 5
+	options.CompactBatchCount = 2 << 5
 
 	db, err := Open(options)
 	assert.Nil(t, err)
@@ -414,11 +412,11 @@ func TestDBCompact(t *testing.T) {
 		})
 	}
 
-	numLogs := 2 << 9 * 7
+	numLogs := 64
 	var logs []*testLog
 	for i := 0; i < numLogs; i++ {
-		// the size of a logRecord is about 1kB (a little bigger than 1kB due to encode)
-		log := &testLog{key: util.RandomValue(2 << 8), value: util.RandomValue(2 << 8)}
+		// the size of a logRecord is about 1MB (a little bigger than 1MB due to encode)
+		log := &testLog{key: util.RandomValue(2 << 18), value: util.RandomValue(2 << 18)}
 		logs = append(logs, log)
 	}
 	for _, log := range logs {
@@ -452,6 +450,7 @@ func TestDBCompact(t *testing.T) {
 			assert.Equal(t, log.value, value)
 		}
 	})
+
 }
 
 func getValueFromVlog(db *DB, key []byte) ([]byte, error) {

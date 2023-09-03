@@ -435,7 +435,22 @@ func (db *DB) Compact() error {
 
 			// replace the wal with the new one.
 			_ = db.vlog.walFiles[part].Delete()
+			if err = newVlogFile.Close(); err != nil {
+				return err
+			}
 			if err = newVlogFile.RenameFileExt(fmt.Sprintf(valueLogFileExt, part)); err != nil {
+				return err
+			}
+			newVlogFile, err = wal.Open(wal.Options{
+				DirPath:        db.vlog.options.dirPath,
+				SegmentSize:    db.vlog.options.segmentSize,
+				SegmentFileExt: fmt.Sprintf(valueLogFileExt, part),
+				BlockCache:     db.vlog.options.blockCache,
+				Sync:           false, // we will sync manually
+				BytesPerSync:   0,     // the same as Sync
+			})
+			if err != nil {
+				_ = newVlogFile.Delete()
 				return err
 			}
 			db.vlog.walFiles[part] = newVlogFile

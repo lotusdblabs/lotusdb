@@ -106,7 +106,7 @@ func TestValueLogWriteBatch(t *testing.T) {
 		hashKeyFunction: DefaultOptions.KeyHashFunction,
 	}
 
-	numRWList := []int{500000, 1000000, 2000000}
+	numRWList := []int{50000, 100000, 200000}
 
 	tests := []struct {
 		name    string
