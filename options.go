@@ -48,6 +48,13 @@ type Options struct {
 	// ValueLogFileSize size of a single value log file.
 	// Default value is 1GB.
 	ValueLogFileSize int64
+
+	// indexType.
+	// default value is bptree.
+	IndexType IndexType
+
+	// writing entries to disk after reading the specified number of entries.
+	CompactBatchCount int
 }
 
 // BatchOptions specifies the options for creating a batch.
@@ -98,25 +105,22 @@ const (
 )
 
 var DefaultOptions = Options{
-	DirPath:          tempDBDir(),
-	MemtableSize:     64 * MB,
-	MemtableNums:     15,
-	BlockCache:       64 * MB,
-	Sync:             false,
-	BytesPerSync:     0,
-	PartitionNum:     3,
-	KeyHashFunction:  xxhash.Sum64,
-	ValueLogFileSize: 1 * GB,
+	DirPath:           tempDBDir(),
+	MemtableSize:      64 * MB,
+	MemtableNums:      15,
+	BlockCache:        64 * MB,
+	Sync:              false,
+	BytesPerSync:      0,
+	PartitionNum:      3,
+	KeyHashFunction:   xxhash.Sum64,
+	ValueLogFileSize:  1 * GB,
+	IndexType:         BTree,
+	CompactBatchCount: 2 << 20,
 }
 
 var DefaultBatchOptions = BatchOptions{
 	Sync:     true,
 	ReadOnly: false,
-}
-
-var DefaultIteratorOptions = IteratorOptions{
-	Prefix:  nil,
-	Reverse: false,
 }
 
 func tempDBDir() string {

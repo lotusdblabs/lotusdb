@@ -19,10 +19,10 @@ type BPTree struct {
 	trees   []*bbolt.DB
 }
 
-// openIndexBoltDB opens a BoltDB index.
+// openBTreeIndex opens a BoltDB(On-Disk BTree) index.
 // Actually, it opens a BoltDB for each partition.
 // The partition number is specified by the index options.
-func openIndexBoltDB(options indexOptions) (*BPTree, error) {
+func openBTreeIndex(options indexOptions) (*BPTree, error) {
 	trees := make([]*bbolt.DB, options.partitionNum)
 
 	for i := 0; i < options.partitionNum; i++ {
@@ -58,7 +58,7 @@ func openIndexBoltDB(options indexOptions) (*BPTree, error) {
 }
 
 func (bt *BPTree) Get(key []byte) (*KeyPosition, error) {
-	p := bt.getKeyPartition(key)
+	p := bt.options.getKeyPartition(key)
 	tree := bt.trees[p]
 	var keyPos *KeyPosition
 
@@ -126,7 +126,7 @@ func (bt *BPTree) DeleteBatch(keys [][]byte) error {
 
 	partitionKeys := make([][][]byte, bt.options.partitionNum)
 	for _, key := range keys {
-		p := bt.getKeyPartition(key)
+		p := bt.options.getKeyPartition(key)
 		partitionKeys[p] = append(partitionKeys[p], key)
 	}
 	g, ctx := errgroup.WithContext(context.Background())
@@ -176,9 +176,4 @@ func (bt *BPTree) Sync() error {
 		}
 	}
 	return nil
-}
-
-func (bt *BPTree) getKeyPartition(key []byte) int {
-	hashFn := bt.options.hashKeyFunction
-	return int(hashFn(key) % uint64(bt.options.partitionNum))
 }

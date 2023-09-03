@@ -6,6 +6,7 @@ require (
 	github.com/bwmarrin/snowflake v0.3.0
 	github.com/dgraph-io/badger/v4 v4.1.0
 	github.com/rosedblabs/wal v1.3.2
+	github.com/spaolacci/murmur3 v1.1.0
 	github.com/stretchr/testify v1.8.4
 )
 
@@ -34,6 +35,7 @@ require (
 	github.com/hashicorp/golang-lru/v2 v2.0.4 // indirect
 	github.com/klauspost/compress v1.16.7 // indirect
 	github.com/pkg/errors v0.9.1 // indirect
+	github.com/rosedblabs/diskhash v0.0.0-20230825144203-2d051ecdb9a5
 	go.etcd.io/bbolt v1.3.7
 	go.uber.org/zap v1.24.0
 	golang.org/x/net v0.12.0 // indirect

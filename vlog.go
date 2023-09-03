@@ -1,14 +1,16 @@
 package lotusdb
 
 import (
+	"context"
 	"fmt"
+	"time"
 
 	"github.com/rosedblabs/wal"
 	"golang.org/x/sync/errgroup"
 )
 
 const (
-	valueLogFileExt = ".VLOG.%d"
+	valueLogFileExt = ".VLOG.%v.%d"
 )
 
 // valueLog value log is named after the concept in Wisckey paper
@@ -35,6 +37,9 @@ type valueLogOptions struct {
 
 	// hash function for sharding
 	hashKeyFunction func([]byte) uint64
+
+	// writing validEntries to disk after reading the specified number of entries.
+	compactBatchCount int
 }
 
 func openValueLog(options valueLogOptions) (*valueLog, error) {
@@ -44,7 +49,7 @@ func openValueLog(options valueLogOptions) (*valueLog, error) {
 		vLogWal, err := wal.Open(wal.Options{
 			DirPath:        options.dirPath,
 			SegmentSize:    options.segmentSize,
-			SegmentFileExt: fmt.Sprintf(valueLogFileExt, i),
+			SegmentFileExt: fmt.Sprintf(valueLogFileExt, time.Now().Format("02-03-04-05-2006"), i),
 			BlockCache:     options.blockCache,
 			Sync:           false, // we will sync manually
 			BytesPerSync:   0,     // the same as Sync
@@ -75,7 +80,7 @@ func (vlog *valueLog) writeBatch(records []*ValueLogRecord) ([]*KeyPosition, err
 	}
 
 	posChan := make(chan []*KeyPosition, vlog.options.partitionNum)
-	groups := make([]errgroup.Group, vlog.options.partitionNum)
+	g, ctx := errgroup.WithContext(context.Background())
 	for i := 0; i < int(vlog.options.partitionNum); i++ {
 		if len(partitionRecords[i]) == 0 {
 			posChan <- []*KeyPosition{}
@@ -83,19 +88,26 @@ func (vlog *valueLog) writeBatch(records []*ValueLogRecord) ([]*KeyPosition, err
 		}
 
 		part := i
-		groups[i].Go(func() error {
+		g.Go(func() error {
 			var positions []*KeyPosition
 			for _, record := range partitionRecords[part] {
-				pos, err := vlog.walFiles[part].Write(encodeValueLogRecord(record))
-				if err != nil {
+				select {
+				case <-ctx.Done():
 					posChan <- nil
-					return err
+					return ctx.Err()
+				default:
+					pos, err := vlog.walFiles[part].Write(encodeValueLogRecord(record))
+					if err != nil {
+						posChan <- nil
+						return err
+					}
+					positions = append(positions, &KeyPosition{
+						key:       record.key,
+						partition: uint32(part),
+						position:  pos},
+					)
 				}
-				positions = append(positions, &KeyPosition{
-					key:       record.key,
-					partition: uint32(part),
-					position:  pos},
-				)
+
 			}
 			posChan <- positions
 			return nil
@@ -105,11 +117,12 @@ func (vlog *valueLog) writeBatch(records []*ValueLogRecord) ([]*KeyPosition, err
 	var keyPositions []*KeyPosition
 
 	for i := 0; i < int(vlog.options.partitionNum); i++ {
-		if err := groups[i].Wait(); err != nil {
-			return nil, err
-		}
 		pos := <-posChan
 		keyPositions = append(keyPositions, pos...)
+	}
+
+	if err := g.Wait(); err != nil {
+		return nil, err
 	}
 
 	return keyPositions, nil
