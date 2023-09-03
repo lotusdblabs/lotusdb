@@ -369,22 +369,27 @@ func (db *DB) Compact() error {
 	db.flushLock.Lock()
 	defer db.flushLock.Unlock()
 
+	openVlogFile := func(part int, ext string) *wal.WAL {
+		walFile, err := wal.Open(wal.Options{
+			DirPath:        db.vlog.options.dirPath,
+			SegmentSize:    db.vlog.options.segmentSize,
+			SegmentFileExt: fmt.Sprintf(ext, part),
+			BlockCache:     db.vlog.options.blockCache,
+			Sync:           false, // we will sync manually
+			BytesPerSync:   0,     // the same as Sync
+		})
+		if err != nil {
+			_ = walFile.Delete()
+			panic(err)
+		}
+		return walFile
+	}
+
 	g, _ := errgroup.WithContext(context.Background())
 	for i := 0; i < int(db.vlog.options.partitionNum); i++ {
 		part := i
 		g.Go(func() error {
-			newVlogFile, err := wal.Open(wal.Options{
-				DirPath:        db.vlog.options.dirPath,
-				SegmentSize:    db.vlog.options.segmentSize,
-				SegmentFileExt: fmt.Sprintf(tempValueLogFileExt, part),
-				BlockCache:     db.vlog.options.blockCache,
-				Sync:           false, // we will sync manually
-				BytesPerSync:   0,     // the same as Sync
-			})
-			if err != nil {
-				_ = newVlogFile.Delete()
-				return err
-			}
+			newVlogFile := openVlogFile(part, tempValueLogFileExt)
 
 			validRecords := make([]*ValueLogRecord, 0, db.vlog.options.compactBatchCount)
 			reader := db.vlog.walFiles[part].NewReader()
@@ -426,7 +431,7 @@ func (db *DB) Compact() error {
 			}
 
 			if len(validRecords) > 0 {
-				err = db.rewriteValidRecords(newVlogFile, validRecords, part)
+				err := db.rewriteValidRecords(newVlogFile, validRecords, part)
 				if err != nil {
 					_ = newVlogFile.Delete()
 					return err
@@ -435,25 +440,11 @@ func (db *DB) Compact() error {
 
 			// replace the wal with the new one.
 			_ = db.vlog.walFiles[part].Delete()
-			if err = newVlogFile.Close(); err != nil {
+			_ = newVlogFile.Close()
+			if err := newVlogFile.RenameFileExt(fmt.Sprintf(valueLogFileExt, part)); err != nil {
 				return err
 			}
-			if err = newVlogFile.RenameFileExt(fmt.Sprintf(valueLogFileExt, part)); err != nil {
-				return err
-			}
-			newVlogFile, err = wal.Open(wal.Options{
-				DirPath:        db.vlog.options.dirPath,
-				SegmentSize:    db.vlog.options.segmentSize,
-				SegmentFileExt: fmt.Sprintf(valueLogFileExt, part),
-				BlockCache:     db.vlog.options.blockCache,
-				Sync:           false, // we will sync manually
-				BytesPerSync:   0,     // the same as Sync
-			})
-			if err != nil {
-				_ = newVlogFile.Delete()
-				return err
-			}
-			db.vlog.walFiles[part] = newVlogFile
+			db.vlog.walFiles[part] = openVlogFile(part, valueLogFileExt)
 
 			return nil
 		})

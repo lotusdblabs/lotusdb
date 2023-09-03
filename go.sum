@@ -38,8 +38,8 @@ github.com/pmezard/go-difflib v1.0.0 h1:4DBwDE0NGyQoBHbLQYPwSUPoCMWR5BEzIk/f1lZb
 github.com/pmezard/go-difflib v1.0.0/go.mod h1:iKH77koFhYxTK1pcRnkKkqfTogsbg7gZNVY4sRDYZ/4=
 github.com/rosedblabs/diskhash v0.0.0-20230825144203-2d051ecdb9a5 h1:iK0Bqwd4LS5Kysac2o4l0ly9vkPBLQKQCnyFSd+qJXQ=
 github.com/rosedblabs/diskhash v0.0.0-20230825144203-2d051ecdb9a5/go.mod h1:3xvIg+7iOFUL/vMCE/6DwE6Yecb0okVYJBEfpdC/E+8=
-github.com/rosedblabs/wal v1.3.4-0.20230903070535-92f622425823 h1:nDRktPFxNATGLDCsC+E6N4J96gB7iA01IjSVkLbDl2Q=
-github.com/rosedblabs/wal v1.3.4-0.20230903070535-92f622425823/go.mod h1:wdq54KJUyVTOv1uddMc6Cdh2d/YCIo8yjcwJAb1RCEM=
+github.com/rosedblabs/wal v1.3.4-0.20230903095514-51f5de6bb0d3 h1:MHuNMgraOMF1tK00cIwQGu+8cA8qvdaZgSRkONDhO5Y=
+github.com/rosedblabs/wal v1.3.4-0.20230903095514-51f5de6bb0d3/go.mod h1:wdq54KJUyVTOv1uddMc6Cdh2d/YCIo8yjcwJAb1RCEM=
 github.com/spaolacci/murmur3 v1.1.0 h1:7c1g84S4BPRrfL5Xrdp6fOJ206sU9y293DDHaoy0bLI=
 github.com/spaolacci/murmur3 v1.1.0/go.mod h1:JwIasOWyU6f++ZhiEuf87xNszmSA2myDM2Kzu9HwQUA=
 github.com/stretchr/objx v0.1.0/go.mod h1:HFkY916IF+rwdDfMAkV7OtwuqBVzrE8GR6GFx+wExME=
