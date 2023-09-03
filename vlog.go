@@ -3,14 +3,13 @@ package lotusdb
 import (
 	"context"
 	"fmt"
-	"time"
-
 	"github.com/rosedblabs/wal"
 	"golang.org/x/sync/errgroup"
 )
 
 const (
-	valueLogFileExt = ".VLOG.%v.%d"
+	valueLogFileExt     = ".VLOG.%d"
+	tempValueLogFileExt = ".VLOG.%d.temp"
 )
 
 // valueLog value log is named after the concept in Wisckey paper
@@ -49,7 +48,7 @@ func openValueLog(options valueLogOptions) (*valueLog, error) {
 		vLogWal, err := wal.Open(wal.Options{
 			DirPath:        options.dirPath,
 			SegmentSize:    options.segmentSize,
-			SegmentFileExt: fmt.Sprintf(valueLogFileExt, time.Now().Format("02-03-04-05-2006"), i),
+			SegmentFileExt: fmt.Sprintf(valueLogFileExt, i),
 			BlockCache:     options.blockCache,
 			Sync:           false, // we will sync manually
 			BytesPerSync:   0,     // the same as Sync

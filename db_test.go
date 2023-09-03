@@ -1,7 +1,6 @@
 package lotusdb
 
 import (
-	"fmt"
 	"os"
 	"sync"
 	"testing"
@@ -440,11 +439,8 @@ func TestDBCompact(t *testing.T) {
 		size, err := util.DirSize(db.options.DirPath)
 		assert.Nil(t, err)
 
-		start := time.Now()
 		err = db.Compact()
 		assert.Nil(t, err)
-		runTime := time.Since(start)
-		fmt.Printf("partionNum:%d, runTime:%v\n", options.PartitionNum, runTime)
 
 		sizeCompact, err := util.DirSize(db.options.DirPath)
 		assert.Nil(t, err)
@@ -456,7 +452,6 @@ func TestDBCompact(t *testing.T) {
 			assert.Equal(t, log.value, value)
 		}
 	})
-
 }
 
 func getValueFromVlog(db *DB, key []byte) ([]byte, error) {
