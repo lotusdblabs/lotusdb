@@ -21,7 +21,6 @@ const (
 	// for example, the wal file name of memtable with id 1 is .SEG.1
 	walFileExt     = ".SEG.%d"
 	initialTableID = 1
-	arenaExtraSize = 50000
 )
 
 type (
@@ -104,7 +103,7 @@ func openAllMemtables(options Options) ([]*memtable, error) {
 // and load all entries from wal to rebuild the content of the skip list.
 func openMemtable(options memtableOptions) (*memtable, error) {
 	// init skip list
-	skl := arenaskl.NewSkiplist(int64(options.memSize) + arenaExtraSize)
+	skl := arenaskl.NewSkiplist(int64(float64(options.memSize) * 1.5))
 	table := &memtable{options: options, skl: skl}
 
 	// open the Write Ahead Log file
