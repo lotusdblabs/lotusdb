@@ -102,8 +102,16 @@ func Open(options Options) (*DB, error) {
 		batchPool: sync.Pool{New: makeBatch},
 	}
 
-	// start flush memtables goroutine
-	go db.flushMemtables()
+	// if there are some immutable memtables when opening the database, flush them to disk
+	if len(db.immuMems) > 0 {
+		for _, table := range db.immuMems {
+			db.flushMemtable(table)
+		}
+	}
+
+	// start flush memtables goroutine asynchronously, 
+	// memtables with new coming writes will be flushed to disk if the active memtable is full
+	go db.listenMemtableFlush()
 
 	return db, nil
 }
@@ -272,77 +280,83 @@ func (db *DB) waitMemetableSpace() error {
 	return nil
 }
 
-func (db *DB) flushMemtables() {
+func (db *DB) flushMemtable(table *memtable) {
+	db.flushLock.Lock()
+	sklIter := table.skl.NewIterator()
+	var deletedKeys [][]byte
+	var logRecords []*ValueLogRecord
+
+	// iterate all records in memtable, divide them into deleted keys and log records
+	for sklIter.SeekToFirst(); sklIter.Valid(); sklIter.Next() {
+		key, valueStruct := y.ParseKey(sklIter.Key()), sklIter.Value()
+		if valueStruct.Meta == LogRecordDeleted {
+			deletedKeys = append(deletedKeys, key)
+		} else {
+			logRecord := ValueLogRecord{key: key, value: valueStruct.Value}
+			logRecords = append(logRecords, &logRecord)
+		}
+	}
+	_ = sklIter.Close()
+
+	// write to value log, get the positions of keys
+	keyPos, err := db.vlog.writeBatch(logRecords)
+	if err != nil {
+		log.Println("vlog writeBatch failed:", err)
+		db.flushLock.Unlock()
+		return
+	}
+
+	// sync the value log
+	if err := db.vlog.sync(); err != nil {
+		log.Println("vlog sync failed:", err)
+		db.flushLock.Unlock()
+		return
+	}
+
+	// write all keys and positions to index
+	if err := db.index.PutBatch(keyPos); err != nil {
+		log.Println("index PutBatch failed:", err)
+		db.flushLock.Unlock()
+		return
+	}
+	if err := db.index.DeleteBatch(deletedKeys); err != nil {
+		log.Println("index DeleteBatch failed:", err)
+		db.flushLock.Unlock()
+		return
+	}
+	// sync the index
+	if err := db.index.Sync(); err != nil {
+		log.Println("index sync failed:", err)
+		db.flushLock.Unlock()
+		return
+	}
+
+	// delete the wal
+	if err := table.deleteWAl(); err != nil {
+		log.Println("delete wal failed:", err)
+		db.flushLock.Unlock()
+		return
+	}
+
+	// delete old memtable kept in memory
+	db.mu.Lock()
+	if len(db.immuMems) == 1 {
+		db.immuMems = db.immuMems[:0]
+	} else {
+		db.immuMems = db.immuMems[1:]
+	}
+	db.mu.Unlock()
+
+	db.flushLock.Unlock()
+}
+
+func (db *DB) listenMemtableFlush() {
 	sig := make(chan os.Signal, 1)
 	signal.Notify(sig, os.Interrupt, syscall.SIGHUP, syscall.SIGINT, syscall.SIGTERM, syscall.SIGQUIT)
 	for {
 		select {
 		case table := <-db.flushChan:
-			db.flushLock.Lock()
-			sklIter := table.skl.NewIterator()
-			var deletedKeys [][]byte
-			var logRecords []*ValueLogRecord
-			for sklIter.SeekToFirst(); sklIter.Valid(); sklIter.Next() {
-				key, valueStruct := y.ParseKey(sklIter.Key()), sklIter.Value()
-				if valueStruct.Meta == LogRecordDeleted {
-					deletedKeys = append(deletedKeys, key)
-				} else {
-					logRecord := ValueLogRecord{key: key, value: valueStruct.Value}
-					logRecords = append(logRecords, &logRecord)
-				}
-			}
-			_ = sklIter.Close()
-
-			// write to value log, get the positions of keys
-			keyPos, err := db.vlog.writeBatch(logRecords)
-			if err != nil {
-				log.Println("vlog writeBatch failed:", err)
-				db.flushLock.Unlock()
-				continue
-			}
-			// sync the value log
-			if err := db.vlog.sync(); err != nil {
-				log.Println("vlog sync failed:", err)
-				db.flushLock.Unlock()
-				continue
-			}
-
-			// write all keys and positions to index
-			if err := db.index.PutBatch(keyPos); err != nil {
-				log.Println("index PutBatch failed:", err)
-				db.flushLock.Unlock()
-				continue
-			}
-			if err := db.index.DeleteBatch(deletedKeys); err != nil {
-				log.Println("index DeleteBatch failed:", err)
-				db.flushLock.Unlock()
-				continue
-			}
-			// sync the index
-			if err := db.index.Sync(); err != nil {
-				log.Println("index sync failed:", err)
-				db.flushLock.Unlock()
-				continue
-			}
-
-			// delete the wal
-			if err := table.deleteWAl(); err != nil {
-				log.Println("delete wal failed:", err)
-				db.flushLock.Unlock()
-				continue
-			}
-
-			// delete old memtable kept in memory
-			db.mu.Lock()
-			if len(db.immuMems) == 1 {
-				db.immuMems = db.immuMems[:0]
-			} else {
-				db.immuMems = db.immuMems[1:]
-			}
-			db.mu.Unlock()
-
-			db.flushLock.Unlock()
-
+			db.flushMemtable(table)
 		case <-sig:
 			return
 		}

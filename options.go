@@ -16,7 +16,7 @@ type Options struct {
 	MemtableSize uint32
 
 	// MemtableNums represents maximum number of memtables to keep in memory before flushing.
-	// Default value is 5.
+	// Default value is 15.
 	MemtableNums int
 
 	// BlockCache specifies the size of the block cache in number of bytes.
@@ -108,14 +108,14 @@ var DefaultOptions = Options{
 	DirPath:           tempDBDir(),
 	MemtableSize:      64 * MB,
 	MemtableNums:      15,
-	BlockCache:        64 * MB,
+	BlockCache:        0,
 	Sync:              false,
 	BytesPerSync:      0,
 	PartitionNum:      3,
 	KeyHashFunction:   xxhash.Sum64,
 	ValueLogFileSize:  1 * GB,
 	IndexType:         BTree,
-	CompactBatchCount: 2 << 20,
+	CompactBatchCount: 10000,
 }
 
 var DefaultBatchOptions = BatchOptions{

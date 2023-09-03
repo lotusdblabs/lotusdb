@@ -5,7 +5,6 @@ LotusDB is a fast k/v database compatible with LSM tree and B+ tree, optimizatio
 Key features:
 
 * **Combine the advantages of LSM and B+ tree**
-
 * **Fast read/write performance**
 * **Much lower read and space amplification than typical LSM**
 

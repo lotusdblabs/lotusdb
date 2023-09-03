@@ -21,6 +21,7 @@ const (
 	// for example, the wal file name of memtable with id 1 is .SEG.1
 	walFileExt     = ".SEG.%d"
 	initialTableID = 1
+	arenaExtraSize = 50000
 )
 
 type (
@@ -47,7 +48,6 @@ type (
 		dirPath         string // where write ahead log wal file is stored
 		tableId         uint32 // unique id of the memtable, used to generate wal file name
 		memSize         uint32 // max size of the memtable
-		maxBatchSize    int64  // max entries size of a single batch
 		walBytesPerSync uint32 // flush wal file to disk throughput BytesPerSync parameter
 		walSync         bool   // WAL flush immediately after each writing
 		walBlockCache   uint32 // block cache size of wal
@@ -86,7 +86,6 @@ func openAllMemtables(options Options) ([]*memtable, error) {
 			dirPath:         options.DirPath,
 			tableId:         uint32(table),
 			memSize:         options.MemtableSize,
-			maxBatchSize:    1000, // todo
 			walSync:         options.Sync,
 			walBytesPerSync: options.BytesPerSync,
 			walBlockCache:   options.BlockCache,
@@ -105,10 +104,10 @@ func openAllMemtables(options Options) ([]*memtable, error) {
 // and load all entries from wal to rebuild the content of the skip list.
 func openMemtable(options memtableOptions) (*memtable, error) {
 	// init skip list
-	skl := arenaskl.NewSkiplist(int64(options.memSize) + options.maxBatchSize)
+	skl := arenaskl.NewSkiplist(int64(options.memSize) + arenaExtraSize)
 	table := &memtable{options: options, skl: skl}
 
-	// open the corresponding Write Ahead Log file
+	// open the Write Ahead Log file
 	walFile, err := wal.Open(wal.Options{
 		DirPath:        options.dirPath,
 		SegmentSize:    math.MaxInt, // no limit, guarantee that a wal file only contains one segment file
@@ -205,7 +204,7 @@ func (mt *memtable) get(key []byte) (bool, []byte) {
 }
 
 func (mt *memtable) isFull() bool {
-	return mt.skl.MemSize()+mt.options.maxBatchSize >= int64(mt.options.memSize)
+	return mt.skl.MemSize() >= int64(mt.options.memSize)
 }
 
 func (mt *memtable) deleteWAl() error {

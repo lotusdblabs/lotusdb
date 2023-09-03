@@ -12,7 +12,9 @@ func TestDirSize(t *testing.T) {
 	dirPath, err := os.MkdirTemp("", "db-test-DirSize")
 	assert.Nil(t, err)
 
-	defer os.RemoveAll(dirPath)
+	defer func() {
+		_ = os.RemoveAll(dirPath)
+	}()
 
 	err = os.MkdirAll(dirPath, os.ModePerm)
 	assert.Nil(t, err)
