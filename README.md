@@ -44,7 +44,7 @@ func main() {
 		panic(err)
 	}
 
-	// Read Key-Value
+	// Get Key-Value
 	value, err = db.Get(key)
 	if err != nil {
 		panic(err)
