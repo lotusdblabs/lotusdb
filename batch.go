@@ -3,6 +3,7 @@ package lotusdb
 import (
 	"fmt"
 	"sync"
+	"unsafe"
 
 	"github.com/bwmarrin/snowflake"
 )
@@ -106,7 +107,8 @@ func (b *Batch) Put(key []byte, value []byte) error {
 
 	b.mu.Lock()
 	// write to pendingWrites
-	b.pendingWrites[string(key)] = &LogRecord{
+	keyS := *(*string)(unsafe.Pointer(&key))
+	b.pendingWrites[keyS] = &LogRecord{
 		Key:   key,
 		Value: value,
 		Type:  LogRecordNormal,
@@ -128,7 +130,8 @@ func (b *Batch) Get(key []byte) ([]byte, error) {
 	// get from pendingWrites
 	if b.pendingWrites != nil {
 		b.mu.RLock()
-		if record := b.pendingWrites[string(key)]; record != nil {
+		keyS := *(*string)(unsafe.Pointer(&key))
+		if record := b.pendingWrites[keyS]; record != nil {
 			if record.Type == LogRecordDeleted {
 				b.mu.RUnlock()
 				return nil, ErrKeyNotFound
@@ -180,7 +183,8 @@ func (b *Batch) Delete(key []byte) error {
 	}
 
 	b.mu.Lock()
-	b.pendingWrites[string(key)] = &LogRecord{
+	keyS := *(*string)(unsafe.Pointer(&key))
+	b.pendingWrites[keyS] = &LogRecord{
 		Key:  key,
 		Type: LogRecordDeleted,
 	}
@@ -201,7 +205,8 @@ func (b *Batch) Exist(key []byte) (bool, error) {
 	// check if the key exists in pendingWrites
 	if b.pendingWrites != nil {
 		b.mu.RLock()
-		if record := b.pendingWrites[string(key)]; record != nil {
+		keyS := *(*string)(unsafe.Pointer(&key))
+		if record := b.pendingWrites[keyS]; record != nil {
 			b.mu.RUnlock()
 			return record.Type != LogRecordDeleted, nil
 		}
