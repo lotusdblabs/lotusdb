@@ -87,6 +87,17 @@ type WriteOptions struct {
 	DisableWal bool
 }
 
+var (
+	// just used for internal
+	defaultWriteOptions = WriteOptions{Sync: false, DisableWal: false}
+
+	// WriteReliable provides a default parameter set. Sync: true, DisableWal: false
+	WriteReliable = WriteOptions{Sync: true, DisableWal: false}
+
+	// WriteFast provides a default parameter set. Sync: false, DisableWal: true
+	WriteFast = WriteOptions{Sync: false, DisableWal: true}
+)
+
 // IteratorOptions is the options for the iterator.
 type IteratorOptions struct {
 	// Prefix filters the keys by prefix.

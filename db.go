@@ -171,7 +171,7 @@ func (db *DB) Sync() error {
 	return nil
 }
 
-func (db *DB) Put(key []byte, value []byte, options *WriteOptions) error {
+func (db *DB) Put(key []byte, value []byte, options WriteOptions) error {
 	batch := db.batchPool.Get().(*Batch)
 	defer func() {
 		batch.reset()
@@ -189,14 +189,14 @@ func (db *DB) Get(key []byte) ([]byte, error) {
 	batch := db.batchPool.Get().(*Batch)
 	batch.init(true, false, db)
 	defer func() {
-		_ = batch.Commit(nil)
+		_ = batch.Commit(defaultWriteOptions)
 		batch.reset()
 		db.batchPool.Put(batch)
 	}()
 	return batch.Get(key)
 }
 
-func (db *DB) Delete(key []byte, options *WriteOptions) error {
+func (db *DB) Delete(key []byte, options WriteOptions) error {
 	batch := db.batchPool.Get().(*Batch)
 	defer func() {
 		batch.reset()
@@ -214,7 +214,7 @@ func (db *DB) Exist(key []byte) (bool, error) {
 	batch := db.batchPool.Get().(*Batch)
 	batch.init(true, false, db)
 	defer func() {
-		_ = batch.Commit(nil)
+		_ = batch.Commit(defaultWriteOptions)
 		batch.reset()
 		db.batchPool.Put(batch)
 	}()
