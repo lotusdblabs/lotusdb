@@ -51,7 +51,7 @@ func TestValueLogWriteAllKindsEntries(t *testing.T) {
 		_ = os.RemoveAll(path)
 	}()
 
-	logs := []*ValueLogRecord{
+	logs := []ValueLogRecord{
 		{key: []byte("key 0"), value: []byte("value 0")},
 		{key: nil, value: []byte("value 2")},
 		{key: []byte("key 3"), value: nil},
@@ -66,19 +66,19 @@ func TestValueLogWriteAllKindsEntries(t *testing.T) {
 		wantErr bool
 	}{
 		{
-			"normal key-value", args{log: logs[0]}, false,
+			"normal key-value", args{log: &logs[0]}, false,
 		},
 		{
-			"nil key", args{log: logs[1]}, false,
+			"nil key", args{log: &logs[1]}, false,
 		},
 		{
-			"nil value", args{log: logs[2]}, false,
+			"nil value", args{log: &logs[2]}, false,
 		},
 	}
 
 	for _, tt := range tests {
 		t.Run(tt.name, func(t *testing.T) {
-			logs := []*ValueLogRecord{tt.args.log}
+			logs := []ValueLogRecord{*tt.args.log}
 			_, err := vlog.writeBatch(logs)
 			if (err != nil) != tt.wantErr {
 				t.Errorf("writeBatch() error = %v, wantErr = %v", err, tt.wantErr)
@@ -167,9 +167,9 @@ func writeBatch(opts valueLogOptions, numRW int, numPart int) error {
 	}
 
 	val := util.RandomValue(512)
-	var logs []*ValueLogRecord
+	var logs []ValueLogRecord
 	for i := 0; i < numRW; i++ {
-		log := &ValueLogRecord{key: util.GetTestKey(i), value: val}
+		log := ValueLogRecord{key: util.GetTestKey(i), value: val}
 		logs = append(logs, log)
 	}
 
@@ -198,7 +198,7 @@ func TestValueLogRead(t *testing.T) {
 		_ = os.RemoveAll(path)
 	}()
 
-	logs := []*ValueLogRecord{
+	logs := []ValueLogRecord{
 		{key: []byte("key 0"), value: []byte("value 0")},
 		{key: nil, value: []byte("value 2")},
 		{key: []byte("key 3"), value: nil},
@@ -218,13 +218,13 @@ func TestValueLogRead(t *testing.T) {
 		wantErr bool
 	}{
 		{
-			"normal key-value", args{log: logs[0]}, false,
+			"normal key-value", args{log: &logs[0]}, false,
 		},
 		{
-			"nil key", args{log: logs[1]}, false,
+			"nil key", args{log: &logs[1]}, false,
 		},
 		{
-			"nil value", args{log: logs[2]}, false,
+			"nil value", args{log: &logs[2]}, false,
 		},
 	}
 
@@ -263,7 +263,7 @@ func TestValueLogReadReopen(t *testing.T) {
 		_ = os.RemoveAll(path)
 	}()
 
-	logs := []*ValueLogRecord{
+	logs := []ValueLogRecord{
 		{key: []byte("key 0"), value: []byte("value 0")},
 		{key: nil, value: []byte("value 2")},
 		{key: []byte("key 3"), value: nil},
@@ -310,7 +310,7 @@ func TestValueLogSync(t *testing.T) {
 	vlog, err := openValueLog(opts)
 	assert.Nil(t, err)
 
-	_, err = vlog.writeBatch([]*ValueLogRecord{{key: []byte("key"), value: []byte("value")}})
+	_, err = vlog.writeBatch([]ValueLogRecord{{key: []byte("key"), value: []byte("value")}})
 	assert.Nil(t, err)
 
 	t.Run("test value log sync", func(t *testing.T) {
@@ -374,11 +374,11 @@ func TestValueLogMultiSegmentFiles(t *testing.T) {
 			vlog, err := openValueLog(opts)
 			assert.Nil(t, err)
 
-			var logs []*ValueLogRecord
+			var logs []ValueLogRecord
 			numLogs := (tt.wantNumSeg - 0.5) * 100
 			for i := 0; i < int(numLogs); i++ {
 				// the size of a logRecord is about 1MB (a little bigger than 1MB due to encode)
-				log := &ValueLogRecord{key: util.RandomValue(2 << 18), value: util.RandomValue(2 << 18)}
+				log := ValueLogRecord{key: util.RandomValue(2 << 18), value: util.RandomValue(2 << 18)}
 				logs = append(logs, log)
 			}
 

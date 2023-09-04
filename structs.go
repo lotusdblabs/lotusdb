@@ -119,11 +119,11 @@ func encodeValueLogRecord(record *ValueLogRecord) []byte {
 	return buf
 }
 
-func decodeValueLogRecord(buf []byte) *ValueLogRecord {
+func decodeValueLogRecord(buf []byte) (klr ValueLogRecord) {
 	keyLen := binary.LittleEndian.Uint32(buf[:4])
-	key := make([]byte, keyLen)
-	copy(key, buf[4:4+keyLen])
-	value := make([]byte, uint32(len(buf))-keyLen-4)
-	copy(value, buf[4+keyLen:])
-	return &ValueLogRecord{key: key, value: value}
+	klr.key = make([]byte, keyLen)
+	copy(klr.key, buf[4:4+keyLen])
+	klr.value = make([]byte, uint32(len(buf))-keyLen-4)
+	copy(klr.value, buf[4+keyLen:])
+	return
 }

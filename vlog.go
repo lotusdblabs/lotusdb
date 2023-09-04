@@ -62,17 +62,17 @@ func openValueLog(options valueLogOptions) (*valueLog, error) {
 	return &valueLog{walFiles: walFiles, options: options}, nil
 }
 
-func (vlog *valueLog) read(pos *KeyPosition) (*ValueLogRecord, error) {
+func (vlog *valueLog) read(pos *KeyPosition) (ValueLogRecord, error) {
 	buf, err := vlog.walFiles[pos.partition].Read(pos.position)
 	if err != nil {
-		return nil, err
+		return ValueLogRecord{}, err
 	}
 	log := decodeValueLogRecord(buf)
 	return log, nil
 }
 
-func (vlog *valueLog) writeBatch(records []*ValueLogRecord) ([]*KeyPosition, error) {
-	partitionRecords := make([][]*ValueLogRecord, vlog.options.partitionNum)
+func (vlog *valueLog) writeBatch(records []ValueLogRecord) ([]*KeyPosition, error) {
+	partitionRecords := make([][]ValueLogRecord, vlog.options.partitionNum)
 	for _, record := range records {
 		p := vlog.getKeyPartition(record.key)
 		partitionRecords[p] = append(partitionRecords[p], record)
@@ -89,7 +89,8 @@ func (vlog *valueLog) writeBatch(records []*ValueLogRecord) ([]*KeyPosition, err
 		part := i
 		g.Go(func() error {
 			var positions []*KeyPosition
-			for _, record := range partitionRecords[part] {
+			for i := range partitionRecords[part] {
+				record := &partitionRecords[part][i]
 				select {
 				case <-ctx.Done():
 					posChan <- nil

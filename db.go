@@ -284,7 +284,7 @@ func (db *DB) flushMemtable(table *memtable) {
 	db.flushLock.Lock()
 	sklIter := table.skl.NewIterator()
 	var deletedKeys [][]byte
-	var logRecords []*ValueLogRecord
+	var logRecords []ValueLogRecord
 
 	// iterate all records in memtable, divide them into deleted keys and log records
 	for sklIter.SeekToFirst(); sklIter.Valid(); sklIter.Next() {
@@ -293,7 +293,7 @@ func (db *DB) flushMemtable(table *memtable) {
 			deletedKeys = append(deletedKeys, key)
 		} else {
 			logRecord := ValueLogRecord{key: key, value: valueStruct.Value}
-			logRecords = append(logRecords, &logRecord)
+			logRecords = append(logRecords, logRecord)
 		}
 	}
 	_ = sklIter.Close()
@@ -391,7 +391,7 @@ func (db *DB) Compact() error {
 		g.Go(func() error {
 			newVlogFile := openVlogFile(part, tempValueLogFileExt)
 
-			validRecords := make([]*ValueLogRecord, 0, db.vlog.options.compactBatchCount)
+			validRecords := make([]ValueLogRecord, 0, db.vlog.options.compactBatchCount)
 			reader := db.vlog.walFiles[part].NewReader()
 			var count = 0
 			// iterate all records in wal, find the valid records
@@ -453,9 +453,10 @@ func (db *DB) Compact() error {
 	return g.Wait()
 }
 
-func (db *DB) rewriteValidRecords(walFile *wal.WAL, validRecords []*ValueLogRecord, part int) error {
+func (db *DB) rewriteValidRecords(walFile *wal.WAL, validRecords []ValueLogRecord, part int) error {
 	var positions []*KeyPosition
-	for _, record := range validRecords {
+	for i := range validRecords {
+		record := &validRecords[i]
 		pos, err := walFile.Write(encodeValueLogRecord(record))
 		if err != nil {
 			return err
