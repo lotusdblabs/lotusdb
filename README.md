@@ -12,8 +12,8 @@ Key features:
 
 ![](https://github.com/lotusdblabs/lotusdb/blob/main/resource/img/design-overview.png)
 
-## Use Example
-```
+## Getting Started
+```go
 package main
 
 import "github.com/lotusdblabs/lotusdb/v2"
