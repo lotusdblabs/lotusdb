@@ -120,10 +120,7 @@ func TestDBPut(t *testing.T) {
 
 	for _, tt := range tests {
 		t.Run(tt.name, func(t *testing.T) {
-			err = db.Put(tt.args.log.key, tt.args.log.value, &WriteOptions{
-				Sync:       true,
-				DisableWal: false,
-			})
+			err = db.Put(tt.args.log.key, tt.args.log.value, WriteReliable)
 			if (err != nil) != tt.wantErr {
 				t.Errorf("writeBatch() error = %v, wantErr = %v", err, tt.wantErr)
 			}
@@ -181,10 +178,7 @@ func TestDBGet(t *testing.T) {
 	}
 
 	for _, log := range logs {
-		err := db.Put(log.key, log.value, &WriteOptions{
-			Sync:       true,
-			DisableWal: false,
-		})
+		err := db.Put(log.key, log.value, WriteReliable)
 		assert.Equal(t, err != nil, log.wantErr)
 	}
 
@@ -243,19 +237,13 @@ func TestDBDelete(t *testing.T) {
 	}
 
 	for _, log := range logs {
-		err := db.Put(log.key, log.value, &WriteOptions{
-			Sync:       true,
-			DisableWal: false,
-		})
+		err := db.Put(log.key, log.value, WriteReliable)
 		assert.Nil(t, err)
 	}
 
 	for _, tt := range tests {
 		t.Run(tt.name, func(t *testing.T) {
-			err := db.Delete(tt.args.log.key, &WriteOptions{
-				Sync:       true,
-				DisableWal: false,
-			})
+			err := db.Delete(tt.args.log.key, WriteReliable)
 			if (err != nil) != tt.wantErr {
 				t.Errorf("Get(key) error = %v, wantErr = %v", err, tt.wantErr)
 			}
@@ -316,10 +304,7 @@ func TestDBExist(t *testing.T) {
 	}
 
 	for _, log := range logs {
-		err := db.Put(log.key, log.value, &WriteOptions{
-			Sync:       true,
-			DisableWal: false,
-		})
+		err := db.Put(log.key, log.value, WriteReliable)
 		assert.Equal(t, err != nil, log.wantErr)
 	}
 
@@ -359,18 +344,12 @@ func TestDBFlushMemTables(t *testing.T) {
 		{key: []byte("key 2"), value: []byte("value 2")},
 	}
 	for _, log := range logs {
-		_ = db.Put(log.key, log.value, &WriteOptions{
-			Sync:       true,
-			DisableWal: false,
-		})
+		_ = db.Put(log.key, log.value, WriteReliable)
 	}
 	for i := 0; i < numLogs; i++ {
 		// the size of a logRecord is about 1MB (a little bigger than 1MB due to encode)
 		log := &testLog{key: util.RandomValue(2 << 18), value: util.RandomValue(2 << 18)}
-		_ = db.Put(log.key, log.value, &WriteOptions{
-			Sync:       true,
-			DisableWal: false,
-		})
+		_ = db.Put(log.key, log.value, WriteReliable)
 	}
 
 	t.Run("test flushMemtables", func(t *testing.T) {
@@ -406,10 +385,7 @@ func TestDBCompact(t *testing.T) {
 		{key: []byte("key 2"), value: []byte("value 2")},
 	}
 	for _, log := range testlogs {
-		_ = db.Put(log.key, log.value, &WriteOptions{
-			Sync:       true,
-			DisableWal: false,
-		})
+		_ = db.Put(log.key, log.value, WriteReliable)
 	}
 
 	numLogs := 64
@@ -420,16 +396,10 @@ func TestDBCompact(t *testing.T) {
 		logs = append(logs, log)
 	}
 	for _, log := range logs {
-		_ = db.Put(log.key, log.value, &WriteOptions{
-			Sync:       true,
-			DisableWal: false,
-		})
+		_ = db.Put(log.key, log.value, WriteReliable)
 	}
 	for _, log := range logs {
-		_ = db.Delete(log.key, &WriteOptions{
-			Sync:       true,
-			DisableWal: false,
-		})
+		_ = db.Delete(log.key, WriteReliable)
 	}
 
 	t.Run("test compaction", func(t *testing.T) {
@@ -501,10 +471,7 @@ func TestDBMultiClients(t *testing.T) {
 			wg.Add(1)
 			go func(i int) {
 				for _, log := range logs[i] {
-					_ = db.Put(log.key, log.value, &WriteOptions{
-						Sync:       true,
-						DisableWal: false,
-					})
+					_ = db.Put(log.key, log.value, WriteReliable)
 					time.Sleep(time.Millisecond * 5)
 				}
 				wg.Done()
@@ -528,10 +495,7 @@ func TestDBMultiClients(t *testing.T) {
 			wg.Add(1)
 			go func(i int) {
 				for _, log := range logs[i] {
-					_ = db.Delete(log.key, &WriteOptions{
-						Sync:       true,
-						DisableWal: false,
-					})
+					_ = db.Delete(log.key, WriteReliable)
 					time.Sleep(time.Millisecond * 5)
 				}
 				wg.Done()
