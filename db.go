@@ -189,7 +189,7 @@ func (db *DB) Get(key []byte) ([]byte, error) {
 	batch := db.batchPool.Get().(*Batch)
 	batch.init(true, false, db)
 	defer func() {
-		_ = batch.Commit(defaultWriteOptions)
+		_ = batch.Commit(DefaultWriteOptions)
 		batch.reset()
 		db.batchPool.Put(batch)
 	}()
@@ -214,7 +214,7 @@ func (db *DB) Exist(key []byte) (bool, error) {
 	batch := db.batchPool.Get().(*Batch)
 	batch.init(true, false, db)
 	defer func() {
-		_ = batch.Commit(defaultWriteOptions)
+		_ = batch.Commit(DefaultWriteOptions)
 		batch.reset()
 		db.batchPool.Put(batch)
 	}()

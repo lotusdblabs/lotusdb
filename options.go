@@ -89,7 +89,7 @@ type WriteOptions struct {
 
 var (
 	// just used for internal
-	defaultWriteOptions = WriteOptions{Sync: false, DisableWal: false}
+	DefaultWriteOptions = WriteOptions{Sync: false, DisableWal: false}
 
 	// WriteReliable provides a default parameter set. Sync: true, DisableWal: false
 	WriteReliable = WriteOptions{Sync: true, DisableWal: false}
