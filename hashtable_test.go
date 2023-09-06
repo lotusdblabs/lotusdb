@@ -78,11 +78,11 @@ func TestOpenHashTable(t *testing.T) {
 }
 
 func TestHashTable_PutBatch(t *testing.T) {
-	testhashtablePutbatch(t, 1)
-	testhashtablePutbatch(t, 3)
+	testHashTablePutBatch(t, 1)
+	testHashTablePutBatch(t, 3)
 }
 
-func testhashtablePutbatch(t *testing.T, partitionNum int) {
+func testHashTablePutBatch(t *testing.T, partitionNum int) {
 	options := indexOptions{
 		indexType:       Hash,
 		dirPath:         filepath.Join(os.TempDir(), "hashtable-putBatch-"+strconv.Itoa(partitionNum)),
@@ -131,12 +131,12 @@ func testhashtablePutbatch(t *testing.T, partitionNum int) {
 }
 
 func TestHashTable_Get(t *testing.T) {
-	testhashtableGet(t, 1)
-	testhashtableGet(t, 3)
+	testHashTableGet(t, 1)
+	testHashTableGet(t, 3)
 
 }
 
-func testhashtableGet(t *testing.T, partitionNum int) {
+func testHashTableGet(t *testing.T, partitionNum int) {
 	options := indexOptions{
 		indexType:       Hash,
 		dirPath:         filepath.Join(os.TempDir(), "hashtable-get-"+strconv.Itoa(partitionNum)),
@@ -184,11 +184,11 @@ func testhashtableGet(t *testing.T, partitionNum int) {
 }
 
 func TestHashTable_DeleteBatch(t *testing.T) {
-	testhashtableDeletebatch(t, 1)
-	testhashtableDeletebatch(t, 3)
+	testHashTableDeleteBatch(t, 1)
+	testHashTableDeleteBatch(t, 3)
 }
 
-func testhashtableDeletebatch(t *testing.T, partitionNum int) {
+func testHashTableDeleteBatch(t *testing.T, partitionNum int) {
 	options := indexOptions{
 		indexType:       Hash,
 		dirPath:         filepath.Join(os.TempDir(), "hashtable-deleteBatch-"+strconv.Itoa(partitionNum)),
@@ -236,11 +236,11 @@ func testhashtableDeletebatch(t *testing.T, partitionNum int) {
 }
 
 func TestHashTable_Close(t *testing.T) {
-	testhashtableClose(t, 1)
-	testhashtableClose(t, 3)
+	testHashTableClose(t, 1)
+	testHashTableClose(t, 3)
 }
 
-func testhashtableClose(t *testing.T, partitionNum int) {
+func testHashTableClose(t *testing.T, partitionNum int) {
 	options := indexOptions{
 		indexType:       Hash,
 		dirPath:         filepath.Join(os.TempDir(), "hashtable-close-"+strconv.Itoa(partitionNum)),
@@ -262,11 +262,11 @@ func testhashtableClose(t *testing.T, partitionNum int) {
 }
 
 func TestHashTable_Sync(t *testing.T) {
-	testhashtableSync(t, 1)
-	testhashtableSync(t, 3)
+	testHashTableSync(t, 1)
+	testHashTableSync(t, 3)
 }
 
-func testhashtableSync(t *testing.T, partitionNum int) {
+func testHashTableSync(t *testing.T, partitionNum int) {
 	options := indexOptions{
 		indexType:       Hash,
 		dirPath:         filepath.Join(os.TempDir(), "hashtable-sync-"+strconv.Itoa(partitionNum)),

@@ -5,7 +5,7 @@ go 1.19
 require (
 	github.com/bwmarrin/snowflake v0.3.0
 	github.com/dgraph-io/badger/v4 v4.1.0
-	github.com/rosedblabs/wal v1.3.4-0.20230903095514-51f5de6bb0d3
+	github.com/rosedblabs/wal v1.3.4-0.20230906004724-a604ff62b6ee
 	github.com/spaolacci/murmur3 v1.1.0
 	github.com/stretchr/testify v1.8.4
 )
@@ -30,7 +30,7 @@ require (
 	github.com/gofrs/flock v0.8.1
 	github.com/gogo/protobuf v1.3.2 // indirect
 	github.com/golang/glog v1.1.1 // indirect
-	github.com/hashicorp/golang-lru/v2 v2.0.4 // indirect
+	github.com/hashicorp/golang-lru/v2 v2.0.6 // indirect
 	github.com/klauspost/compress v1.16.7 // indirect
 	github.com/pkg/errors v0.9.1 // indirect
 	github.com/rosedblabs/diskhash v0.0.0-20230825144203-2d051ecdb9a5

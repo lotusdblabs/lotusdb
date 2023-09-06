@@ -31,7 +31,7 @@ type valueLogOptions struct {
 	// If BlockCache is set to 0, no block cache will be used.
 	blockCache uint32
 
-	// value log are partioned to serveral parts for concurrent writing and reading
+	// value log are partitioned to several parts for concurrent writing and reading
 	partitionNum uint32
 
 	// hash function for sharding

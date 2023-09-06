@@ -6,7 +6,6 @@ import (
 	"errors"
 	"fmt"
 	"path/filepath"
-	"sync"
 
 	"github.com/rosedblabs/diskhash"
 	"github.com/rosedblabs/wal"
@@ -21,20 +20,14 @@ const slotValueLength = binary.MaxVarintLen32*3 + binary.MaxVarintLen64
 // HashTable is the diskhash index implementation.
 // see: https://github.com/rosedblabs/diskhash
 type HashTable struct {
-	options     indexOptions
-	tables      []*diskhash.Table
-	bytesBuffer *sync.Pool
+	options indexOptions
+	tables  []*diskhash.Table
 }
 
 // openHashIndex open a diskhash for each partition.
 // The partition number is specified by the index options.
 func openHashIndex(options indexOptions) (*HashTable, error) {
 	tables := make([]*diskhash.Table, options.partitionNum)
-	bytesBuffer := &sync.Pool{
-		New: func() any {
-			return make([]byte, slotValueLength)
-		},
-	}
 
 	for i := 0; i < options.partitionNum; i++ {
 		dishHashOptions := diskhash.DefaultOptions
@@ -48,9 +41,8 @@ func openHashIndex(options indexOptions) (*HashTable, error) {
 	}
 
 	return &HashTable{
-		options:     options,
-		tables:      tables,
-		bytesBuffer: bytesBuffer,
+		options: options,
+		tables:  tables,
 	}, nil
 }
 
@@ -89,12 +81,10 @@ func (ht *HashTable) PutBatch(positions []*KeyPosition) error {
 						}
 						return false, nil
 					}
-					encPos := ht.bytesBuffer.Get().([]byte)
-					copy(encPos, record.position.Encode())
+					encPos := record.position.EncodeFixedSize()
 					if err := table.Put(record.key, encPos, matchKey); err != nil {
 						return err
 					}
-					ht.bytesBuffer.Put(&encPos)
 				}
 			}
 			return nil
