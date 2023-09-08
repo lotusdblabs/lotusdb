@@ -97,24 +97,46 @@ func (vlog *valueLog) writeBatch(records []*ValueLogRecord) ([]*KeyPosition, err
 		part := i
 		g.Go(func() error {
 			var positions []*KeyPosition
-			for _, record := range partitionRecords[part] {
+			writeIdx := 0
+			for idx, record := range partitionRecords[part] {
 				select {
 				case <-ctx.Done():
 					posChan <- nil
 					return ctx.Err()
 				default:
-					pos, err := vlog.walFiles[part].Write(encodeValueLogRecord(record))
+					err := vlog.walFiles[part].PendingWrites(encodeValueLogRecord(record))
 					if err != nil {
-						posChan <- nil
-						return err
+						if err != wal.ErrPendingSizeTooLarge {
+							posChan <- nil
+							return err
+						}
+						pos, err := vlog.walFiles[part].WriteALL()
+						if err != nil {
+							posChan <- nil
+							return err
+						}
+						for i, p := range pos {
+							positions = append(positions, &KeyPosition{
+								key:       partitionRecords[part][writeIdx+i].key,
+								partition: uint32(part),
+								position:  p,
+							})
+						}
+						writeIdx = idx + 1
 					}
-					positions = append(positions, &KeyPosition{
-						key:       record.key,
-						partition: uint32(part),
-						position:  pos},
-					)
 				}
-
+			}
+			pos, err := vlog.walFiles[part].WriteALL()
+			if err != nil {
+				posChan <- nil
+				return err
+			}
+			for i, p := range pos {
+				positions = append(positions, &KeyPosition{
+					key:       partitionRecords[part][writeIdx+i].key,
+					partition: uint32(part),
+					position:  p,
+				})
 			}
 			posChan <- positions
 			return nil
