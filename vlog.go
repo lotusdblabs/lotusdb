@@ -3,6 +3,7 @@ package lotusdb
 import (
 	"context"
 	"fmt"
+
 	"github.com/rosedblabs/wal"
 	"golang.org/x/sync/errgroup"
 )
@@ -41,6 +42,8 @@ type valueLogOptions struct {
 	compactBatchCount int
 }
 
+// open wal files for value log, it will open several wal files for concurrent writing and reading
+// the number of wal files is specified by the partitionNum
 func openValueLog(options valueLogOptions) (*valueLog, error) {
 	var walFiles []*wal.WAL
 
@@ -62,6 +65,7 @@ func openValueLog(options valueLogOptions) (*valueLog, error) {
 	return &valueLog{walFiles: walFiles, options: options}, nil
 }
 
+// read the value log record from the specified position
 func (vlog *valueLog) read(pos *KeyPosition) (*ValueLogRecord, error) {
 	buf, err := vlog.walFiles[pos.partition].Read(pos.position)
 	if err != nil {
@@ -71,13 +75,17 @@ func (vlog *valueLog) read(pos *KeyPosition) (*ValueLogRecord, error) {
 	return log, nil
 }
 
+// write the value log record to the value log, it will be separated to several partitions
+// and write to the corresponding partition concurrently.
 func (vlog *valueLog) writeBatch(records []*ValueLogRecord) ([]*KeyPosition, error) {
+	// group the records by partition
 	partitionRecords := make([][]*ValueLogRecord, vlog.options.partitionNum)
 	for _, record := range records {
 		p := vlog.getKeyPartition(record.key)
 		partitionRecords[p] = append(partitionRecords[p], record)
 	}
 
+	// channel for receiving the positions of the records after writing to the value log
 	posChan := make(chan []*KeyPosition, vlog.options.partitionNum)
 	g, ctx := errgroup.WithContext(context.Background())
 	for i := 0; i < int(vlog.options.partitionNum); i++ {
@@ -113,8 +121,8 @@ func (vlog *valueLog) writeBatch(records []*ValueLogRecord) ([]*KeyPosition, err
 		})
 	}
 
+	// nwo we get the positions of the records, we can return them to the caller
 	var keyPositions []*KeyPosition
-
 	for i := 0; i < int(vlog.options.partitionNum); i++ {
 		pos := <-posChan
 		keyPositions = append(keyPositions, pos...)
@@ -127,6 +135,7 @@ func (vlog *valueLog) writeBatch(records []*ValueLogRecord) ([]*KeyPosition, err
 	return keyPositions, nil
 }
 
+// sync the value log to disk
 func (vlog *valueLog) sync() error {
 	for _, walFile := range vlog.walFiles {
 		if err := walFile.Sync(); err != nil {
@@ -136,6 +145,7 @@ func (vlog *valueLog) sync() error {
 	return nil
 }
 
+// close the value log
 func (vlog *valueLog) close() error {
 	for _, walFile := range vlog.walFiles {
 		if err := walFile.Close(); err != nil {

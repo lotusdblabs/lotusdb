@@ -28,6 +28,9 @@ type Index interface {
 	Close() error
 }
 
+// open the specified index according to the index type
+// currently, we support two index types: BTree and Hash,
+// both of them are disk-based index.
 func openIndex(options indexOptions) (Index, error) {
 	switch options.indexType {
 	case BTree:
@@ -44,7 +47,8 @@ type IndexType int8
 const (
 	// BTree is the BoltDB index type.
 	BTree IndexType = iota
-	// Hash is the diskhash index type. see: https://github.com/rosedblabs/diskhash
+	// Hash is the diskhash index type.
+	// see: https://github.com/rosedblabs/diskhash
 	Hash
 )
 

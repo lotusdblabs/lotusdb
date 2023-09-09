@@ -11,7 +11,7 @@ import (
 )
 
 // bucket name for bolt db to store index data
-var boltBucketName = []byte("lotusdb-index")
+var indexBucketName = []byte("lotusdb-index")
 
 // BPTree is the BoltDB index implementation.
 type BPTree struct {
@@ -45,7 +45,7 @@ func openBTreeIndex(options indexOptions) (*BPTree, error) {
 		if err != nil {
 			return nil, err
 		}
-		if _, err := tx.CreateBucketIfNotExists(boltBucketName); err != nil {
+		if _, err := tx.CreateBucketIfNotExists(indexBucketName); err != nil {
 			return nil, err
 		}
 		if err := tx.Commit(); err != nil {
@@ -57,13 +57,14 @@ func openBTreeIndex(options indexOptions) (*BPTree, error) {
 	return &BPTree{trees: trees, options: options}, nil
 }
 
+// Get gets the position of the specified key.
 func (bt *BPTree) Get(key []byte) (*KeyPosition, error) {
 	p := bt.options.getKeyPartition(key)
 	tree := bt.trees[p]
 	var keyPos *KeyPosition
 
 	if err := tree.View(func(tx *bbolt.Tx) error {
-		bucket := tx.Bucket(boltBucketName)
+		bucket := tx.Bucket(indexBucketName)
 		value := bucket.Get(key)
 		if len(value) != 0 {
 			keyPos = new(KeyPosition)
@@ -78,11 +79,13 @@ func (bt *BPTree) Get(key []byte) (*KeyPosition, error) {
 	return keyPos, nil
 }
 
+// PutBatch puts the specified key positions into the index.
 func (bt *BPTree) PutBatch(positions []*KeyPosition) error {
 	if len(positions) == 0 {
 		return nil
 	}
 
+	// group positions by partition
 	partitionRecords := make([][]*KeyPosition, bt.options.partitionNum)
 	for _, pos := range positions {
 		p := pos.partition
@@ -99,7 +102,7 @@ func (bt *BPTree) PutBatch(positions []*KeyPosition) error {
 			// get the bolt db instance for this partition
 			tree := bt.trees[partition]
 			return tree.Update(func(tx *bbolt.Tx) error {
-				bucket := tx.Bucket(boltBucketName)
+				bucket := tx.Bucket(indexBucketName)
 				// put each record into the bucket
 				for _, record := range partitionRecords[partition] {
 					select {
@@ -119,16 +122,20 @@ func (bt *BPTree) PutBatch(positions []*KeyPosition) error {
 	return g.Wait()
 }
 
+// DeleteBatch deletes the specified keys from the index.
 func (bt *BPTree) DeleteBatch(keys [][]byte) error {
 	if len(keys) == 0 {
 		return nil
 	}
 
+	// group keys by partition
 	partitionKeys := make([][][]byte, bt.options.partitionNum)
 	for _, key := range keys {
 		p := bt.options.getKeyPartition(key)
 		partitionKeys[p] = append(partitionKeys[p], key)
 	}
+
+	// delete keys from each partition
 	g, ctx := errgroup.WithContext(context.Background())
 	for i := range partitionKeys {
 		partition := i
@@ -139,7 +146,7 @@ func (bt *BPTree) DeleteBatch(keys [][]byte) error {
 			tree := bt.trees[partition]
 			return tree.Update(func(tx *bbolt.Tx) error {
 				// get the bolt db instance for this partition
-				bucket := tx.Bucket(boltBucketName)
+				bucket := tx.Bucket(indexBucketName)
 				// delete each key from the bucket
 				for _, key := range partitionKeys[partition] {
 					select {
@@ -158,6 +165,9 @@ func (bt *BPTree) DeleteBatch(keys [][]byte) error {
 	return g.Wait()
 }
 
+// Close releases all boltdb database resources.
+// It will block waiting for any open transactions to finish
+// before closing the database and returning.
 func (bt *BPTree) Close() error {
 	for _, tree := range bt.trees {
 		err := tree.Close()
@@ -168,6 +178,7 @@ func (bt *BPTree) Close() error {
 	return nil
 }
 
+// Sync executes fdatasync() against the database file handle.
 func (bt *BPTree) Sync() error {
 	for _, tree := range bt.trees {
 		err := tree.Sync()
