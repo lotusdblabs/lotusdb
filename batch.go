@@ -257,7 +257,7 @@ func (b *Batch) Commit(options *WriteOptions) error {
 	}
 
 	// wait for memtable space
-	if err := b.db.waitMemetableSpace(); err != nil {
+	if err := b.db.waitMemtableSpace(); err != nil {
 		return err
 	}
 	batchId := b.batchId.Generate()

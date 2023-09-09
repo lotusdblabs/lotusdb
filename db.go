@@ -24,20 +24,38 @@ const (
 	fileLockName = "FLOCK"
 )
 
+// DB is the main structure of the LotusDB database.
+// It contains all the information needed to operate the database.
+//
+// DB is thread-safe, and can be used by multiple goroutines.
+// But you can not open multiple DBs with the same directory path at the same time.
+// ErrDatabaseIsUsing will be returned if you do so.
+//
+// LotusDB is the most advanced key-value database written in Go.
+// It combines the advantages of LSM tree and B+ tree, read and write are both very fast.
+// It is also very memory efficient, and can store billions of key-value pairs in a single machine.
 type DB struct {
-	activeMem *memtable    // Active memtable for writing.
-	immuMems  []*memtable  // Immutable memtables, waiting to be flushed to disk.
-	index     Index        // index is multi-partition bptree to store key and chunk position.
-	vlog      *valueLog    // vlog is the value log.
-	fileLock  *flock.Flock // fileLock to prevent multiple processes from using the same database directory.
-	flushChan chan *memtable
+	activeMem *memtable      // Active memtable for writing.
+	immuMems  []*memtable    // Immutable memtables, waiting to be flushed to disk.
+	index     Index          // index is multi-partition indexes to store key and chunk position.
+	vlog      *valueLog      // vlog is the value log.
+	fileLock  *flock.Flock   // fileLock to prevent multiple processes from using the same database directory.
+	flushChan chan *memtable // flushChan is used to notify the flush goroutine to flush memtable to disk.
+	flushLock sync.Mutex     // flushLock is to prevent flush running while compaction doesn't occur
 	mu        sync.RWMutex
 	closed    bool
 	options   Options
-	batchPool sync.Pool
-	flushLock sync.Mutex // flushLock is to prevent flush running while compaction doesn't occur
+	batchPool sync.Pool // batchPool is a pool of batch, to reduce the cost of memory allocation.
 }
 
+// Open a database with the specified options.
+// If the database directory does not exist, it will be created automatically.
+//
+// Multiple processes can not use the same database directory at the same time,
+// otherwise it will return ErrDatabaseIsUsing.
+//
+// It will first open the wal to rebuild the memtable, then open the index and value log.
+// Return the DB object if succeeded, otherwise return the error.
 func Open(options Options) (*DB, error) {
 	// check whether all options are valid
 	if err := validateOptions(&options); err != nil {
@@ -116,6 +134,9 @@ func Open(options Options) (*DB, error) {
 	return db, nil
 }
 
+// Close the database, close all data files and release file lock.
+// Set the closed flag to true.
+// The DB instance cannot be used after closing.
 func (db *DB) Close() error {
 	db.mu.Lock()
 	defer db.mu.Unlock()
@@ -146,6 +167,7 @@ func (db *DB) Close() error {
 	return nil
 }
 
+// Sync all data files to the underlying storage.
 func (db *DB) Sync() error {
 	db.mu.Lock()
 	defer db.mu.Unlock()
@@ -171,12 +193,18 @@ func (db *DB) Sync() error {
 	return nil
 }
 
+// Put a key-value pair into the database.
+// Actually, it will open a new batch and commit it.
+// You can think the batch has only one Put operation.
 func (db *DB) Put(key []byte, value []byte, options *WriteOptions) error {
 	batch := db.batchPool.Get().(*Batch)
 	defer func() {
 		batch.reset()
 		db.batchPool.Put(batch)
 	}()
+	// This is a single put operation, we can set Sync to false.
+	// Because the data will be written to the WAL,
+	// and the WAL file will be synced to disk according to the DB options.
 	batch.init(false, false, db).withPendingWrites()
 	if err := batch.Put(key, value); err != nil {
 		batch.unlock()
@@ -185,6 +213,9 @@ func (db *DB) Put(key []byte, value []byte, options *WriteOptions) error {
 	return batch.Commit(options)
 }
 
+// Get the value of the specified key from the database.
+// Actually, it will open a new batch and commit it.
+// You can think the batch has only one Get operation.
 func (db *DB) Get(key []byte) ([]byte, error) {
 	batch := db.batchPool.Get().(*Batch)
 	batch.init(true, false, db)
@@ -196,12 +227,18 @@ func (db *DB) Get(key []byte) ([]byte, error) {
 	return batch.Get(key)
 }
 
+// Delete the specified key from the database.
+// Actually, it will open a new batch and commit it.
+// You can think the batch has only one Delete operation.
 func (db *DB) Delete(key []byte, options *WriteOptions) error {
 	batch := db.batchPool.Get().(*Batch)
 	defer func() {
 		batch.reset()
 		db.batchPool.Put(batch)
 	}()
+	// This is a single delete operation, we can set Sync to false.
+	// Because the data will be written to the WAL,
+	// and the WAL file will be synced to disk according to the DB options.
 	batch.init(false, false, db).withPendingWrites()
 	if err := batch.Delete(key); err != nil {
 		batch.unlock()
@@ -210,6 +247,9 @@ func (db *DB) Delete(key []byte, options *WriteOptions) error {
 	return batch.Commit(options)
 }
 
+// Exist checks if the specified key exists in the database.
+// Actually, it will open a new batch and commit it.
+// You can think the batch has only one Exist operation.
 func (db *DB) Exist(key []byte) (bool, error) {
 	batch := db.batchPool.Get().(*Batch)
 	batch.init(true, false, db)
@@ -227,7 +267,7 @@ func validateOptions(options *Options) error {
 		return errors.New("hash index is not supported yet")
 	}
 	if options.DirPath == "" {
-		return errors.New("dir path is empty")
+		return errors.New("the database directory path can not be empty")
 	}
 	if options.MemtableSize <= 0 {
 		options.MemtableSize = 64 << 20 // 64MB
@@ -244,6 +284,8 @@ func validateOptions(options *Options) error {
 	return nil
 }
 
+// get all memtables, including active memtable and immutable memtables.
+// must be called with db.mu held.
 func (db *DB) getMemTables() []*memtable {
 	var tables []*memtable
 	tables = append(tables, db.activeMem)
@@ -256,30 +298,42 @@ func (db *DB) getMemTables() []*memtable {
 	return tables
 }
 
-func (db *DB) waitMemetableSpace() error {
+// waitMemtableSpace waits for space in the memtable.
+// If the active memtable is full, it will be flushed to disk by the background goroutine.
+// But if the flush speed is slower than the write speed, there may be no space in the memtable.
+// So the write operation will wait for space in the memtable, and the timeout is specified by WaitMemSpaceTimeout.
+func (db *DB) waitMemtableSpace() error {
 	if !db.activeMem.isFull() {
 		return nil
 	}
 
-	timer := time.NewTimer(100 * time.Millisecond)
+	timer := time.NewTimer(db.options.WaitMemSpaceTimeout)
 	defer timer.Stop()
 	select {
 	case db.flushChan <- db.activeMem:
 		db.immuMems = append(db.immuMems, db.activeMem)
 		options := db.activeMem.options
 		options.tableId++
+		// open a new memtable for writing
 		table, err := openMemtable(options)
 		if err != nil {
 			return err
 		}
 		db.activeMem = table
 	case <-timer.C:
-		return errors.New("wait memtable space to write failed")
+		return errors.New("wait memtable space timeout, try again later")
 	}
 
 	return nil
 }
 
+// flushMemtable flushes the specified memtable to disk.
+// Following steps will be done:
+// 1. Iterate all records in memtable, divide them into deleted keys and log records.
+// 2. Write the log records to value log, get the positions of keys.
+// 3. Write all keys and positions to index.
+// 4. Delete the deleted keys from index.
+// 5. Delete the wal.
 func (db *DB) flushMemtable(table *memtable) {
 	db.flushLock.Lock()
 	sklIter := table.skl.NewIterator()
@@ -319,6 +373,7 @@ func (db *DB) flushMemtable(table *memtable) {
 		db.flushLock.Unlock()
 		return
 	}
+	// delete the deleted keys from index
 	if err := db.index.DeleteBatch(deletedKeys); err != nil {
 		log.Println("index DeleteBatch failed:", err)
 		db.flushLock.Unlock()

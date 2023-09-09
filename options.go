@@ -2,6 +2,7 @@ package lotusdb
 
 import (
 	"os"
+	"time"
 
 	"github.com/cespare/xxhash/v2"
 )
@@ -55,6 +56,14 @@ type Options struct {
 
 	// writing entries to disk after reading the specified number of entries.
 	CompactBatchCount int
+
+	// WaitMemSpaceTimeout specifies the timeout for waiting for space in the memtable.
+	// When all memtables are full, it will be flushed to disk by the background goroutine.
+	// But if the flush speed is slower than the write speed, there may be no space in the memtable.
+	// So the write operation will wait for space in the memtable, and the timeout is specified by WaitMemSpaceTimeout.
+	// If the timeout is exceeded, the write operation will fail, you can try again later.
+	// Default value is 100ms.
+	WaitMemSpaceTimeout time.Duration
 }
 
 // BatchOptions specifies the options for creating a batch.
@@ -105,17 +114,18 @@ const (
 )
 
 var DefaultOptions = Options{
-	DirPath:           tempDBDir(),
-	MemtableSize:      64 * MB,
-	MemtableNums:      15,
-	BlockCache:        0,
-	Sync:              false,
-	BytesPerSync:      0,
-	PartitionNum:      3,
-	KeyHashFunction:   xxhash.Sum64,
-	ValueLogFileSize:  1 * GB,
-	IndexType:         BTree,
-	CompactBatchCount: 10000,
+	DirPath:             tempDBDir(),
+	MemtableSize:        64 * MB,
+	MemtableNums:        15,
+	BlockCache:          0,
+	Sync:                false,
+	BytesPerSync:        0,
+	PartitionNum:        3,
+	KeyHashFunction:     xxhash.Sum64,
+	ValueLogFileSize:    1 * GB,
+	IndexType:           BTree,
+	CompactBatchCount:   10000,
+	WaitMemSpaceTimeout: 100 * time.Millisecond,
 }
 
 var DefaultBatchOptions = BatchOptions{
