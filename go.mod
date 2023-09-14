@@ -5,7 +5,7 @@ go 1.19
 require (
 	github.com/bwmarrin/snowflake v0.3.0
 	github.com/dgraph-io/badger/v4 v4.1.0
-	github.com/rosedblabs/wal v1.3.4-0.20230906004724-a604ff62b6ee
+	github.com/rosedblabs/wal v1.3.4-0.20230914005746-b3078b5ee2ed
 	github.com/spaolacci/murmur3 v1.1.0
 	github.com/stretchr/testify v1.8.4
 )

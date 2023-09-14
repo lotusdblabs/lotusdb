@@ -90,45 +90,32 @@ func (vlog *valueLog) writeBatch(records []*ValueLogRecord) ([]*KeyPosition, err
 	g, ctx := errgroup.WithContext(context.Background())
 	for i := 0; i < int(vlog.options.partitionNum); i++ {
 		if len(partitionRecords[i]) == 0 {
-			posChan <- []*KeyPosition{}
 			continue
 		}
 
 		part := i
-		g.Go(func() error {
+		g.Go(func() (err error) {
+			defer func() error {
+				if err != nil {
+					vlog.walFiles[part].ClearPendingWrites()
+				}
+				return err
+			}()
 			var positions []*KeyPosition
 			writeIdx := 0
-			for idx, record := range partitionRecords[part] {
+			for _, record := range partitionRecords[part] {
 				select {
 				case <-ctx.Done():
-					posChan <- nil
-					return ctx.Err()
+					err = ctx.Err()
+					return
 				default:
-					err := vlog.walFiles[part].PendingWrites(encodeValueLogRecord(record))
-					if err != nil {
-						if err != wal.ErrPendingSizeTooLarge {
-							posChan <- nil
-							return err
-						}
-						pos, err := vlog.walFiles[part].WriteALL()
-						if err != nil {
-							posChan <- nil
-							return err
-						}
-						for i, p := range pos {
-							positions = append(positions, &KeyPosition{
-								key:       partitionRecords[part][writeIdx+i].key,
-								partition: uint32(part),
-								position:  p,
-							})
-						}
-						writeIdx = idx + 1
+					if err = vlog.walFiles[part].PendingWrites(encodeValueLogRecord(record)); err != nil {
+						return
 					}
 				}
 			}
-			pos, err := vlog.walFiles[part].WriteALL()
+			pos, err := vlog.walFiles[part].WriteAll()
 			if err != nil {
-				posChan <- nil
 				return err
 			}
 			for i, p := range pos {
@@ -143,15 +130,17 @@ func (vlog *valueLog) writeBatch(records []*ValueLogRecord) ([]*KeyPosition, err
 		})
 	}
 
+	if err := g.Wait(); err != nil {
+		return nil, err
+	}
+	close(posChan)
+
 	// nwo we get the positions of the records, we can return them to the caller
 	var keyPositions []*KeyPosition
+
 	for i := 0; i < int(vlog.options.partitionNum); i++ {
 		pos := <-posChan
 		keyPositions = append(keyPositions, pos...)
-	}
-
-	if err := g.Wait(); err != nil {
-		return nil, err
 	}
 
 	return keyPositions, nil

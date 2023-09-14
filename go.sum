@@ -23,8 +23,6 @@ github.com/gogo/protobuf v1.3.2/go.mod h1:P1XiOD3dCwIKUDQYPy72D8LYyHL2YPYrpS2s69
 github.com/golang/glog v0.0.0-20160126235308-23def4e6c14b/go.mod h1:SBH7ygxi8pfUlaOkMMuAQtPIUF8ecWP5IEl/CR7VP2Q=
 github.com/golang/glog v1.1.1 h1:jxpi2eWoU84wbX9iIEyAeeoac3FLuifZpY9tcNUD9kw=
 github.com/golang/glog v1.1.1/go.mod h1:zR+okUeTbrL6EL3xHUDxZuEtGv04p5shwip1+mL/rLQ=
-github.com/hashicorp/golang-lru/v2 v2.0.4 h1:7GHuZcgid37q8o5i3QI9KMT4nCWQQ3Kx3Ov6bb9MfK0=
-github.com/hashicorp/golang-lru/v2 v2.0.4/go.mod h1:QeFd9opnmA6QUJc5vARoKUSoFhyfM2/ZepoAG6RGpeM=
 github.com/hashicorp/golang-lru/v2 v2.0.6 h1:3xi/Cafd1NaoEnS/yDssIiuVeDVywU0QdFGl3aQaQHM=
 github.com/hashicorp/golang-lru/v2 v2.0.6/go.mod h1:QeFd9opnmA6QUJc5vARoKUSoFhyfM2/ZepoAG6RGpeM=
 github.com/kisielk/errcheck v1.5.0/go.mod h1:pFxgyoBC7bSaBwPgfKdkLd5X25qrDl4LWUI2bnpBCr8=
@@ -40,10 +38,8 @@ github.com/pmezard/go-difflib v1.0.0 h1:4DBwDE0NGyQoBHbLQYPwSUPoCMWR5BEzIk/f1lZb
 github.com/pmezard/go-difflib v1.0.0/go.mod h1:iKH77koFhYxTK1pcRnkKkqfTogsbg7gZNVY4sRDYZ/4=
 github.com/rosedblabs/diskhash v0.0.0-20230825144203-2d051ecdb9a5 h1:iK0Bqwd4LS5Kysac2o4l0ly9vkPBLQKQCnyFSd+qJXQ=
 github.com/rosedblabs/diskhash v0.0.0-20230825144203-2d051ecdb9a5/go.mod h1:3xvIg+7iOFUL/vMCE/6DwE6Yecb0okVYJBEfpdC/E+8=
-github.com/rosedblabs/wal v1.3.4-0.20230903095514-51f5de6bb0d3 h1:MHuNMgraOMF1tK00cIwQGu+8cA8qvdaZgSRkONDhO5Y=
-github.com/rosedblabs/wal v1.3.4-0.20230903095514-51f5de6bb0d3/go.mod h1:wdq54KJUyVTOv1uddMc6Cdh2d/YCIo8yjcwJAb1RCEM=
-github.com/rosedblabs/wal v1.3.4-0.20230906004724-a604ff62b6ee h1:qMnn+C+9hDmfPzIbMoqArq1VGX05cT0uOvypvD48YoU=
-github.com/rosedblabs/wal v1.3.4-0.20230906004724-a604ff62b6ee/go.mod h1:wdq54KJUyVTOv1uddMc6Cdh2d/YCIo8yjcwJAb1RCEM=
+github.com/rosedblabs/wal v1.3.4-0.20230914005746-b3078b5ee2ed h1:e9aFaY85IVCRBrarfiDMfpEV15KCoMCX1Mgc2/lkPg4=
+github.com/rosedblabs/wal v1.3.4-0.20230914005746-b3078b5ee2ed/go.mod h1:wdq54KJUyVTOv1uddMc6Cdh2d/YCIo8yjcwJAb1RCEM=
 github.com/spaolacci/murmur3 v1.1.0 h1:7c1g84S4BPRrfL5Xrdp6fOJ206sU9y293DDHaoy0bLI=
 github.com/spaolacci/murmur3 v1.1.0/go.mod h1:JwIasOWyU6f++ZhiEuf87xNszmSA2myDM2Kzu9HwQUA=
 github.com/stretchr/objx v0.1.0/go.mod h1:HFkY916IF+rwdDfMAkV7OtwuqBVzrE8GR6GFx+wExME=

@@ -281,6 +281,10 @@ func validateOptions(options *Options) error {
 	if options.ValueLogFileSize <= 0 {
 		options.ValueLogFileSize = 1 << 30 // 1GB
 	}
+	// assure ValueLogFileSize >= MemtableSize
+	if options.ValueLogFileSize < int64(options.MemtableSize) {
+		options.ValueLogFileSize = int64(options.MemtableSize)
+	}
 	return nil
 }
 
@@ -516,7 +520,7 @@ func (db *DB) rewriteValidRecords(walFile *wal.WAL, validRecords []*ValueLogReco
 		}
 	}
 
-	walChunkPositions, err := walFile.WriteALL()
+	walChunkPositions, err := walFile.WriteAll()
 	if err != nil {
 		return err
 	}

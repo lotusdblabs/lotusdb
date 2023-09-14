@@ -1,11 +1,12 @@
 package benchmark
 
 import (
+	"os"
+	"testing"
+
 	"github.com/lotusdblabs/lotusdb/v2"
 	"github.com/lotusdblabs/lotusdb/v2/util"
 	"github.com/stretchr/testify/assert"
-	"os"
-	"testing"
 )
 
 var db *lotusdb.DB
