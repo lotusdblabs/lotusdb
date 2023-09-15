@@ -1,3 +1,5 @@
+![lotusdb.png](https://s2.loli.net/2023/09/15/Ase6Fcu5xJ9aL8T.png)
+
 ## What is LotusDB
 
 LotusDB is the most advanced key-value store written in Go, extremely fast, compatible with LSM tree and B+ tree, and optimization of badger and bbolt.
