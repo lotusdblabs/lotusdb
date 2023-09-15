@@ -1,4 +1,4 @@
-![lotusdb.png](https://s2.loli.net/2023/09/15/Ase6Fcu5xJ9aL8T.png)
+![Snipaste_2023-09-15_21-45-26.png](https://s2.loli.net/2023/09/15/MpzXhrO3KcZnYwI.png)
 
 ## What is LotusDB
 
