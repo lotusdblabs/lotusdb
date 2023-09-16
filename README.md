@@ -1,3 +1,5 @@
+![Snipaste_2023-09-15_21-45-26.png](https://s2.loli.net/2023/09/15/MpzXhrO3KcZnYwI.png)
+
 ## What is LotusDB
 
 LotusDB is the most advanced key-value store written in Go, extremely fast, compatible with LSM tree and B+ tree, and optimization of badger and bbolt.
@@ -16,14 +18,16 @@ Key features:
 ```go
 package main
 
-import "github.com/lotusdblabs/lotusdb/v2"
+import (
+	"github.com/lotusdblabs/lotusdb/v2"
+)
 
 func main() {
-	// Set Options
+	// specify the options
 	options := lotusdb.DefaultOptions
 	options.DirPath = "/tmp/lotusdb_basic"
 
-	// Open LotusDB
+	// open a database
 	db, err := lotusdb.Open(options)
 	if err != nil {
 		panic(err)
@@ -32,39 +36,27 @@ func main() {
 		_ = db.Close()
 	}()
 
-	// Put Key-Value
-	key := []byte("KV store engine")
-	value := []byte("LotusDB")
-	putOptions := &lotusdb.WriteOptions{
-		Sync:       true,
-		DisableWal: false,
-	}
-	err = db.Put(key, value, putOptions)
+	// put a key
+	err = db.Put([]byte("name"), []byte("lotusdb"), nil)
 	if err != nil {
 		panic(err)
 	}
 
-	// Get Key-Value
-	value, err = db.Get(key)
+	// get a key
+	val, err := db.Get([]byte("name"))
 	if err != nil {
 		panic(err)
 	}
-	println(string(value))
+	println(string(val))
 
-	// Delete Key-Value
-	err = db.Delete(key, putOptions)
-	if err != nil {
-		panic(err)
-	}
-
-	// Start Compaction of Value Log
-	err = db.Compact()
+	// delete a key
+	err = db.Delete([]byte("name"), nil)
 	if err != nil {
 		panic(err)
 	}
 }
-
 ```
+see the [examples](https://github.com/lotusdblabs/lotusdb/tree/main/examples) for more details.
 
 ## Community
 
