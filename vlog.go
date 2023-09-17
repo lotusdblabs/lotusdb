@@ -95,13 +95,13 @@ func (vlog *valueLog) writeBatch(records []*ValueLogRecord) ([]*KeyPosition, err
 
 		part := i
 		g.Go(func() (err error) {
-			defer func() error {
+			defer func() {
 				if err != nil {
 					vlog.walFiles[part].ClearPendingWrites()
 				}
-				return err
 			}()
-			var positions []*KeyPosition
+
+			var keyPositions []*KeyPosition
 			writeIdx := 0
 			for _, record := range partitionRecords[part] {
 				select {
@@ -114,18 +114,18 @@ func (vlog *valueLog) writeBatch(records []*ValueLogRecord) ([]*KeyPosition, err
 					}
 				}
 			}
-			pos, err := vlog.walFiles[part].WriteAll()
+			positions, err := vlog.walFiles[part].WriteAll()
 			if err != nil {
 				return err
 			}
-			for i, p := range pos {
-				positions = append(positions, &KeyPosition{
+			for i, pos := range positions {
+				keyPositions = append(keyPositions, &KeyPosition{
 					key:       partitionRecords[part][writeIdx+i].key,
 					partition: uint32(part),
-					position:  p,
+					position:  pos,
 				})
 			}
-			posChan <- positions
+			posChan <- keyPositions
 			return nil
 		})
 	}
@@ -137,7 +137,6 @@ func (vlog *valueLog) writeBatch(records []*ValueLogRecord) ([]*KeyPosition, err
 
 	// nwo we get the positions of the records, we can return them to the caller
 	var keyPositions []*KeyPosition
-
 	for i := 0; i < int(vlog.options.partitionNum); i++ {
 		pos := <-posChan
 		keyPositions = append(keyPositions, pos...)

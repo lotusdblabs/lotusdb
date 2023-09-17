@@ -169,6 +169,7 @@ func (mt *memtable) putBatch(pendingWrites map[string]*LogRecord,
 				return err
 			}
 		}
+
 		// add a record to indicate the end of the batch
 		endRecord := encodeLogRecord(&LogRecord{
 			Key:  batchId.Bytes(),

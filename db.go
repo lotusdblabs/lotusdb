@@ -516,6 +516,7 @@ func (db *DB) rewriteValidRecords(walFile *wal.WAL, validRecords []*ValueLogReco
 	for _, record := range validRecords {
 		err := walFile.PendingWrites(encodeValueLogRecord(record))
 		if err != nil {
+			walFile.ClearPendingWrites()
 			return err
 		}
 	}
