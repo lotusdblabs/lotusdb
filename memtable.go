@@ -161,19 +161,25 @@ func (mt *memtable) putBatch(pendingWrites map[string]*LogRecord,
 
 	// if wal is not disabled, write to wal first to ensure durability and atomicity
 	if options == nil || !options.DisableWal {
+		// add record to wal.pendingWrites
 		for _, record := range pendingWrites {
 			record.BatchId = uint64(batchId)
 			encRecord := encodeLogRecord(record)
-			if _, err := mt.wal.Write(encRecord); err != nil {
+			if err := mt.wal.PendingWrites(encRecord); err != nil {
 				return err
 			}
 		}
-		// write a record to indicate the end of the batch
+		// add a record to indicate the end of the batch
 		endRecord := encodeLogRecord(&LogRecord{
 			Key:  batchId.Bytes(),
 			Type: LogRecordBatchFinished,
 		})
-		if _, err := mt.wal.Write(endRecord); err != nil {
+		if err := mt.wal.PendingWrites(endRecord); err != nil {
+			return err
+		}
+
+		// write wal.pendingWrites
+		if _, err := mt.wal.WriteAll(); err != nil {
 			return err
 		}
 		// flush wal if necessary

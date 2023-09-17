@@ -281,6 +281,10 @@ func validateOptions(options *Options) error {
 	if options.ValueLogFileSize <= 0 {
 		options.ValueLogFileSize = 1 << 30 // 1GB
 	}
+	// assure ValueLogFileSize >= MemtableSize
+	if options.ValueLogFileSize < int64(options.MemtableSize) {
+		options.ValueLogFileSize = int64(options.MemtableSize)
+	}
 	return nil
 }
 
@@ -509,18 +513,25 @@ func (db *DB) Compact() error {
 }
 
 func (db *DB) rewriteValidRecords(walFile *wal.WAL, validRecords []*ValueLogRecord, part int) error {
-	var positions []*KeyPosition
 	for _, record := range validRecords {
-		pos, err := walFile.Write(encodeValueLogRecord(record))
+		err := walFile.PendingWrites(encodeValueLogRecord(record))
 		if err != nil {
 			return err
 		}
+	}
 
-		positions = append(positions, &KeyPosition{
-			key:       record.key,
+	walChunkPositions, err := walFile.WriteAll()
+	if err != nil {
+		return err
+	}
+
+	positions := make([]*KeyPosition, len(walChunkPositions))
+	for i, walChunkPosition := range walChunkPositions {
+		positions[i] = &KeyPosition{
+			key:       validRecords[i].key,
 			partition: uint32(part),
-			position:  pos},
-		)
+			position:  walChunkPosition,
+		}
 	}
 	return db.index.PutBatch(positions)
 }

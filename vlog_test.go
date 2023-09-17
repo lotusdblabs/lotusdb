@@ -5,6 +5,7 @@ import (
 	"testing"
 
 	"github.com/lotusdblabs/lotusdb/v2/util"
+	"github.com/rosedblabs/wal"
 	"github.com/stretchr/testify/assert"
 )
 
@@ -358,11 +359,13 @@ func TestValueLogMultiSegmentFiles(t *testing.T) {
 
 	tests := []struct {
 		name       string
-		wantNumSeg float64
+		NumSeg     float64
+		wantNumSeg int
+		want       error
 	}{
-		{"1 segment files", 1},
-		{"3 segment files", 3},
-		{"5 segment files", 5},
+		{"1 segment files", 1, 1, nil},
+		{"3 segment files", 3, 1, wal.ErrPendingSizeTooLarge},
+		{"5 segment files", 5, 1, wal.ErrPendingSizeTooLarge},
 	}
 
 	for _, tt := range tests {
@@ -375,7 +378,7 @@ func TestValueLogMultiSegmentFiles(t *testing.T) {
 			assert.Nil(t, err)
 
 			var logs []*ValueLogRecord
-			numLogs := (tt.wantNumSeg - 0.5) * 100
+			numLogs := (tt.NumSeg - 0.5) * 100
 			for i := 0; i < int(numLogs); i++ {
 				// the size of a logRecord is about 1MB (a little bigger than 1MB due to encode)
 				log := &ValueLogRecord{key: util.RandomValue(2 << 18), value: util.RandomValue(2 << 18)}
@@ -383,11 +386,11 @@ func TestValueLogMultiSegmentFiles(t *testing.T) {
 			}
 
 			_, err = vlog.writeBatch(logs)
-			assert.Nil(t, err)
+			assert.Equal(t, tt.want, err)
 
 			entries, err := os.ReadDir(path)
 			assert.Nil(t, err)
-			assert.Equal(t, int(tt.wantNumSeg), len(entries))
+			assert.Equal(t, tt.wantNumSeg, len(entries))
 
 			err = vlog.close()
 			assert.Nil(t, err)
