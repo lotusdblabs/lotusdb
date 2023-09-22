@@ -1,10 +1,13 @@
 package lotusdb
 
 import (
+	"bytes"
 	"fmt"
 	"sync"
 
 	"github.com/bwmarrin/snowflake"
+	"github.com/rosedblabs/diskhash"
+	"github.com/rosedblabs/wal"
 )
 
 // Batch is a batch operations of the database.
@@ -152,19 +155,45 @@ func (b *Batch) Get(key []byte) ([]byte, error) {
 	}
 
 	// get from index
-	position, err := b.db.index.Get(key)
-	if err != nil {
-		return nil, err
-	}
-	if position == nil {
-		return nil, ErrKeyNotFound
-	}
-	record, err := b.db.vlog.read(position)
-	if err != nil {
-		return nil, err
+	var value []byte
+	switch b.db.options.IndexType {
+	case BTree:
+		position, err := b.db.index.Get(key)
+		if err != nil {
+			return nil, err
+		}
+		if position == nil {
+			return nil, ErrKeyNotFound
+		}
+		record, err := b.db.vlog.read(position)
+		if err != nil {
+			return nil, err
+		}
+		value = record.value
+	case Hash:
+		_, err := b.db.index.Get(key, func(slot diskhash.Slot) (bool, error) {
+			chunkPosition := wal.DecodeChunkPosition(slot.Value)
+			checkKeyPos := &KeyPosition{
+				key:       key,
+				partition: uint32(b.db.vlog.getKeyPartition(key)),
+				position:  chunkPosition,
+			}
+			valueLogRecord, _ := b.db.vlog.read(checkKeyPos)
+			if valueLogRecord == nil {
+				return false, ErrKeyNotFound
+			}
+			if !bytes.Equal(valueLogRecord.key, key) {
+				return false, nil
+			}
+			value = valueLogRecord.value
+			return true, nil
+		})
+		if err != nil {
+			return nil, err
+		}
 	}
 
-	return record.value, nil
+	return value, nil
 }
 
 // Delete marks a key for deletion in the batch.
@@ -221,9 +250,35 @@ func (b *Batch) Exist(key []byte) (bool, error) {
 	}
 
 	// check if the key exists in index
-	position, err := b.db.index.Get(key)
-	if err != nil {
-		return false, err
+	var position *KeyPosition
+	switch b.db.options.IndexType {
+	case BTree:
+		pos, err := b.db.index.Get(key)
+		if err != nil {
+			return false, err
+		}
+		position = pos
+	case Hash:
+		_, err := b.db.index.Get(key, func(slot diskhash.Slot) (bool, error) {
+			chunkPosition := wal.DecodeChunkPosition(slot.Value)
+			checkKeyPos := &KeyPosition{
+				key:       key,
+				partition: uint32(b.db.vlog.getKeyPartition(key)),
+				position:  chunkPosition,
+			}
+			valueLogRecord, _ := b.db.vlog.read(checkKeyPos)
+			if valueLogRecord == nil {
+				return false, ErrKeyNotFound
+			}
+			if !bytes.Equal(valueLogRecord.key, key) {
+				return false, nil
+			}
+			position = checkKeyPos
+			return true, nil
+		})
+		if err != nil {
+			return false, nil
+		}
 	}
 	return position != nil, nil
 }

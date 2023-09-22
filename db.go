@@ -1,6 +1,7 @@
 package lotusdb
 
 import (
+	"bytes"
 	"context"
 	"errors"
 	"fmt"
@@ -16,6 +17,7 @@ import (
 
 	"github.com/dgraph-io/badger/v4/y"
 	"github.com/gofrs/flock"
+	"github.com/rosedblabs/diskhash"
 	"github.com/rosedblabs/wal"
 	"golang.org/x/sync/errgroup"
 )
@@ -263,9 +265,9 @@ func (db *DB) Exist(key []byte) (bool, error) {
 
 // validateOptions validates the given options.
 func validateOptions(options *Options) error {
-	if options.IndexType == Hash {
-		return errors.New("hash index is not supported yet")
-	}
+	// if options.IndexType == Hash {
+	// 	return errors.New("hash index is not supported yet")
+	// }
 	if options.DirPath == "" {
 		return errors.New("the database directory path can not be empty")
 	}
@@ -399,11 +401,23 @@ func (db *DB) flushMemtable(table *memtable) {
 
 	// delete old memtable kept in memory
 	db.mu.Lock()
-	if len(db.immuMems) == 1 {
-		db.immuMems = db.immuMems[:0]
+	if table == db.activeMem {
+		options := db.activeMem.options
+		options.tableId++
+		// open a new memtable for writing
+		table, err := openMemtable(options)
+		if err != nil {
+			panic("flush activate memtable wrong")
+		}
+		db.activeMem = table
 	} else {
-		db.immuMems = db.immuMems[1:]
+		if len(db.immuMems) == 1 {
+			db.immuMems = db.immuMems[:0]
+		} else {
+			db.immuMems = db.immuMems[1:]
+		}
 	}
+
 	db.mu.Unlock()
 
 	db.flushLock.Unlock()
@@ -466,12 +480,38 @@ func (db *DB) Compact() error {
 				}
 
 				record := decodeValueLogRecord(chunk)
-				keyPos, err := db.index.Get(record.key)
-				if err != nil {
-					_ = newVlogFile.Delete()
-					return err
+				var keyPos *KeyPosition
+				switch db.options.IndexType {
+				case BTree:
+					pos, err := db.index.Get(record.key)
+					if err != nil {
+						_ = newVlogFile.Delete()
+						return err
+					}
+					keyPos = pos
+				case Hash:
+					_, err := db.index.Get(record.key, func(slot diskhash.Slot) (bool, error) {
+						chunkPosition := wal.DecodeChunkPosition(slot.Value)
+						checkKeyPos := &KeyPosition{
+							key:       record.key,
+							partition: uint32(db.vlog.getKeyPartition(record.key)),
+							position:  chunkPosition,
+						}
+						valueLogRecord, _ := db.vlog.read(checkKeyPos)
+						if valueLogRecord == nil {
+							return false, ErrKeyNotFound
+						}
+						if !bytes.Equal(valueLogRecord.key, record.key) {
+							return false, nil
+						}
+						keyPos = checkKeyPos
+						return true, nil
+					})
+					if err != nil {
+						_ = newVlogFile.Delete()
+						return err
+					}
 				}
-
 				if keyPos == nil {
 					continue
 				}

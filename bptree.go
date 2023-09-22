@@ -5,6 +5,7 @@ import (
 	"fmt"
 	"path/filepath"
 
+	"github.com/rosedblabs/diskhash"
 	"github.com/rosedblabs/wal"
 	"go.etcd.io/bbolt"
 	"golang.org/x/sync/errgroup"
@@ -22,7 +23,7 @@ type BPTree struct {
 // openBTreeIndex opens a BoltDB(On-Disk BTree) index.
 // Actually, it opens a BoltDB for each partition.
 // The partition number is specified by the index options.
-func openBTreeIndex(options indexOptions) (*BPTree, error) {
+func openBTreeIndex(options indexOptions, _ ...diskhash.MatchKeyFunc) (*BPTree, error) {
 	trees := make([]*bbolt.DB, options.partitionNum)
 
 	for i := 0; i < options.partitionNum; i++ {
@@ -58,7 +59,7 @@ func openBTreeIndex(options indexOptions) (*BPTree, error) {
 }
 
 // Get gets the position of the specified key.
-func (bt *BPTree) Get(key []byte) (*KeyPosition, error) {
+func (bt *BPTree) Get(key []byte, _ ...diskhash.MatchKeyFunc) (*KeyPosition, error) {
 	p := bt.options.getKeyPartition(key)
 	tree := bt.trees[p]
 	var keyPos *KeyPosition
@@ -80,7 +81,7 @@ func (bt *BPTree) Get(key []byte) (*KeyPosition, error) {
 }
 
 // PutBatch puts the specified key positions into the index.
-func (bt *BPTree) PutBatch(positions []*KeyPosition) error {
+func (bt *BPTree) PutBatch(positions []*KeyPosition, _ ...diskhash.MatchKeyFunc) error {
 	if len(positions) == 0 {
 		return nil
 	}
@@ -123,7 +124,7 @@ func (bt *BPTree) PutBatch(positions []*KeyPosition) error {
 }
 
 // DeleteBatch deletes the specified keys from the index.
-func (bt *BPTree) DeleteBatch(keys [][]byte) error {
+func (bt *BPTree) DeleteBatch(keys [][]byte, _ ...diskhash.MatchKeyFunc) error {
 	if len(keys) == 0 {
 		return nil
 	}

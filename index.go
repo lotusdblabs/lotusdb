@@ -1,5 +1,7 @@
 package lotusdb
 
+import "github.com/rosedblabs/diskhash"
+
 const (
 	// indexFileExt is the file extension for index files.
 	indexFileExt = "INDEX.%d"
@@ -13,13 +15,13 @@ const (
 // But you can implement your own index if you want.
 type Index interface {
 	// PutBatch put batch records to index
-	PutBatch([]*KeyPosition) error
+	PutBatch(keyPositions []*KeyPosition, matchKeyFunc ...diskhash.MatchKeyFunc) error
 
 	// Get chunk position by key
-	Get([]byte) (*KeyPosition, error)
+	Get(key []byte, matchKeyFunc ...diskhash.MatchKeyFunc) (*KeyPosition, error)
 
 	// DeleteBatch delete batch records from index
-	DeleteBatch([][]byte) error
+	DeleteBatch(keys [][]byte, matchKeyFunc ...diskhash.MatchKeyFunc) error
 
 	// Sync sync index data to disk
 	Sync() error

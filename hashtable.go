@@ -8,7 +8,6 @@ import (
 	"path/filepath"
 
 	"github.com/rosedblabs/diskhash"
-	"github.com/rosedblabs/wal"
 	"github.com/spaolacci/murmur3"
 	"golang.org/x/sync/errgroup"
 )
@@ -47,7 +46,7 @@ func openHashIndex(options indexOptions) (*HashTable, error) {
 }
 
 // PutBatch put batch records to index
-func (ht *HashTable) PutBatch(positions []*KeyPosition) error {
+func (ht *HashTable) PutBatch(positions []*KeyPosition, matchKeyFunc ...diskhash.MatchKeyFunc) error {
 	if len(positions) == 0 {
 		return nil
 	}
@@ -94,35 +93,19 @@ func (ht *HashTable) PutBatch(positions []*KeyPosition) error {
 }
 
 // Get chunk position by key
-func (ht *HashTable) Get(key []byte) (*KeyPosition, error) {
+func (ht *HashTable) Get(key []byte, matchKeyFunc ...diskhash.MatchKeyFunc) (*KeyPosition, error) {
 	p := ht.options.getKeyPartition(key)
 	table := ht.tables[p]
-	var value []byte
-	var keyPos *KeyPosition
-
-	getFunc := func(slot diskhash.Slot) (bool, error) {
-		if murmur3.Sum32(key) == slot.Hash {
-			value = make([]byte, len(slot.Value))
-			copy(value, slot.Value)
-			return true, nil
-		}
-		return false, nil
-	}
-
-	err := table.Get(key, getFunc)
+	err := table.Get(key, matchKeyFunc[0])
 	if err != nil {
 		return nil, err
 	}
-	if len(value) != 0 {
-		keyPos = new(KeyPosition)
-		keyPos.key, keyPos.partition = key, uint32(p)
-		keyPos.position = wal.DecodeChunkPosition(value)
-	}
-	return keyPos, nil
+	// hashTable will not use keyPosition, so return nil, nil
+	return nil, nil
 }
 
 // DeleteBatch delete batch records from index
-func (ht *HashTable) DeleteBatch(keys [][]byte) error {
+func (ht *HashTable) DeleteBatch(keys [][]byte, matchKeyFunc ...diskhash.MatchKeyFunc) error {
 	if len(keys) == 0 {
 		return nil
 	}
