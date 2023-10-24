@@ -130,7 +130,7 @@ func testHashTablePutBatch(t *testing.T, partitionNum int) {
 }
 
 func TestHashTable_Get(t *testing.T) {
-	// testHashTableGet(t, 1)
+	testHashTableGet(t, 1)
 	testHashTableGet(t, 3)
 }
 
@@ -158,7 +158,7 @@ func testHashTableGet(t *testing.T, partitionNum int) {
 		wantErr bool
 	}{
 		{"nil", nil, false, true},
-		{"not-exist", []byte("not-exist"), false, false},
+		{"not-exist", []byte("not-exist"), false, true},
 		{"exist", []byte("exist"), true, false},
 	}
 	for _, tt := range tests {

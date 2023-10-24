@@ -265,9 +265,6 @@ func (db *DB) Exist(key []byte) (bool, error) {
 
 // validateOptions validates the given options.
 func validateOptions(options *Options) error {
-	// if options.IndexType == Hash {
-	// 	return errors.New("hash index is not supported yet")
-	// }
 	if options.DirPath == "" {
 		return errors.New("the database directory path can not be empty")
 	}

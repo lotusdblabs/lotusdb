@@ -156,22 +156,9 @@ func (b *Batch) Get(key []byte) ([]byte, error) {
 
 	// get from index
 	var value []byte
-	switch b.db.options.IndexType {
-	case BTree:
-		position, err := b.db.index.Get(key)
-		if err != nil {
-			return nil, err
-		}
-		if position == nil {
-			return nil, ErrKeyNotFound
-		}
-		record, err := b.db.vlog.read(position)
-		if err != nil {
-			return nil, err
-		}
-		value = record.value
-	case Hash:
-		_, err := b.db.index.Get(key, func(slot diskhash.Slot) (bool, error) {
+	var matchKeyFunc func(diskhash.Slot) (bool, error)
+	if b.db.options.IndexType == Hash {
+		matchKeyFunc = func(slot diskhash.Slot) (bool, error) {
 			chunkPosition := wal.DecodeChunkPosition(slot.Value)
 			checkKeyPos := &KeyPosition{
 				key:       key,
@@ -187,13 +174,28 @@ func (b *Batch) Get(key []byte) ([]byte, error) {
 			}
 			value = valueLogRecord.value
 			return true, nil
-		})
-		if err != nil {
-			return nil, err
 		}
 	}
 
-	return value, nil
+	position, err := b.db.index.Get(key, matchKeyFunc)
+	if err != nil {
+		return nil, err
+	}
+
+	if b.db.options.IndexType == Hash {
+		if value == nil {
+			return nil, ErrKeyNotFound
+		}
+		return value, nil
+	}
+	if position == nil {
+		return nil, ErrKeyNotFound
+	}
+	record, err := b.db.vlog.read(position)
+	if err != nil {
+		return nil, err
+	}
+	return record.value, nil
 }
 
 // Delete marks a key for deletion in the batch.
@@ -250,16 +252,10 @@ func (b *Batch) Exist(key []byte) (bool, error) {
 	}
 
 	// check if the key exists in index
-	var position *KeyPosition
-	switch b.db.options.IndexType {
-	case BTree:
-		pos, err := b.db.index.Get(key)
-		if err != nil {
-			return false, err
-		}
-		position = pos
-	case Hash:
-		_, err := b.db.index.Get(key, func(slot diskhash.Slot) (bool, error) {
+	var value []byte
+	var matchKeyFunc func(diskhash.Slot) (bool, error)
+	if b.db.options.IndexType == Hash {
+		matchKeyFunc = func(slot diskhash.Slot) (bool, error) {
 			chunkPosition := wal.DecodeChunkPosition(slot.Value)
 			checkKeyPos := &KeyPosition{
 				key:       key,
@@ -273,14 +269,19 @@ func (b *Batch) Exist(key []byte) (bool, error) {
 			if !bytes.Equal(valueLogRecord.key, key) {
 				return false, nil
 			}
-			position = checkKeyPos
+			value = valueLogRecord.value
 			return true, nil
-		})
-		if err != nil {
-			return false, nil
 		}
 	}
-	return position != nil, nil
+
+	pos, err := b.db.index.Get(key, matchKeyFunc)
+	if err != nil {
+		return false, err
+	}
+	if b.db.options.IndexType == Hash {
+		return value != nil, nil
+	}
+	return pos != nil, nil
 }
 
 // Commit commits the batch, if the batch is readonly or empty, it will return directly.
