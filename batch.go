@@ -1,13 +1,11 @@
 package lotusdb
 
 import (
-	"bytes"
 	"fmt"
 	"sync"
 
 	"github.com/bwmarrin/snowflake"
 	"github.com/rosedblabs/diskhash"
-	"github.com/rosedblabs/wal"
 )
 
 // Batch is a batch operations of the database.
@@ -156,28 +154,12 @@ func (b *Batch) Get(key []byte) ([]byte, error) {
 
 	// get from index
 	var value []byte
-	var matchKeyFunc func(diskhash.Slot) (bool, error)
+	var matchKey func(diskhash.Slot) (bool, error)
 	if b.db.options.IndexType == Hash {
-		matchKeyFunc = func(slot diskhash.Slot) (bool, error) {
-			chunkPosition := wal.DecodeChunkPosition(slot.Value)
-			checkKeyPos := &KeyPosition{
-				key:       key,
-				partition: uint32(b.db.vlog.getKeyPartition(key)),
-				position:  chunkPosition,
-			}
-			valueLogRecord, _ := b.db.vlog.read(checkKeyPos)
-			if valueLogRecord == nil {
-				return false, ErrKeyNotFound
-			}
-			if !bytes.Equal(valueLogRecord.key, key) {
-				return false, nil
-			}
-			value = valueLogRecord.value
-			return true, nil
-		}
+		matchKey = MatchKeyFunc(b.db, key, nil, &value)
 	}
 
-	position, err := b.db.index.Get(key, matchKeyFunc)
+	position, err := b.db.index.Get(key, matchKey)
 	if err != nil {
 		return nil, err
 	}
@@ -255,25 +237,8 @@ func (b *Batch) Exist(key []byte) (bool, error) {
 	var value []byte
 	var matchKeyFunc func(diskhash.Slot) (bool, error)
 	if b.db.options.IndexType == Hash {
-		matchKeyFunc = func(slot diskhash.Slot) (bool, error) {
-			chunkPosition := wal.DecodeChunkPosition(slot.Value)
-			checkKeyPos := &KeyPosition{
-				key:       key,
-				partition: uint32(b.db.vlog.getKeyPartition(key)),
-				position:  chunkPosition,
-			}
-			valueLogRecord, _ := b.db.vlog.read(checkKeyPos)
-			if valueLogRecord == nil {
-				return false, ErrKeyNotFound
-			}
-			if !bytes.Equal(valueLogRecord.key, key) {
-				return false, nil
-			}
-			value = valueLogRecord.value
-			return true, nil
-		}
+		matchKeyFunc = MatchKeyFunc(b.db, key, nil, &value)
 	}
-
 	pos, err := b.db.index.Get(key, matchKeyFunc)
 	if err != nil {
 		return false, err

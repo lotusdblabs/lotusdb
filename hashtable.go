@@ -1,6 +1,7 @@
 package lotusdb
 
 import (
+	"bytes"
 	"context"
 	"encoding/binary"
 	"errors"
@@ -8,7 +9,7 @@ import (
 	"path/filepath"
 
 	"github.com/rosedblabs/diskhash"
-	"github.com/spaolacci/murmur3"
+	"github.com/rosedblabs/wal"
 	"golang.org/x/sync/errgroup"
 )
 
@@ -50,11 +51,12 @@ func (ht *HashTable) PutBatch(positions []*KeyPosition, matchKeyFunc ...diskhash
 	if len(positions) == 0 {
 		return nil
 	}
-
 	partitionRecords := make([][]*KeyPosition, ht.options.partitionNum)
-	for _, pos := range positions {
+	matchKeys := make([][]diskhash.MatchKeyFunc, ht.options.partitionNum)
+	for i, pos := range positions {
 		p := pos.partition
 		partitionRecords[p] = append(partitionRecords[p], pos)
+		matchKeys[p] = append(matchKeys[p], matchKeyFunc[i])
 	}
 
 	g, ctx := errgroup.WithContext(context.Background())
@@ -66,7 +68,8 @@ func (ht *HashTable) PutBatch(positions []*KeyPosition, matchKeyFunc ...diskhash
 		g.Go(func() error {
 			// get the hashtable instance for this partition
 			table := ht.tables[partition]
-			for _, record := range partitionRecords[partition] {
+			matchKey := matchKeys[partition]
+			for i, record := range partitionRecords[partition] {
 				select {
 				case <-ctx.Done():
 					return ctx.Err()
@@ -74,14 +77,8 @@ func (ht *HashTable) PutBatch(positions []*KeyPosition, matchKeyFunc ...diskhash
 					if record.key == nil || len(record.key) == 0 {
 						return errors.New("key required")
 					}
-					matchKey := func(slot diskhash.Slot) (bool, error) {
-						if murmur3.Sum32(record.key) == slot.Hash {
-							return true, nil
-						}
-						return false, nil
-					}
 					encPos := record.position.EncodeFixedSize()
-					if err := table.Put(record.key, encPos, matchKey); err != nil {
+					if err := table.Put(record.key, encPos, matchKey[i]); err != nil {
 						return err
 					}
 				}
@@ -110,9 +107,11 @@ func (ht *HashTable) DeleteBatch(keys [][]byte, matchKeyFunc ...diskhash.MatchKe
 		return nil
 	}
 	partitionKeys := make([][][]byte, ht.options.partitionNum)
-	for _, key := range keys {
+	matchKeys := make([][]*diskhash.MatchKeyFunc, ht.options.partitionNum)
+	for i, key := range keys {
 		p := ht.options.getKeyPartition(key)
 		partitionKeys[p] = append(partitionKeys[p], key)
+		matchKeys[p] = append(matchKeys[p], &matchKeyFunc[i])
 	}
 	g, ctx := errgroup.WithContext(context.Background())
 	for i := range partitionKeys {
@@ -122,18 +121,13 @@ func (ht *HashTable) DeleteBatch(keys [][]byte, matchKeyFunc ...diskhash.MatchKe
 		}
 		g.Go(func() error {
 			table := ht.tables[partition]
-			for _, key := range partitionKeys[partition] {
+			matchKey := matchKeys[partition]
+			for i, key := range partitionKeys[partition] {
 				select {
 				case <-ctx.Done():
 					return ctx.Err()
 				default:
-					matchKey := func(slot diskhash.Slot) (bool, error) {
-						if murmur3.Sum32(key) == slot.Hash {
-							return true, nil
-						}
-						return false, nil
-					}
-					if err := table.Delete(key, matchKey); err != nil {
+					if err := table.Delete(key, *matchKey[i]); err != nil {
 						return err
 					}
 				}
@@ -164,4 +158,33 @@ func (ht *HashTable) Close() error {
 		}
 	}
 	return nil
+}
+
+// MatchKeyFunc Set nil if do not need keyPos or value
+func MatchKeyFunc(db *DB, key []byte, keyPos **KeyPosition, value *[]byte) func(slot diskhash.Slot) (bool, error) {
+	return func(slot diskhash.Slot) (bool, error) {
+		chunkPosition := wal.DecodeChunkPosition(slot.Value)
+		checkKeyPos := &KeyPosition{
+			key:       key,
+			partition: uint32(db.vlog.getKeyPartition(key)),
+			position:  chunkPosition,
+		}
+		valueLogRecord, err := db.vlog.read(checkKeyPos)
+		if err != nil {
+			return false, err
+		}
+		if valueLogRecord == nil {
+			return false, nil
+		}
+		if !bytes.Equal(valueLogRecord.key, key) {
+			return false, nil
+		}
+		if keyPos != nil {
+			*keyPos = checkKeyPos
+		}
+		if value != nil {
+			*value = valueLogRecord.value
+		}
+		return true, nil
+	}
 }

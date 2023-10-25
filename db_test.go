@@ -1,7 +1,6 @@
 package lotusdb
 
 import (
-	"bytes"
 	"os"
 	"sync"
 	"testing"
@@ -9,7 +8,6 @@ import (
 
 	"github.com/lotusdblabs/lotusdb/v2/util"
 	"github.com/rosedblabs/diskhash"
-	"github.com/rosedblabs/wal"
 	"github.com/stretchr/testify/assert"
 	"github.com/stretchr/testify/require"
 )
@@ -434,7 +432,6 @@ func TestDBCompact(t *testing.T) {
 			DisableWal: false,
 		})
 	}
-
 	t.Run("test compaction", func(t *testing.T) {
 		time.Sleep(time.Millisecond * 500)
 		size, err := util.DirSize(db.options.DirPath)
@@ -458,27 +455,11 @@ func TestDBCompact(t *testing.T) {
 
 func getValueFromVlog(db *DB, key []byte) ([]byte, error) {
 	var value []byte
-	var matchKeyFunc func(diskhash.Slot) (bool, error)
+	var matchKey func(diskhash.Slot) (bool, error)
 	if db.options.IndexType == Hash {
-		matchKeyFunc = func(slot diskhash.Slot) (bool, error) {
-			chunkPosition := wal.DecodeChunkPosition(slot.Value)
-			checkKeyPos := &KeyPosition{
-				key:       key,
-				partition: uint32(db.vlog.getKeyPartition(key)),
-				position:  chunkPosition,
-			}
-			valueLogRecord, _ := db.vlog.read(checkKeyPos)
-			if valueLogRecord == nil {
-				return false, ErrKeyNotFound
-			}
-			if !bytes.Equal(valueLogRecord.key, key) {
-				return false, nil
-			}
-			value = valueLogRecord.value
-			return true, nil
-		}
+		matchKey = MatchKeyFunc(db, key, nil, &value)
 	}
-	position, err := db.index.Get(key, matchKeyFunc)
+	position, err := db.index.Get(key, matchKey)
 	if err != nil {
 		return nil, err
 	}
@@ -488,7 +469,6 @@ func getValueFromVlog(db *DB, key []byte) ([]byte, error) {
 		}
 		return value, nil
 	}
-
 	if position == nil {
 		return nil, ErrKeyNotFound
 	}

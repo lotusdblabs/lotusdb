@@ -1,7 +1,6 @@
 package lotusdb
 
 import (
-	"bytes"
 	"context"
 	"errors"
 	"fmt"
@@ -371,13 +370,27 @@ func (db *DB) flushMemtable(table *memtable) {
 	}
 
 	// write all keys and positions to index
-	if err := db.index.PutBatch(keyPos); err != nil {
+	putMatchKeys := []diskhash.MatchKeyFunc{}
+	if db.options.IndexType == Hash && len(keyPos) > 0 {
+		putMatchKeys = make([]diskhash.MatchKeyFunc, len(keyPos))
+		for i := range putMatchKeys {
+			putMatchKeys[i] = MatchKeyFunc(db, keyPos[i].key, nil, nil)
+		}
+	}
+	if err := db.index.PutBatch(keyPos, putMatchKeys...); err != nil {
 		log.Println("index PutBatch failed:", err)
 		db.flushLock.Unlock()
 		return
 	}
 	// delete the deleted keys from index
-	if err := db.index.DeleteBatch(deletedKeys); err != nil {
+	deleteMatchKeys := []diskhash.MatchKeyFunc{}
+	if db.options.IndexType == Hash && len(deletedKeys) > 0 {
+		deleteMatchKeys = make([]diskhash.MatchKeyFunc, len(deletedKeys))
+		for i := range deleteMatchKeys {
+			deleteMatchKeys[i] = MatchKeyFunc(db, deletedKeys[i], nil, nil)
+		}
+	}
+	if err := db.index.DeleteBatch(deletedKeys, deleteMatchKeys...); err != nil {
 		log.Println("index DeleteBatch failed:", err)
 		db.flushLock.Unlock()
 		return
@@ -477,38 +490,21 @@ func (db *DB) Compact() error {
 				}
 
 				record := decodeValueLogRecord(chunk)
-				var keyPos *KeyPosition
-				switch db.options.IndexType {
-				case BTree:
-					pos, err := db.index.Get(record.key)
-					if err != nil {
-						_ = newVlogFile.Delete()
-						return err
-					}
-					keyPos = pos
-				case Hash:
-					_, err := db.index.Get(record.key, func(slot diskhash.Slot) (bool, error) {
-						chunkPosition := wal.DecodeChunkPosition(slot.Value)
-						checkKeyPos := &KeyPosition{
-							key:       record.key,
-							partition: uint32(db.vlog.getKeyPartition(record.key)),
-							position:  chunkPosition,
-						}
-						valueLogRecord, _ := db.vlog.read(checkKeyPos)
-						if valueLogRecord == nil {
-							return false, ErrKeyNotFound
-						}
-						if !bytes.Equal(valueLogRecord.key, record.key) {
-							return false, nil
-						}
-						keyPos = checkKeyPos
-						return true, nil
-					})
-					if err != nil {
-						_ = newVlogFile.Delete()
-						return err
-					}
+				var hashTableKeyPos *KeyPosition
+				var matchKey func(diskhash.Slot) (bool, error)
+				if db.options.IndexType == Hash {
+					matchKey = MatchKeyFunc(db, record.key, &hashTableKeyPos, nil)
 				}
+				keyPos, err := db.index.Get(record.key, matchKey)
+				if err != nil {
+					_ = newVlogFile.Delete()
+					return err
+				}
+
+				if db.options.IndexType == Hash {
+					keyPos = hashTableKeyPos
+				}
+
 				if keyPos == nil {
 					continue
 				}
@@ -571,5 +567,11 @@ func (db *DB) rewriteValidRecords(walFile *wal.WAL, validRecords []*ValueLogReco
 			position:  walChunkPosition,
 		}
 	}
-	return db.index.PutBatch(positions)
+	matchKeys := make([]diskhash.MatchKeyFunc, len(positions))
+	if db.options.IndexType == Hash {
+		for i := range matchKeys {
+			matchKeys[i] = MatchKeyFunc(db, positions[i].key, nil, nil)
+		}
+	}
+	return db.index.PutBatch(positions, matchKeys...)
 }
