@@ -15,7 +15,7 @@ Key features:
 
 ### Design Overview
 
-![](/resource/img/design-overview.png)
+![](https://github.com/yanxiaoqi932/lotusdb/blob/docs/resource/img/design-overview.png)
 
 ### Community
 
