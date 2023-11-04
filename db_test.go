@@ -7,6 +7,7 @@ import (
 	"time"
 
 	"github.com/lotusdblabs/lotusdb/v2/util"
+	"github.com/rosedblabs/diskhash"
 	"github.com/stretchr/testify/assert"
 	"github.com/stretchr/testify/require"
 )
@@ -431,7 +432,6 @@ func TestDBCompact(t *testing.T) {
 			DisableWal: false,
 		})
 	}
-
 	t.Run("test compaction", func(t *testing.T) {
 		time.Sleep(time.Millisecond * 500)
 		size, err := util.DirSize(db.options.DirPath)
@@ -454,9 +454,20 @@ func TestDBCompact(t *testing.T) {
 }
 
 func getValueFromVlog(db *DB, key []byte) ([]byte, error) {
-	position, err := db.index.Get(key)
+	var value []byte
+	var matchKey func(diskhash.Slot) (bool, error)
+	if db.options.IndexType == Hash {
+		matchKey = MatchKeyFunc(db, key, nil, &value)
+	}
+	position, err := db.index.Get(key, matchKey)
 	if err != nil {
 		return nil, err
+	}
+	if db.options.IndexType == Hash {
+		if value == nil {
+			return nil, ErrKeyNotFound
+		}
+		return value, nil
 	}
 	if position == nil {
 		return nil, ErrKeyNotFound

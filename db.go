@@ -16,6 +16,7 @@ import (
 
 	"github.com/dgraph-io/badger/v4/y"
 	"github.com/gofrs/flock"
+	"github.com/rosedblabs/diskhash"
 	"github.com/rosedblabs/wal"
 	"golang.org/x/sync/errgroup"
 )
@@ -263,9 +264,6 @@ func (db *DB) Exist(key []byte) (bool, error) {
 
 // validateOptions validates the given options.
 func validateOptions(options *Options) error {
-	if options.IndexType == Hash {
-		return errors.New("hash index is not supported yet")
-	}
 	if options.DirPath == "" {
 		return errors.New("the database directory path can not be empty")
 	}
@@ -372,13 +370,27 @@ func (db *DB) flushMemtable(table *memtable) {
 	}
 
 	// write all keys and positions to index
-	if err := db.index.PutBatch(keyPos); err != nil {
+	putMatchKeys := []diskhash.MatchKeyFunc{}
+	if db.options.IndexType == Hash && len(keyPos) > 0 {
+		putMatchKeys = make([]diskhash.MatchKeyFunc, len(keyPos))
+		for i := range putMatchKeys {
+			putMatchKeys[i] = MatchKeyFunc(db, keyPos[i].key, nil, nil)
+		}
+	}
+	if err := db.index.PutBatch(keyPos, putMatchKeys...); err != nil {
 		log.Println("index PutBatch failed:", err)
 		db.flushLock.Unlock()
 		return
 	}
 	// delete the deleted keys from index
-	if err := db.index.DeleteBatch(deletedKeys); err != nil {
+	deleteMatchKeys := []diskhash.MatchKeyFunc{}
+	if db.options.IndexType == Hash && len(deletedKeys) > 0 {
+		deleteMatchKeys = make([]diskhash.MatchKeyFunc, len(deletedKeys))
+		for i := range deleteMatchKeys {
+			deleteMatchKeys[i] = MatchKeyFunc(db, deletedKeys[i], nil, nil)
+		}
+	}
+	if err := db.index.DeleteBatch(deletedKeys, deleteMatchKeys...); err != nil {
 		log.Println("index DeleteBatch failed:", err)
 		db.flushLock.Unlock()
 		return
@@ -399,11 +411,23 @@ func (db *DB) flushMemtable(table *memtable) {
 
 	// delete old memtable kept in memory
 	db.mu.Lock()
-	if len(db.immuMems) == 1 {
-		db.immuMems = db.immuMems[:0]
+	if table == db.activeMem {
+		options := db.activeMem.options
+		options.tableId++
+		// open a new memtable for writing
+		table, err := openMemtable(options)
+		if err != nil {
+			panic("flush activate memtable wrong")
+		}
+		db.activeMem = table
 	} else {
-		db.immuMems = db.immuMems[1:]
+		if len(db.immuMems) == 1 {
+			db.immuMems = db.immuMems[:0]
+		} else {
+			db.immuMems = db.immuMems[1:]
+		}
 	}
+
 	db.mu.Unlock()
 
 	db.flushLock.Unlock()
@@ -466,10 +490,19 @@ func (db *DB) Compact() error {
 				}
 
 				record := decodeValueLogRecord(chunk)
-				keyPos, err := db.index.Get(record.key)
+				var hashTableKeyPos *KeyPosition
+				var matchKey func(diskhash.Slot) (bool, error)
+				if db.options.IndexType == Hash {
+					matchKey = MatchKeyFunc(db, record.key, &hashTableKeyPos, nil)
+				}
+				keyPos, err := db.index.Get(record.key, matchKey)
 				if err != nil {
 					_ = newVlogFile.Delete()
 					return err
+				}
+
+				if db.options.IndexType == Hash {
+					keyPos = hashTableKeyPos
 				}
 
 				if keyPos == nil {
@@ -534,5 +567,11 @@ func (db *DB) rewriteValidRecords(walFile *wal.WAL, validRecords []*ValueLogReco
 			position:  walChunkPosition,
 		}
 	}
-	return db.index.PutBatch(positions)
+	matchKeys := make([]diskhash.MatchKeyFunc, len(positions))
+	if db.options.IndexType == Hash {
+		for i := range matchKeys {
+			matchKeys[i] = MatchKeyFunc(db, positions[i].key, nil, nil)
+		}
+	}
+	return db.index.PutBatch(positions, matchKeys...)
 }

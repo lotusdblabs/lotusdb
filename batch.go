@@ -5,6 +5,7 @@ import (
 	"sync"
 
 	"github.com/bwmarrin/snowflake"
+	"github.com/rosedblabs/diskhash"
 )
 
 // Batch is a batch operations of the database.
@@ -152,9 +153,22 @@ func (b *Batch) Get(key []byte) ([]byte, error) {
 	}
 
 	// get from index
-	position, err := b.db.index.Get(key)
+	var value []byte
+	var matchKey func(diskhash.Slot) (bool, error)
+	if b.db.options.IndexType == Hash {
+		matchKey = MatchKeyFunc(b.db, key, nil, &value)
+	}
+
+	position, err := b.db.index.Get(key, matchKey)
 	if err != nil {
 		return nil, err
+	}
+
+	if b.db.options.IndexType == Hash {
+		if value == nil {
+			return nil, ErrKeyNotFound
+		}
+		return value, nil
 	}
 	if position == nil {
 		return nil, ErrKeyNotFound
@@ -163,7 +177,6 @@ func (b *Batch) Get(key []byte) ([]byte, error) {
 	if err != nil {
 		return nil, err
 	}
-
 	return record.value, nil
 }
 
@@ -221,11 +234,19 @@ func (b *Batch) Exist(key []byte) (bool, error) {
 	}
 
 	// check if the key exists in index
-	position, err := b.db.index.Get(key)
+	var value []byte
+	var matchKeyFunc func(diskhash.Slot) (bool, error)
+	if b.db.options.IndexType == Hash {
+		matchKeyFunc = MatchKeyFunc(b.db, key, nil, &value)
+	}
+	pos, err := b.db.index.Get(key, matchKeyFunc)
 	if err != nil {
 		return false, err
 	}
-	return position != nil, nil
+	if b.db.options.IndexType == Hash {
+		return value != nil, nil
+	}
+	return pos != nil, nil
 }
 
 // Commit commits the batch, if the batch is readonly or empty, it will return directly.
