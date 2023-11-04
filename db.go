@@ -441,6 +441,13 @@ func (db *DB) listenMemtableFlush() {
 		case table := <-db.flushChan:
 			db.flushMemtable(table)
 		case <-sig:
+			// Persist the remaining data before the db shutdown
+			db.flushMemtable(db.activeMem)
+			// Open a new memtable for writing
+			options := db.activeMem.options
+			options.tableId++
+			table, _ := openMemtable(options)
+			db.activeMem = table
 			return
 		}
 	}
