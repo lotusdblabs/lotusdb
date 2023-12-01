@@ -309,6 +309,12 @@ func (db *DB) waitMemtableSpace() error {
 		return nil
 	}
 
+	db.mu.Lock()
+	defer db.mu.Unlock()
+	if !db.activeMem.isFull() {
+		return nil
+	}
+
 	timer := time.NewTimer(db.options.WaitMemSpaceTimeout)
 	defer timer.Stop()
 	select {
