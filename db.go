@@ -2,7 +2,6 @@ package lotusdb
 
 import (
 	"context"
-	"errors"
 	"fmt"
 	"io"
 	"log"
@@ -91,7 +90,7 @@ func Open(options Options) (*DB, error) {
 		indexType:       options.IndexType,
 		dirPath:         options.DirPath,
 		partitionNum:    options.PartitionNum,
-		hashKeyFunction: options.KeyHashFunction,
+		keyHashFunction: options.KeyHashFunction,
 	})
 	if err != nil {
 		return nil, err
@@ -265,7 +264,7 @@ func (db *DB) Exist(key []byte) (bool, error) {
 // validateOptions validates the given options.
 func validateOptions(options *Options) error {
 	if options.DirPath == "" {
-		return errors.New("the database directory path can not be empty")
+		return ErrDBDirectoryISEmpty
 	}
 	if options.MemtableSize <= 0 {
 		options.MemtableSize = 64 << 20 // 64MB
@@ -323,7 +322,7 @@ func (db *DB) waitMemtableSpace() error {
 		}
 		db.activeMem = table
 	case <-timer.C:
-		return errors.New("wait memtable space timeout, try again later")
+		return ErrWaitMemtableSpaceTimeOut
 	}
 
 	return nil

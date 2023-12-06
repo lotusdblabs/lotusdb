@@ -9,4 +9,7 @@ var (
 	ErrReadOnlyBatch   = errors.New("the batch is read only")
 	ErrBatchCommitted  = errors.New("the batch is committed")
 	ErrDBClosed        = errors.New("the database is closed")
+
+	ErrDBDirectoryISEmpty       = errors.New("the database directory path can not be empty")
+	ErrWaitMemtableSpaceTimeOut = errors.New("wait memtable space timeout, try again later")
 )

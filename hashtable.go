@@ -4,7 +4,6 @@ import (
 	"bytes"
 	"context"
 	"encoding/binary"
-	"errors"
 	"fmt"
 	"path/filepath"
 
@@ -74,8 +73,8 @@ func (ht *HashTable) PutBatch(positions []*KeyPosition, matchKeyFunc ...diskhash
 				case <-ctx.Done():
 					return ctx.Err()
 				default:
-					if record.key == nil || len(record.key) == 0 {
-						return errors.New("key required")
+					if len(record.key) == 0 {
+						return ErrKeyIsEmpty
 					}
 					encPos := record.position.EncodeFixedSize()
 					if err := table.Put(record.key, encPos, matchKey[i]); err != nil {
@@ -91,6 +90,9 @@ func (ht *HashTable) PutBatch(positions []*KeyPosition, matchKeyFunc ...diskhash
 
 // Get chunk position by key
 func (ht *HashTable) Get(key []byte, matchKeyFunc ...diskhash.MatchKeyFunc) (*KeyPosition, error) {
+	if len(key) == 0 {
+		return nil, ErrKeyIsEmpty
+	}
 	p := ht.options.getKeyPartition(key)
 	table := ht.tables[p]
 	err := table.Get(key, matchKeyFunc[0])
@@ -127,6 +129,9 @@ func (ht *HashTable) DeleteBatch(keys [][]byte, matchKeyFunc ...diskhash.MatchKe
 				case <-ctx.Done():
 					return ctx.Err()
 				default:
+					if len(key) == 0 {
+						return ErrKeyIsEmpty
+					}
 					if err := table.Delete(key, *matchKey[i]); err != nil {
 						return err
 					}
