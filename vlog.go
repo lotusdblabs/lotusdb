@@ -109,9 +109,7 @@ func (vlog *valueLog) writeBatch(records []*ValueLogRecord) ([]*KeyPosition, err
 					err = ctx.Err()
 					return
 				default:
-					if err = vlog.walFiles[part].PendingWrites(encodeValueLogRecord(record)); err != nil {
-						return
-					}
+					vlog.walFiles[part].PendingWrites(encodeValueLogRecord(record))
 				}
 			}
 			positions, err := vlog.walFiles[part].WriteAll()

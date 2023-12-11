@@ -165,9 +165,7 @@ func (mt *memtable) putBatch(pendingWrites map[string]*LogRecord,
 		for _, record := range pendingWrites {
 			record.BatchId = uint64(batchId)
 			encRecord := encodeLogRecord(record)
-			if err := mt.wal.PendingWrites(encRecord); err != nil {
-				return err
-			}
+			mt.wal.PendingWrites(encRecord)
 		}
 
 		// add a record to indicate the end of the batch
@@ -175,9 +173,7 @@ func (mt *memtable) putBatch(pendingWrites map[string]*LogRecord,
 			Key:  batchId.Bytes(),
 			Type: LogRecordBatchFinished,
 		})
-		if err := mt.wal.PendingWrites(endRecord); err != nil {
-			return err
-		}
+		mt.wal.PendingWrites(endRecord)
 
 		// write wal.pendingWrites
 		if _, err := mt.wal.WriteAll(); err != nil {
