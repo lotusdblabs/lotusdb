@@ -61,10 +61,10 @@ type indexOptions struct {
 
 	partitionNum int // index partition nums for sharding
 
-	hashKeyFunction func([]byte) uint64 // hash function for sharding
+	keyHashFunction func([]byte) uint64 // hash function for sharding
 }
 
 func (io *indexOptions) getKeyPartition(key []byte) int {
-	hashFn := io.hashKeyFunction
+	hashFn := io.keyHashFunction
 	return int(hashFn(key) % uint64(io.partitionNum))
 }

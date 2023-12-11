@@ -24,14 +24,14 @@ func Test_openIndexBoltDB(t *testing.T) {
 				indexType:       BTree,
 				dirPath:         filepath.Join(os.TempDir(), "bptree-open-1"),
 				partitionNum:    1,
-				hashKeyFunction: xxhash.Sum64,
+				keyHashFunction: xxhash.Sum64,
 			},
 			&BPTree{
 				options: indexOptions{
 					indexType:       BTree,
 					dirPath:         filepath.Join(os.TempDir(), "bptree-open-1"),
 					partitionNum:    1,
-					hashKeyFunction: xxhash.Sum64,
+					keyHashFunction: xxhash.Sum64,
 				},
 				trees: make([]*bbolt.DB, 1),
 			},
@@ -42,14 +42,14 @@ func Test_openIndexBoltDB(t *testing.T) {
 				indexType:       BTree,
 				dirPath:         filepath.Join(os.TempDir(), "bptree-open-3"),
 				partitionNum:    3,
-				hashKeyFunction: xxhash.Sum64,
+				keyHashFunction: xxhash.Sum64,
 			},
 			&BPTree{
 				options: indexOptions{
 					indexType:       BTree,
 					dirPath:         filepath.Join(os.TempDir(), "bptree-open-3"),
 					partitionNum:    3,
-					hashKeyFunction: xxhash.Sum64,
+					keyHashFunction: xxhash.Sum64,
 				},
 				trees: make([]*bbolt.DB, 3),
 			},
@@ -90,7 +90,7 @@ func testbptreeGet(t *testing.T, partitionNum int) {
 		indexType:       BTree,
 		dirPath:         filepath.Join(os.TempDir(), "bptree-get-"+strconv.Itoa(partitionNum)),
 		partitionNum:    partitionNum,
-		hashKeyFunction: xxhash.Sum64,
+		keyHashFunction: xxhash.Sum64,
 	}
 
 	err := os.MkdirAll(options.dirPath, os.ModePerm)
@@ -116,9 +116,10 @@ func testbptreeGet(t *testing.T, partitionNum int) {
 		exist   bool
 		wantErr bool
 	}{
-		{"nil", nil, false, false},
+		{"nil", nil, false, true},
 		{"not-exist", []byte("not-exist"), false, false},
 		{"exist", []byte("exist"), true, false},
+		{"len(key)=0", []byte(""), false, true},
 	}
 	for _, tt := range tests {
 		t.Run(tt.name, func(t *testing.T) {
@@ -145,7 +146,7 @@ func testbptreePutbatch(t *testing.T, partitionNum int) {
 		indexType:       BTree,
 		dirPath:         filepath.Join(os.TempDir(), "bptree-putBatch-"+strconv.Itoa(partitionNum)),
 		partitionNum:    partitionNum,
-		hashKeyFunction: xxhash.Sum64,
+		keyHashFunction: xxhash.Sum64,
 	}
 
 	err := os.MkdirAll(options.dirPath, os.ModePerm)
@@ -162,13 +163,16 @@ func testbptreePutbatch(t *testing.T, partitionNum int) {
 		key:       nil,
 		partition: 0,
 		position:  &wal.ChunkPosition{},
-	})
-
-	keyPositions = append(keyPositions, &KeyPosition{
+	}, &KeyPosition{
 		key:       []byte("normal"),
 		partition: uint32(bt.options.getKeyPartition([]byte("normal"))),
 		position:  &wal.ChunkPosition{},
-	})
+	}, &KeyPosition{
+		key:       []byte(""),
+		partition: uint32(bt.options.getKeyPartition([]byte(""))),
+		position:  &wal.ChunkPosition{},
+	},
+	)
 
 	tests := []struct {
 		name      string
@@ -178,6 +182,7 @@ func testbptreePutbatch(t *testing.T, partitionNum int) {
 		{"empty", keyPositions[:0], false},
 		{"nil-key", keyPositions[:1], true},
 		{"normal", keyPositions[1:2], false},
+		{"len(key)=0", keyPositions[2:3], true},
 	}
 	for _, tt := range tests {
 		t.Run(tt.name, func(t *testing.T) {
@@ -201,7 +206,7 @@ func testbptreeDeletebatch(t *testing.T, partitionNum int) {
 		indexType:       BTree,
 		dirPath:         filepath.Join(os.TempDir(), "bptree-deleteBatch-"+strconv.Itoa(partitionNum)),
 		partitionNum:    partitionNum,
-		hashKeyFunction: xxhash.Sum64,
+		keyHashFunction: xxhash.Sum64,
 	}
 
 	err := os.MkdirAll(options.dirPath, os.ModePerm)
@@ -213,7 +218,7 @@ func testbptreeDeletebatch(t *testing.T, partitionNum int) {
 	bt, err := openBTreeIndex(options)
 	assert.Nil(t, err)
 	var keys [][]byte
-	keys = append(keys, nil, []byte("not-exist"), []byte("exist"))
+	keys = append(keys, nil, []byte("not-exist"), []byte("exist"), []byte(""))
 	var keyPositions []*KeyPosition
 	keyPositions = append(keyPositions, &KeyPosition{
 		key:       []byte("exist"),
@@ -229,10 +234,10 @@ func testbptreeDeletebatch(t *testing.T, partitionNum int) {
 		keys    [][]byte
 		wantErr bool
 	}{
-		{"nil", keys[:1], false},
+		{"nil", keys[:1], true},
 		{"no-exist", keys[1:2], false},
 		{"exist", keys[2:3], false},
-		{"all", keys, false},
+		{"len(key)=0", keys[3:], true},
 	}
 	for _, tt := range tests {
 		t.Run(tt.name, func(t *testing.T) {
@@ -256,7 +261,7 @@ func testbptreeClose(t *testing.T, partitionNum int) {
 		indexType:       BTree,
 		dirPath:         filepath.Join(os.TempDir(), "bptree-close-"+strconv.Itoa(partitionNum)),
 		partitionNum:    partitionNum,
-		hashKeyFunction: xxhash.Sum64,
+		keyHashFunction: xxhash.Sum64,
 	}
 
 	err := os.MkdirAll(options.dirPath, os.ModePerm)
@@ -285,7 +290,7 @@ func testbptreeSync(t *testing.T, partitionNum int) {
 		indexType:       BTree,
 		dirPath:         filepath.Join(os.TempDir(), "bptree-sync-"+strconv.Itoa(partitionNum)),
 		partitionNum:    partitionNum,
-		hashKeyFunction: xxhash.Sum64,
+		keyHashFunction: xxhash.Sum64,
 	}
 
 	err := os.MkdirAll(options.dirPath, os.ModePerm)

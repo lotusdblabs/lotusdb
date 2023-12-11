@@ -60,6 +60,9 @@ func openBTreeIndex(options indexOptions, _ ...diskhash.MatchKeyFunc) (*BPTree, 
 
 // Get gets the position of the specified key.
 func (bt *BPTree) Get(key []byte, _ ...diskhash.MatchKeyFunc) (*KeyPosition, error) {
+	if len(key) == 0 {
+		return nil, ErrKeyIsEmpty
+	}
 	p := bt.options.getKeyPartition(key)
 	tree := bt.trees[p]
 	var keyPos *KeyPosition
@@ -112,6 +115,9 @@ func (bt *BPTree) PutBatch(positions []*KeyPosition, _ ...diskhash.MatchKeyFunc)
 					default:
 						encPos := record.position.Encode()
 						if err := bucket.Put(record.key, encPos); err != nil {
+							if err == bbolt.ErrKeyRequired {
+								return ErrKeyIsEmpty
+							}
 							return err
 						}
 					}
@@ -154,6 +160,9 @@ func (bt *BPTree) DeleteBatch(keys [][]byte, _ ...diskhash.MatchKeyFunc) error {
 					case <-ctx.Done():
 						return ctx.Err()
 					default:
+						if len(key) == 0 {
+							return ErrKeyIsEmpty
+						}
 						if err := bucket.Delete(key); err != nil {
 							return err
 						}
