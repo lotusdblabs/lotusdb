@@ -553,11 +553,7 @@ func (db *DB) Compact() error {
 
 func (db *DB) rewriteValidRecords(walFile *wal.WAL, validRecords []*ValueLogRecord, part int) error {
 	for _, record := range validRecords {
-		err := walFile.PendingWrites(encodeValueLogRecord(record))
-		if err != nil {
-			walFile.ClearPendingWrites()
-			return err
-		}
+		walFile.PendingWrites(encodeValueLogRecord(record))
 	}
 
 	walChunkPositions, err := walFile.WriteAll()
