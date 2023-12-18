@@ -337,6 +337,7 @@ func (db *DB) waitMemtableSpace() error {
 // 5. Delete the wal.
 func (db *DB) flushMemtable(table *memtable) {
 	db.flushLock.Lock()
+	defer db.flushLock.Unlock()
 	sklIter := table.skl.NewIterator()
 	var deletedKeys [][]byte
 	var logRecords []*ValueLogRecord
@@ -357,14 +358,12 @@ func (db *DB) flushMemtable(table *memtable) {
 	keyPos, err := db.vlog.writeBatch(logRecords)
 	if err != nil {
 		log.Println("vlog writeBatch failed:", err)
-		db.flushLock.Unlock()
 		return
 	}
 
 	// sync the value log
 	if err := db.vlog.sync(); err != nil {
 		log.Println("vlog sync failed:", err)
-		db.flushLock.Unlock()
 		return
 	}
 
@@ -378,7 +377,6 @@ func (db *DB) flushMemtable(table *memtable) {
 	}
 	if err := db.index.PutBatch(keyPos, putMatchKeys...); err != nil {
 		log.Println("index PutBatch failed:", err)
-		db.flushLock.Unlock()
 		return
 	}
 	// delete the deleted keys from index
@@ -391,20 +389,17 @@ func (db *DB) flushMemtable(table *memtable) {
 	}
 	if err := db.index.DeleteBatch(deletedKeys, deleteMatchKeys...); err != nil {
 		log.Println("index DeleteBatch failed:", err)
-		db.flushLock.Unlock()
 		return
 	}
 	// sync the index
 	if err := db.index.Sync(); err != nil {
 		log.Println("index sync failed:", err)
-		db.flushLock.Unlock()
 		return
 	}
 
 	// delete the wal
 	if err := table.deleteWAl(); err != nil {
 		log.Println("delete wal failed:", err)
-		db.flushLock.Unlock()
 		return
 	}
 
@@ -428,8 +423,6 @@ func (db *DB) flushMemtable(table *memtable) {
 	}
 
 	db.mu.Unlock()
-
-	db.flushLock.Unlock()
 }
 
 func (db *DB) listenMemtableFlush() {
@@ -482,7 +475,7 @@ func (db *DB) Compact() error {
 
 			validRecords := make([]*ValueLogRecord, 0, db.vlog.options.compactBatchCount)
 			reader := db.vlog.walFiles[part].NewReader()
-			var count = 0
+			count := 0
 			// iterate all records in wal, find the valid records
 			for {
 				count++
