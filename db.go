@@ -368,7 +368,7 @@ func (db *DB) flushMemtable(table *memtable) {
 	}
 
 	// write all keys and positions to index
-	putMatchKeys := []diskhash.MatchKeyFunc{}
+	var putMatchKeys []diskhash.MatchKeyFunc
 	if db.options.IndexType == Hash && len(keyPos) > 0 {
 		putMatchKeys = make([]diskhash.MatchKeyFunc, len(keyPos))
 		for i := range putMatchKeys {
@@ -380,7 +380,7 @@ func (db *DB) flushMemtable(table *memtable) {
 		return
 	}
 	// delete the deleted keys from index
-	deleteMatchKeys := []diskhash.MatchKeyFunc{}
+	var deleteMatchKeys []diskhash.MatchKeyFunc
 	if db.options.IndexType == Hash && len(deletedKeys) > 0 {
 		deleteMatchKeys = make([]diskhash.MatchKeyFunc, len(deletedKeys))
 		for i := range deleteMatchKeys {
