@@ -465,3 +465,95 @@ func TestMemtableClose(t *testing.T) {
 		assert.Nil(t, err)
 	})
 }
+
+func TestNewMemtableIterator(t *testing.T) {
+	path, err := os.MkdirTemp("", "memtable-test-iterator-new")
+	assert.Nil(t, err)
+
+	defer func() {
+		_ = os.RemoveAll(path)
+	}()
+
+	opts := memtableOptions{
+		dirPath:         path,
+		tableId:         0,
+		memSize:         DefaultOptions.MemtableSize,
+		walBytesPerSync: DefaultOptions.BytesPerSync,
+		walSync:         DefaultBatchOptions.Sync,
+		walBlockCache:   DefaultOptions.BlockCache,
+	}
+
+	table, err := openMemtable(opts)
+	defer table.close()
+	assert.Nil(t, err)
+
+	options := IteratorOptions{
+		Reverse: false,
+	}
+	iter, err := NewMemtableIterator(options, table)
+	assert.Nil(t, err)
+
+	err = iter.Close()
+	assert.Nil(t, err)
+}
+
+func Test_memtableIterator_Rewind(t *testing.T) {
+	path, err := os.MkdirTemp("", "memtable-test-iterator-rewind")
+	assert.Nil(t, err)
+
+	defer func() {
+		_ = os.RemoveAll(path)
+	}()
+
+	opts := memtableOptions{
+		dirPath:         path,
+		tableId:         0,
+		memSize:         DefaultOptions.MemtableSize,
+		walBytesPerSync: DefaultOptions.BytesPerSync,
+		walSync:         DefaultBatchOptions.Sync,
+		walBlockCache:   DefaultOptions.BlockCache,
+	}
+	table, err := openMemtable(opts)
+	assert.Nil(t, err)
+
+	writeOpts := &WriteOptions{
+		Sync:       false,
+		DisableWal: false,
+	}
+	node, err := snowflake.NewNode(1)
+	assert.Nil(t, err)
+	writeLogs := map[string]*LogRecord{
+		"key 0": {Key: []byte("key 0"), Value: []byte("value 0"), Type: LogRecordNormal},
+		"key 1": {Key: nil, Value: []byte("value 1"), Type: LogRecordNormal},
+		"key 2": {Key: []byte("key 2"), Value: []byte(""), Type: LogRecordNormal},
+	}
+	// deleteLogs := map[string]*LogRecord{
+	// 	"key 0": {Key: []byte("key 0"), Value: []byte(""), Type: LogRecordDeleted},
+	// 	"":      {Key: nil, Value: []byte(""), Type: LogRecordDeleted},
+	// 	"key 2": {Key: []byte("key 2"), Value: []byte(""), Type: LogRecordDeleted},
+	// }
+
+	err = table.putBatch(writeLogs, node.Generate(), writeOpts)
+	assert.Nil(t, err)
+
+	iteratorOptions := IteratorOptions{
+		Reverse: false,
+	}
+	itr, err := NewMemtableIterator(iteratorOptions, table)
+	assert.Nil(t, err)
+	itr.Rewind()
+	for itr.Valid() {
+		t.Log(string(itr.Key()))
+		itr.Next()
+	}
+
+	iteratorOptions.Reverse = true
+	itr, err = NewMemtableIterator(iteratorOptions, table)
+	assert.Nil(t, err)
+	itr.Rewind()
+	for itr.Valid() {
+		t.Log(string(itr.Key()))
+		itr.Next()
+	}
+
+}

@@ -1,6 +1,7 @@
 package lotusdb
 
 import (
+	"container/heap"
 	"context"
 	"fmt"
 	"io"
@@ -17,6 +18,7 @@ import (
 	"github.com/gofrs/flock"
 	"github.com/rosedblabs/diskhash"
 	"github.com/rosedblabs/wal"
+	"go.etcd.io/bbolt"
 	"golang.org/x/sync/errgroup"
 )
 
@@ -132,6 +134,9 @@ func Open(options Options) (*DB, error) {
 	go db.listenMemtableFlush()
 
 	return db, nil
+}
+func (db *DB) GetA() *memtable {
+	return db.activeMem
 }
 
 // Close the database, close all data files and release file lock.
@@ -569,4 +574,83 @@ func (db *DB) rewriteValidRecords(walFile *wal.WAL, validRecords []*ValueLogReco
 		}
 	}
 	return db.index.PutBatch(positions, matchKeys...)
+}
+
+func (db *DB) NewIterator(options IteratorOptions) (*MergeIterator, error) {
+	db.mu.Lock()
+	defer func() {
+		if r := recover(); r != nil {
+			db.mu.Unlock()
+		}
+	}()
+	itrs := make([]*SingleIter, 0, db.options.PartitionNum+len(db.immuMems)+1)
+	rank := 0
+	txs := make([]*bbolt.Tx, db.options.PartitionNum)
+	index := db.index.(*BPTree)
+	for i := 0; i < db.options.PartitionNum; i++ {
+		tx, err := index.trees[i].Begin(false)
+		if err != nil {
+			return nil, err
+		}
+		txs[i] = tx
+		itr, err := NewCursorIterator(
+			tx,
+			options,
+		)
+		if err != nil {
+			return nil, err
+		}
+		itr.Rewind()
+		// is empty
+		if !itr.Valid() {
+			continue
+		}
+		itrs[rank] = &SingleIter{
+			iType:   CursorItr,
+			options: options,
+			rank:    rank,
+			iter:    itr,
+		}
+		rank++
+	}
+
+	for i := 0; i < len(db.immuMems); i++ {
+		itr, err := NewMemtableIterator(options, db.immuMems[i])
+		if err != nil {
+			return nil, err
+		}
+		itr.Rewind()
+		// is empty
+		if !itr.Valid() {
+			continue
+		}
+		itrs[rank] = &SingleIter{
+			iType:   MemItr,
+			options: options,
+			rank:    rank,
+			iter:    itr,
+		}
+		rank++
+	}
+
+	itr, err := NewMemtableIterator(options, db.activeMem)
+	if err != nil {
+		return nil, err
+	}
+	itr.Rewind()
+	if itr.Valid() {
+		itrs[rank] = &SingleIter{
+			iType:   MemItr,
+			options: options,
+			rank:    rank,
+			iter:    itr,
+		}
+	}
+	h := IterHeap(itrs)
+	heap.Init(&h)
+
+	return &MergeIterator{
+		h:  h,
+		db: db,
+	}, nil
 }

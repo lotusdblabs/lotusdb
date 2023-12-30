@@ -158,7 +158,6 @@ func openMemtable(options memtableOptions) (*memtable, error) {
 // putBatch writes a batch of entries to memtable.
 func (mt *memtable) putBatch(pendingWrites map[string]*LogRecord,
 	batchId snowflake.ID, options *WriteOptions) error {
-
 	// if wal is not disabled, write to wal first to ensure durability and atomicity
 	if options == nil || !options.DisableWal {
 		// add record to wal.pendingWrites
@@ -231,4 +230,52 @@ func (mt *memtable) sync() error {
 		return mt.wal.Sync()
 	}
 	return nil
+}
+
+type memtableIterator struct {
+	options IteratorOptions
+	iter    *arenaskl.UniIterator
+}
+
+func NewMemtableIterator(options IteratorOptions, memtable *memtable) (*memtableIterator, error) {
+	return &memtableIterator{
+		options: options,
+		iter:    memtable.skl.NewUniIterator(options.Reverse),
+	}, nil
+}
+
+// Rewind seek the first key in the iterator.
+func (mi *memtableIterator) Rewind() {
+	mi.iter.Rewind()
+}
+
+// Seek move the iterator to the key which is
+// greater(less when reverse is true) than or equal to the specified key.
+func (mi *memtableIterator) Seek(key []byte) {
+	mi.iter.Seek(key)
+}
+
+// Next moves the iterator to the next key.
+func (mi *memtableIterator) Next() {
+	mi.iter.Next()
+}
+
+// Key get the current key.
+func (mi *memtableIterator) Key() []byte {
+	return y.ParseKey(mi.iter.Key())
+}
+
+// Value get the current value.
+func (mi *memtableIterator) Value() any {
+	return mi.iter.Value()
+}
+
+// Valid returns whether the iterator is exhausted.
+func (mi *memtableIterator) Valid() bool {
+	return mi.iter.Valid()
+}
+
+// Close the iterator.
+func (mi *memtableIterator) Close() error {
+	return mi.iter.Close()
 }

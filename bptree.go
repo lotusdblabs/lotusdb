@@ -198,3 +198,68 @@ func (bt *BPTree) Sync() error {
 	}
 	return nil
 }
+
+type CursorIterator struct {
+	k       []byte
+	v       []byte
+	tx      *bbolt.Tx
+	cursor  *bbolt.Cursor
+	options IteratorOptions
+}
+
+func NewCursorIterator(tx *bbolt.Tx, options IteratorOptions) (*CursorIterator, error) {
+	b, err := tx.CreateBucket(indexBucketName)
+	if err != nil {
+		return nil, err
+	}
+	c := b.Cursor()
+	return &CursorIterator{
+		tx:      tx,
+		cursor:  c,
+		options: options,
+	}, nil
+}
+
+// Rewind seek the first key in the iterator.
+func (ci *CursorIterator) Rewind() {
+	if ci.options.Reverse {
+		ci.k, ci.v = ci.cursor.Last()
+	} else {
+		ci.k, ci.v = ci.cursor.First()
+	}
+}
+
+// Seek move the iterator to the key which is
+// greater(less when reverse is true) than or equal to the specified key.
+func (ci *CursorIterator) Seek(key []byte) {
+	ci.k, ci.v = ci.cursor.Seek(key)
+}
+
+// Next moves the iterator to the next key.
+func (ci *CursorIterator) Next() {
+	if ci.options.Reverse {
+		ci.k, ci.v = ci.cursor.Prev()
+	} else {
+		ci.k, ci.v = ci.cursor.Next()
+	}
+}
+
+// Key get the current key.
+func (ci *CursorIterator) Key() []byte {
+	return ci.k
+}
+
+// Value get the current value.
+func (ci *CursorIterator) Value() any {
+	return ci.v
+}
+
+// Valid returns whether the iterator is exhausted.
+func (ci *CursorIterator) Valid() bool {
+	return ci.k != nil
+}
+
+// Close the iterator.
+func (ci *CursorIterator) Close() error {
+	return ci.tx.Rollback()
+}
