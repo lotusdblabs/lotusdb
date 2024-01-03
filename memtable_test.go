@@ -1,10 +1,12 @@
 package lotusdb
 
 import (
+	"bytes"
 	"os"
 	"testing"
 
 	"github.com/bwmarrin/snowflake"
+	"github.com/dgraph-io/badger/v4/y"
 	"github.com/lotusdblabs/lotusdb/v2/util"
 	"github.com/stretchr/testify/assert"
 )
@@ -527,11 +529,6 @@ func Test_memtableIterator_Rewind(t *testing.T) {
 		"key 1": {Key: nil, Value: []byte("value 1"), Type: LogRecordNormal},
 		"key 2": {Key: []byte("key 2"), Value: []byte(""), Type: LogRecordNormal},
 	}
-	// deleteLogs := map[string]*LogRecord{
-	// 	"key 0": {Key: []byte("key 0"), Value: []byte(""), Type: LogRecordDeleted},
-	// 	"":      {Key: nil, Value: []byte(""), Type: LogRecordDeleted},
-	// 	"key 2": {Key: []byte("key 2"), Value: []byte(""), Type: LogRecordDeleted},
-	// }
 
 	err = table.putBatch(writeLogs, node.Generate(), writeOpts)
 	assert.Nil(t, err)
@@ -541,19 +538,58 @@ func Test_memtableIterator_Rewind(t *testing.T) {
 	}
 	itr, err := NewMemtableIterator(iteratorOptions, table)
 	assert.Nil(t, err)
+	var prev []byte
 	itr.Rewind()
 	for itr.Valid() {
-		t.Log(string(itr.Key()))
+		currKey := itr.Key()
+		assert.True(t, prev == nil || bytes.Compare(prev, currKey) == -1)
+		assert.Equal(t, writeLogs[string(currKey)].Value, itr.Value().(y.ValueStruct).Value)
+		assert.Equal(t, writeLogs[string(currKey)].Type, itr.Value().(y.ValueStruct).Meta)
+		prev = currKey
 		itr.Next()
 	}
+	err = itr.Close()
+	assert.Nil(t, err)
 
 	iteratorOptions.Reverse = true
+	prev = nil
 	itr, err = NewMemtableIterator(iteratorOptions, table)
 	assert.Nil(t, err)
 	itr.Rewind()
 	for itr.Valid() {
-		t.Log(string(itr.Key()))
+		currKey := itr.Key()
+		assert.True(t, prev == nil || bytes.Compare(prev, currKey) == 1)
+		prev = currKey
+		assert.Equal(t, writeLogs[string(currKey)].Value, itr.Value().(y.ValueStruct).Value)
+		assert.Equal(t, writeLogs[string(currKey)].Type, itr.Value().(y.ValueStruct).Meta)
 		itr.Next()
 	}
+	err = itr.Close()
+	assert.Nil(t, err)
+
+	iteratorOptions.Reverse = false
+	itr, err = NewMemtableIterator(iteratorOptions, table)
+	assert.Nil(t, err)
+	itr.Seek(y.KeyWithTs([]byte("key 0"), 0))
+	assert.Equal(t, []byte("key 0"), itr.Key())
+	itr.Seek(y.KeyWithTs([]byte("key 4"), 0))
+	assert.False(t, itr.Valid())
+	err = itr.Close()
+	assert.Nil(t, err)
+
+	iteratorOptions.Reverse = true
+	itr, err = NewMemtableIterator(iteratorOptions, table)
+	assert.Nil(t, err)
+	itr.Seek(y.KeyWithTs([]byte("key 4"), 0))
+	assert.Equal(t, []byte("key 2"), itr.Key())
+
+	itr.Seek(y.KeyWithTs([]byte("key 2"), 0))
+	assert.Equal(t, []byte("key 2"), itr.Key())
+
+	itr.Seek(y.KeyWithTs([]byte("aey 2"), 0))
+	assert.False(t, itr.Valid())
+
+	err = itr.Close()
+	assert.Nil(t, err)
 
 }
