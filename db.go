@@ -600,14 +600,17 @@ func (db *DB) NewIterator(options IteratorOptions) (*MergeIterator, error) {
 		itr.Rewind()
 		// is empty
 		if !itr.Valid() {
+			itr.Close()
 			continue
 		}
-		itrs[rank] = &SingleIter{
+		itrs = append(itrs, &SingleIter{
 			iType:   CursorItr,
 			options: options,
 			rank:    rank,
+			idx:     rank,
 			iter:    itr,
-		}
+		})
+
 		rank++
 	}
 
@@ -619,14 +622,16 @@ func (db *DB) NewIterator(options IteratorOptions) (*MergeIterator, error) {
 		itr.Rewind()
 		// is empty
 		if !itr.Valid() {
+			itr.Close()
 			continue
 		}
-		itrs[rank] = &SingleIter{
+		itrs = append(itrs, &SingleIter{
 			iType:   MemItr,
 			options: options,
 			rank:    rank,
+			idx:     rank,
 			iter:    itr,
-		}
+		})
 		rank++
 	}
 
@@ -636,18 +641,22 @@ func (db *DB) NewIterator(options IteratorOptions) (*MergeIterator, error) {
 	}
 	itr.Rewind()
 	if itr.Valid() {
-		itrs[rank] = &SingleIter{
+		itrs = append(itrs, &SingleIter{
 			iType:   MemItr,
 			options: options,
 			rank:    rank,
+			idx:     rank,
 			iter:    itr,
-		}
+		})
+	} else {
+		itr.Close()
 	}
 	h := IterHeap(itrs)
 	heap.Init(&h)
 
 	return &MergeIterator{
-		h:  h,
-		db: db,
+		h:    h,
+		itrs: itrs,
+		db:   db,
 	}, nil
 }

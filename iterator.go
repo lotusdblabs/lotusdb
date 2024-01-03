@@ -27,16 +27,19 @@ type IteratorI interface {
 }
 
 type MergeIterator struct {
-	h  IterHeap
-	db *DB
+	h    IterHeap
+	itrs []*SingleIter
+	db   *DB
 }
 
 // Rewind seek the first key in the iterator.
 func (mi *MergeIterator) Rewind() {
-	for _, v := range mi.h {
+	for _, v := range mi.itrs {
 		v.iter.Rewind()
 	}
-	heap.Init(&mi.h)
+	h := IterHeap(mi.itrs)
+	heap.Init(&h)
+	mi.h = h
 }
 
 // Seek move the iterator to the key which is
@@ -52,8 +55,15 @@ func (mi *MergeIterator) Seek(key []byte) {
 
 func (mi *MergeIterator) cleanKey(oldKey []byte, rank int) {
 	// delete all key == oldKey && rank < t.rank
-	for i := 0; i < mi.h.Len(); i++ {
-		singleIter := mi.h[i]
+	copyedItrs := make([]*SingleIter, len(mi.itrs))
+	// becouse heap.Remove heap.
+	copy(copyedItrs, mi.itrs)
+	for i := 0; i < len(copyedItrs); i++ {
+		singleIter := copyedItrs[i]
+		if singleIter.rank == rank || !singleIter.iter.Valid() {
+			continue
+		}
+		// 这里说明之前还是valid的
 		for singleIter.iter.Valid() &&
 			bytes.Equal(singleIter.iter.Key(), oldKey) {
 			if singleIter.rank > rank {
@@ -62,22 +72,32 @@ func (mi *MergeIterator) cleanKey(oldKey []byte, rank int) {
 			singleIter.iter.Next()
 		}
 		if !singleIter.iter.Valid() {
-			heap.Remove(&mi.h, i)
+			heap.Remove(&mi.h, singleIter.idx)
 		} else {
-			heap.Fix(&mi.h, i)
+			heap.Fix(&mi.h, singleIter.idx)
 		}
 	}
 }
 
 // Next moves the iterator to the next key.
 func (mi *MergeIterator) Next() {
-	singleIter := heap.Pop(&mi.h).(*SingleIter)
+	// top item
+	singleIter := mi.h[0]
+	oldKey := singleIter.iter.Key()
+	mi.cleanKey(oldKey, singleIter.rank)
+	if !singleIter.iter.Valid() {
+		return
+	}
 	singleIter.iter.Next()
+
 	if singleIter.iType == MemItr {
 		// check is deleteKey
 		for singleIter.iter.Valid() {
 			if valStruct, ok := singleIter.iter.Value().(y.ValueStruct); ok && valStruct.Meta == LogRecordDeleted {
 				mi.cleanKey(singleIter.iter.Key(), singleIter.rank)
+				if !singleIter.iter.Valid() {
+					return
+				}
 				singleIter.iter.Next()
 			} else {
 				break
@@ -98,13 +118,12 @@ func (mi *MergeIterator) Key() []byte {
 
 // Value get the current value.
 func (mi *MergeIterator) Value() []byte {
-	singleIter := heap.Pop(&mi.h).(*SingleIter)
-	val := singleIter.iter.Value().([]byte)
+	singleIter := mi.h[0]
 	if singleIter.iType == CursorItr {
 		keyPos := new(KeyPosition)
 		keyPos.key = singleIter.iter.Key()
 		keyPos.partition = uint32(mi.db.vlog.getKeyPartition(singleIter.iter.Key()))
-		keyPos.position = wal.DecodeChunkPosition(val)
+		keyPos.position = wal.DecodeChunkPosition(singleIter.iter.Value().([]byte))
 		record, err := mi.db.vlog.read(keyPos)
 		if err != nil {
 			panic(err)
@@ -119,6 +138,23 @@ func (mi *MergeIterator) Value() []byte {
 
 // Valid returns whether the iterator is exhausted.
 func (mi *MergeIterator) Valid() bool {
+	if mi.h.Len() == 0 {
+		return false
+	}
+	singleIter := mi.h[0]
+	if singleIter.iType == MemItr && singleIter.iter.Value().(y.ValueStruct).Meta == LogRecordDeleted {
+		mi.cleanKey(singleIter.iter.Key(), singleIter.rank)
+		if !singleIter.iter.Valid() {
+			return false
+		}
+		singleIter.iter.Next()
+		if singleIter.iter.Valid() {
+			heap.Fix(&mi.h, 0)
+			return mi.Valid()
+		} else {
+			heap.Remove(&mi.h, 0)
+		}
+	}
 	return mi.h.Len() > 0
 }
 
@@ -129,7 +165,7 @@ func (mi *MergeIterator) Close() error {
 			mi.db.mu.Unlock()
 		}
 	}()
-	for _, v := range mi.h {
+	for _, v := range mi.itrs {
 		err := v.iter.Close()
 		if err != nil {
 			return err

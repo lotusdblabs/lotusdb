@@ -564,3 +564,141 @@ func TestDBMultiClients(t *testing.T) {
 		wg.Wait()
 	})
 }
+
+func Test_DBIterator(t *testing.T) {
+	options := DefaultOptions
+	path, err := os.MkdirTemp("", "db-test-iter")
+	t.Log(path)
+	assert.Nil(t, err)
+	options.DirPath = path
+	db, err := Open(options)
+	defer destroyDB(db)
+	assert.Nil(t, err)
+	db.immuMems = make([]*memtable, 3)
+	opts := memtableOptions{
+		dirPath:         path,
+		tableId:         0,
+		memSize:         DefaultOptions.MemtableSize,
+		walBytesPerSync: DefaultOptions.BytesPerSync,
+		walSync:         DefaultBatchOptions.Sync,
+		walBlockCache:   DefaultOptions.BlockCache,
+	}
+	for i := 0; i < 3; i++ {
+		opts.tableId = uint32(i)
+		db.immuMems[i], err = openMemtable(opts)
+		assert.Nil(t, err)
+	}
+	logRecord_0 := []*LogRecord{
+		// 0
+		{[]byte("k1"), []byte("v1"), LogRecordNormal, 0},
+		{[]byte("k1"), []byte("v1_1"), LogRecordNormal, 0},
+		{[]byte("k2"), []byte("v1_1"), LogRecordNormal, 0},
+	}
+	logRecord_1 := []*LogRecord{
+		{[]byte("k1"), []byte("v2_1"), LogRecordNormal, 0},
+		{[]byte("k2"), []byte("v2_1"), LogRecordNormal, 0},
+		{[]byte("k2"), []byte("v2_2"), LogRecordNormal, 0},
+	}
+	logRecord_2 := []*LogRecord{
+		// 2
+		{[]byte("k2"), nil, LogRecordDeleted, 0},
+		{[]byte("k3"), []byte("v3_1"), LogRecordNormal, 0},
+	}
+
+	list2Map := func(in []*LogRecord) (out map[string]*LogRecord) {
+		out = make(map[string]*LogRecord)
+		for _, v := range in {
+			out[string(v.Key)] = v
+		}
+		return
+	}
+	db.immuMems[0].putBatch(list2Map(logRecord_0), 0, nil)
+	db.immuMems[1].putBatch(list2Map(logRecord_1), 1, nil)
+	db.immuMems[2].putBatch(list2Map(logRecord_2), 2, nil)
+
+	expectedKey := [][]byte{
+		[]byte("k1"),
+		[]byte("k3"),
+	}
+	expectedVal := [][]byte{
+		[]byte("v2_1"),
+		[]byte("v3_1"),
+	}
+	iter, err := db.NewIterator(IteratorOptions{
+		Reverse: false,
+	})
+	assert.Nil(t, err)
+	var i int
+	iter.Rewind()
+	i = 0
+	for iter.Valid() {
+		if !iter.itrs[0].options.Reverse {
+			assert.Equal(t, expectedKey[i], iter.Key())
+			assert.Equal(t, expectedVal[i], iter.Value())
+
+		} else {
+			assert.Equal(t, expectedKey[2-i], iter.Key())
+			assert.Equal(t, expectedVal[2-i], iter.Value())
+
+		}
+		i++
+		iter.Next()
+	}
+
+	iter.Rewind()
+	i = 0
+	for iter.Valid() {
+		if !iter.itrs[0].options.Reverse {
+			assert.Equal(t, expectedKey[i], iter.Key())
+			assert.Equal(t, expectedVal[i], iter.Value())
+
+		} else {
+			assert.Equal(t, expectedKey[2-i], iter.Key())
+			assert.Equal(t, expectedVal[2-i], iter.Value())
+
+		}
+		i++
+		iter.Next()
+	}
+	err = iter.Close()
+	assert.Nil(t, err)
+
+	iter, err = db.NewIterator(IteratorOptions{
+		Reverse: true,
+	})
+	assert.Nil(t, err)
+
+	iter.Rewind()
+	i = 0
+	for iter.Valid() {
+		if !iter.itrs[0].options.Reverse {
+			assert.Equal(t, expectedKey[i], iter.Key())
+			assert.Equal(t, expectedVal[i], iter.Value())
+
+		} else {
+			assert.Equal(t, expectedKey[1-i], iter.Key())
+			assert.Equal(t, expectedVal[1-i], iter.Value())
+
+		}
+		i++
+		iter.Next()
+	}
+
+	iter.Rewind()
+	i = 0
+	for iter.Valid() {
+		if !iter.itrs[0].options.Reverse {
+			assert.Equal(t, expectedKey[i], iter.Key())
+			assert.Equal(t, expectedVal[i], iter.Value())
+
+		} else {
+			assert.Equal(t, expectedKey[1-i], iter.Key())
+			assert.Equal(t, expectedVal[1-i], iter.Value())
+
+		}
+		i++
+		iter.Next()
+	}
+	iter.Close()
+
+}

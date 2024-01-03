@@ -12,9 +12,10 @@ const (
 )
 
 type SingleIter struct {
-	iType  iterType
+	iType   iterType
 	options IteratorOptions
 	rank    int // rank 越大，说明越新
+	idx     int // 索引
 	iter    IteratorI
 }
 type IterHeap []*SingleIter
@@ -54,6 +55,7 @@ func (ih IterHeap) Less(i int, j int) bool {
 // Swap swaps the elements with indexes i and j.
 func (ih IterHeap) Swap(i int, j int) {
 	ih[i], ih[j] = ih[j], ih[i]
+	ih[i].idx, ih[j].idx = i, j
 }
 
 func (ih *IterHeap) Push(x any) {

@@ -179,7 +179,7 @@ func (mt *memtable) putBatch(pendingWrites map[string]*LogRecord,
 			return err
 		}
 		// flush wal if necessary
-		if options.Sync && !mt.options.walSync {
+		if options != nil && options.Sync && !mt.options.walSync {
 			if err := mt.wal.Sync(); err != nil {
 				return err
 			}
