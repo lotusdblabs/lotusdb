@@ -499,7 +499,7 @@ func TestNewMemtableIterator(t *testing.T) {
 	assert.Nil(t, err)
 }
 
-func Test_memtableIterator_Rewind(t *testing.T) {
+func Test_memtableIterator(t *testing.T) {
 	path, err := os.MkdirTemp("", "memtable-test-iterator-rewind")
 	assert.Nil(t, err)
 
@@ -570,26 +570,28 @@ func Test_memtableIterator_Rewind(t *testing.T) {
 	iteratorOptions.Reverse = false
 	itr, err = NewMemtableIterator(iteratorOptions, table)
 	assert.Nil(t, err)
-	itr.Seek(y.KeyWithTs([]byte("key 0"), 0))
+	itr.Seek([]byte("key 0"))
 	assert.Equal(t, []byte("key 0"), itr.Key())
-	itr.Seek(y.KeyWithTs([]byte("key 4"), 0))
+	itr.Seek([]byte("key 4"))
 	assert.False(t, itr.Valid())
+
+	itr.Seek([]byte("aye 2"))
+	assert.Equal(t, []byte("key 0"), itr.Key())
 	err = itr.Close()
 	assert.Nil(t, err)
 
 	iteratorOptions.Reverse = true
 	itr, err = NewMemtableIterator(iteratorOptions, table)
 	assert.Nil(t, err)
-	itr.Seek(y.KeyWithTs([]byte("key 4"), 0))
+	itr.Seek([]byte("key 4"))
 	assert.Equal(t, []byte("key 2"), itr.Key())
 
-	itr.Seek(y.KeyWithTs([]byte("key 2"), 0))
+	itr.Seek([]byte("key 2"))
 	assert.Equal(t, []byte("key 2"), itr.Key())
 
-	itr.Seek(y.KeyWithTs([]byte("aey 2"), 0))
+	itr.Seek([]byte("aye 2"))
 	assert.False(t, itr.Valid())
 
 	err = itr.Close()
 	assert.Nil(t, err)
-
 }

@@ -1,6 +1,7 @@
 package lotusdb
 
 import (
+	"bytes"
 	"context"
 	"fmt"
 	"path/filepath"
@@ -199,7 +200,7 @@ func (bt *BPTree) Sync() error {
 	return nil
 }
 
-type CursorIterator struct {
+type cursorIterator struct {
 	k       []byte
 	v       []byte
 	tx      *bbolt.Tx
@@ -207,21 +208,18 @@ type CursorIterator struct {
 	options IteratorOptions
 }
 
-func NewCursorIterator(tx *bbolt.Tx, options IteratorOptions) (*CursorIterator, error) {
-	b, err := tx.CreateBucket(indexBucketName)
-	if err != nil {
-		return nil, err
-	}
+func NewCursorIterator(tx *bbolt.Tx, options IteratorOptions) (*cursorIterator, error) {
+	b := tx.Bucket(indexBucketName)
 	c := b.Cursor()
-	return &CursorIterator{
-		tx:      tx,
+	return &cursorIterator{
 		cursor:  c,
 		options: options,
+		tx:      tx,
 	}, nil
 }
 
 // Rewind seek the first key in the iterator.
-func (ci *CursorIterator) Rewind() {
+func (ci *cursorIterator) Rewind() {
 	if ci.options.Reverse {
 		ci.k, ci.v = ci.cursor.Last()
 	} else {
@@ -231,12 +229,15 @@ func (ci *CursorIterator) Rewind() {
 
 // Seek move the iterator to the key which is
 // greater(less when reverse is true) than or equal to the specified key.
-func (ci *CursorIterator) Seek(key []byte) {
+func (ci *cursorIterator) Seek(key []byte) {
 	ci.k, ci.v = ci.cursor.Seek(key)
+	if !bytes.Equal(ci.k, key) && ci.options.Reverse {
+		ci.k, ci.v = ci.cursor.Prev()
+	}
 }
 
 // Next moves the iterator to the next key.
-func (ci *CursorIterator) Next() {
+func (ci *cursorIterator) Next() {
 	if ci.options.Reverse {
 		ci.k, ci.v = ci.cursor.Prev()
 	} else {
@@ -245,21 +246,21 @@ func (ci *CursorIterator) Next() {
 }
 
 // Key get the current key.
-func (ci *CursorIterator) Key() []byte {
+func (ci *cursorIterator) Key() []byte {
 	return ci.k
 }
 
 // Value get the current value.
-func (ci *CursorIterator) Value() any {
+func (ci *cursorIterator) Value() any {
 	return ci.v
 }
 
 // Valid returns whether the iterator is exhausted.
-func (ci *CursorIterator) Valid() bool {
+func (ci *cursorIterator) Valid() bool {
 	return ci.k != nil
 }
 
 // Close the iterator.
-func (ci *CursorIterator) Close() error {
+func (ci *cursorIterator) Close() error {
 	return ci.tx.Rollback()
 }

@@ -252,7 +252,7 @@ func (mi *memtableIterator) Rewind() {
 // Seek move the iterator to the key which is
 // greater(less when reverse is true) than or equal to the specified key.
 func (mi *memtableIterator) Seek(key []byte) {
-	mi.iter.Seek(key)
+	mi.iter.Seek(y.KeyWithTs(key, 0))
 }
 
 // Next moves the iterator to the next key.
