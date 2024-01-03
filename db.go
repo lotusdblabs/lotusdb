@@ -135,9 +135,6 @@ func Open(options Options) (*DB, error) {
 
 	return db, nil
 }
-func (db *DB) GetA() *memtable {
-	return db.activeMem
-}
 
 // Close the database, close all data files and release file lock.
 // Set the closed flag to true.
