@@ -44,6 +44,7 @@ type DB struct {
 	flushLock sync.Mutex     // flushLock is to prevent flush running while compaction doesn't occur
 	mu        sync.RWMutex
 	closed    bool
+	closeChan chan struct{}
 	options   Options
 	batchPool sync.Pool // batchPool is a pool of batch, to reduce the cost of memory allocation.
 }
@@ -116,6 +117,7 @@ func Open(options Options) (*DB, error) {
 		vlog:      vlog,
 		fileLock:  fileLock,
 		flushChan: make(chan *memtable, options.MemtableNums-1),
+		closeChan: make(chan struct{}),
 		options:   options,
 		batchPool: sync.Pool{New: makeBatch},
 	}
@@ -140,7 +142,8 @@ func Open(options Options) (*DB, error) {
 func (db *DB) Close() error {
 	db.mu.Lock()
 	defer db.mu.Unlock()
-
+	close(db.flushChan)
+	<-db.closeChan
 	// close all memtables
 	for _, table := range db.immuMems {
 		if err := table.close(); err != nil {
@@ -430,16 +433,14 @@ func (db *DB) listenMemtableFlush() {
 	signal.Notify(sig, os.Interrupt, syscall.SIGHUP, syscall.SIGINT, syscall.SIGTERM, syscall.SIGQUIT)
 	for {
 		select {
-		case table := <-db.flushChan:
-			db.flushMemtable(table)
+		case table, ok := <-db.flushChan:
+			if ok {
+				db.flushMemtable(table)
+			} else {
+				db.closeChan <- struct{}{}
+				return
+			}
 		case <-sig:
-			// Persist the remaining data before the db shutdown
-			db.flushMemtable(db.activeMem)
-			// Open a new memtable for writing
-			options := db.activeMem.options
-			options.tableId++
-			table, _ := openMemtable(options)
-			db.activeMem = table
 			return
 		}
 	}

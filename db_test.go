@@ -13,10 +13,13 @@ import (
 )
 
 func destroyDB(db *DB) {
-	err := db.Close()
-	if err != nil {
-		panic(err)
+	if !db.closed {
+		err := db.Close()
+		if err != nil {
+			panic(err)
+		}
 	}
+
 	_ = os.RemoveAll(db.options.DirPath)
 }
 
