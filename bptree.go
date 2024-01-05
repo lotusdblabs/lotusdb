@@ -200,6 +200,7 @@ func (bt *BPTree) Sync() error {
 	return nil
 }
 
+// bptreeIterator implement IteratorI
 type bptreeIterator struct {
 	k       []byte
 	v       []byte
@@ -208,6 +209,7 @@ type bptreeIterator struct {
 	options IteratorOptions
 }
 
+// NewBptreeIterator
 func NewBptreeIterator(tx *bbolt.Tx, options IteratorOptions) (*bptreeIterator, error) {
 	b := tx.Bucket(indexBucketName)
 	c := b.Cursor()

@@ -8,6 +8,7 @@ import (
 	"github.com/rosedblabs/wal"
 )
 
+// IteratorI
 type IteratorI interface {
 	// Rewind seek the first key in the iterator.
 	Rewind()
@@ -26,6 +27,7 @@ type IteratorI interface {
 	Close() error
 }
 
+// MergeIterator holds a heap and a set of iterators that implement the IteratorI interface
 type MergeIterator struct {
 	h    IterHeap
 	itrs []*SingleIter // used for rebuilding heap
@@ -53,6 +55,9 @@ func (mi *MergeIterator) Seek(key []byte) {
 	}
 }
 
+
+// cleanKey Remove all unused keys from all iterators. 
+// If the iterators become empty after clearing, remove them from the heap.
 func (mi *MergeIterator) cleanKey(oldKey []byte, rank int) {
 	defer func() {
 		if r := recover(); r != nil {

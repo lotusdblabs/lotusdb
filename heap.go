@@ -11,13 +11,15 @@ const (
 	MemItr
 )
 
+// SingleIter element used to construct the heap，implementing the container.heap interface.
 type SingleIter struct {
 	iType   iterType
 	options IteratorOptions
-	rank    int // rank 越大，说明越新
-	idx     int // 索引
+	rank    int //  A higher rank indicates newer data.
+	idx     int //  idx in heap
 	iter    IteratorI
 }
+
 type IterHeap []*SingleIter
 
 // Len is the number of elements in the collection.
@@ -58,10 +60,12 @@ func (ih IterHeap) Swap(i int, j int) {
 	ih[i].idx, ih[j].idx = i, j
 }
 
+// Push add x as element Len().
 func (ih *IterHeap) Push(x any) {
 	*ih = append(*ih, x.(*SingleIter))
 }
 
+// Pop remove and return element Len() - 1.
 func (ih *IterHeap) Pop() any {
 	old := *ih
 	n := len(old)
