@@ -571,7 +571,6 @@ func TestDBMultiClients(t *testing.T) {
 func TestDBIterator(t *testing.T) {
 	options := DefaultOptions
 	path, err := os.MkdirTemp("", "db-test-iter")
-	t.Log(path)
 	assert.Nil(t, err)
 	options.DirPath = path
 	db, err := Open(options)
@@ -593,6 +592,7 @@ func TestDBIterator(t *testing.T) {
 	}
 	logRecord_0 := []*LogRecord{
 		// 0
+		{[]byte("k3"), nil, LogRecordDeleted, 0},
 		{[]byte("k1"), []byte("v1"), LogRecordNormal, 0},
 		{[]byte("k1"), []byte("v1_1"), LogRecordNormal, 0},
 		{[]byte("k2"), []byte("v1_1"), LogRecordNormal, 0},
@@ -751,5 +751,4 @@ func TestDBIterator(t *testing.T) {
 		err = iter.Close()
 		assert.Nil(t, err)
 	}
-
 }
