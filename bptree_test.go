@@ -321,23 +321,23 @@ func Test_bptreeIterator(t *testing.T) {
 	bt, err := openBTreeIndex(options)
 	assert.Nil(t, err)
 	m := map[string]*wal.ChunkPosition{
-		"key 0": &wal.ChunkPosition{0, 0, 0, 0},
-		"key 1": &wal.ChunkPosition{1, 1, 1, 1},
-		"key 2": &wal.ChunkPosition{2, 2, 2, 2},
+		"key 0": {SegmentId: 0, BlockNumber: 0, ChunkOffset: 0, ChunkSize: 0},
+		"key 1": {SegmentId: 1, BlockNumber: 1, ChunkOffset: 1, ChunkSize: 1},
+		"key 2": {SegmentId: 2, BlockNumber: 2, ChunkOffset: 2, ChunkSize: 2},
 	}
 	var keyPositions []*KeyPosition
 	keyPositions = append(keyPositions, &KeyPosition{
 		key:       []byte("key 0"),
 		partition: 0,
-		position:  &wal.ChunkPosition{0, 0, 0, 0},
+		position:  &wal.ChunkPosition{SegmentId: 0, BlockNumber: 0, ChunkOffset: 0, ChunkSize: 0},
 	}, &KeyPosition{
 		key:       []byte("key 1"),
 		partition: 0,
-		position:  &wal.ChunkPosition{1, 1, 1, 1},
+		position:  &wal.ChunkPosition{SegmentId: 1, BlockNumber: 1, ChunkOffset: 1, ChunkSize: 1},
 	}, &KeyPosition{
 		key:       []byte("key 2"),
 		partition: 0,
-		position:  &wal.ChunkPosition{2, 2, 2, 2},
+		position:  &wal.ChunkPosition{SegmentId: 2, BlockNumber: 2, ChunkOffset: 2, ChunkSize: 2},
 	},
 	)
 
