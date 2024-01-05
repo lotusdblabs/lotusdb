@@ -591,7 +591,7 @@ func (db *DB) NewIterator(options IteratorOptions) (*MergeIterator, error) {
 			return nil, err
 		}
 		txs[i] = tx
-		itr, err := NewCursorIterator(
+		itr, err := NewBptreeIterator(
 			tx,
 			options,
 		)
@@ -605,7 +605,7 @@ func (db *DB) NewIterator(options IteratorOptions) (*MergeIterator, error) {
 			continue
 		}
 		itrs = append(itrs, &SingleIter{
-			iType:   CursorItr,
+			iType:   BptreeItr,
 			options: options,
 			rank:    rank,
 			idx:     rank,

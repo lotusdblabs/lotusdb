@@ -200,7 +200,7 @@ func (bt *BPTree) Sync() error {
 	return nil
 }
 
-type cursorIterator struct {
+type bptreeIterator struct {
 	k       []byte
 	v       []byte
 	tx      *bbolt.Tx
@@ -208,10 +208,10 @@ type cursorIterator struct {
 	options IteratorOptions
 }
 
-func NewCursorIterator(tx *bbolt.Tx, options IteratorOptions) (*cursorIterator, error) {
+func NewBptreeIterator(tx *bbolt.Tx, options IteratorOptions) (*bptreeIterator, error) {
 	b := tx.Bucket(indexBucketName)
 	c := b.Cursor()
-	return &cursorIterator{
+	return &bptreeIterator{
 		cursor:  c,
 		options: options,
 		tx:      tx,
@@ -219,48 +219,48 @@ func NewCursorIterator(tx *bbolt.Tx, options IteratorOptions) (*cursorIterator, 
 }
 
 // Rewind seek the first key in the iterator.
-func (ci *cursorIterator) Rewind() {
-	if ci.options.Reverse {
-		ci.k, ci.v = ci.cursor.Last()
+func (bi *bptreeIterator) Rewind() {
+	if bi.options.Reverse {
+		bi.k, bi.v = bi.cursor.Last()
 	} else {
-		ci.k, ci.v = ci.cursor.First()
+		bi.k, bi.v = bi.cursor.First()
 	}
 }
 
 // Seek move the iterator to the key which is
 // greater(less when reverse is true) than or equal to the specified key.
-func (ci *cursorIterator) Seek(key []byte) {
-	ci.k, ci.v = ci.cursor.Seek(key)
-	if !bytes.Equal(ci.k, key) && ci.options.Reverse {
-		ci.k, ci.v = ci.cursor.Prev()
+func (bi *bptreeIterator) Seek(key []byte) {
+	bi.k, bi.v = bi.cursor.Seek(key)
+	if !bytes.Equal(bi.k, key) && bi.options.Reverse {
+		bi.k, bi.v = bi.cursor.Prev()
 	}
 }
 
 // Next moves the iterator to the next key.
-func (ci *cursorIterator) Next() {
-	if ci.options.Reverse {
-		ci.k, ci.v = ci.cursor.Prev()
+func (bi *bptreeIterator) Next() {
+	if bi.options.Reverse {
+		bi.k, bi.v = bi.cursor.Prev()
 	} else {
-		ci.k, ci.v = ci.cursor.Next()
+		bi.k, bi.v = bi.cursor.Next()
 	}
 }
 
 // Key get the current key.
-func (ci *cursorIterator) Key() []byte {
-	return ci.k
+func (bi *bptreeIterator) Key() []byte {
+	return bi.k
 }
 
 // Value get the current value.
-func (ci *cursorIterator) Value() any {
+func (ci *bptreeIterator) Value() any {
 	return ci.v
 }
 
 // Valid returns whether the iterator is exhausted.
-func (ci *cursorIterator) Valid() bool {
+func (ci *bptreeIterator) Valid() bool {
 	return ci.k != nil
 }
 
 // Close the iterator.
-func (ci *cursorIterator) Close() error {
+func (ci *bptreeIterator) Close() error {
 	return ci.tx.Rollback()
 }

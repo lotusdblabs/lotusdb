@@ -305,7 +305,7 @@ func testbptreeSync(t *testing.T, partitionNum int) {
 	assert.Nil(t, err)
 }
 
-func Test_cursorIterator(t *testing.T) {
+func Test_bptreeIterator(t *testing.T) {
 	options := indexOptions{
 		indexType:       BTree,
 		dirPath:         filepath.Join(os.TempDir(), "bptree-cursorIterator"+strconv.Itoa(1)),
@@ -351,7 +351,7 @@ func Test_cursorIterator(t *testing.T) {
 		Reverse: false,
 	}
 
-	itr, err := NewCursorIterator(tx, iteratorOptions)
+	itr, err := NewBptreeIterator(tx, iteratorOptions)
 	assert.Nil(t, err)
 	var prev []byte
 	itr.Rewind()
@@ -372,7 +372,7 @@ func Test_cursorIterator(t *testing.T) {
 	}
 	prev = nil
 
-	itr, err = NewCursorIterator(tx, iteratorOptions)
+	itr, err = NewBptreeIterator(tx, iteratorOptions)
 	assert.Nil(t, err)
 	itr.Rewind()
 	for itr.Valid() {
@@ -400,7 +400,7 @@ func Test_cursorIterator(t *testing.T) {
 	}
 	prev = nil
 
-	itr, err = NewCursorIterator(tx, iteratorOptions)
+	itr, err = NewBptreeIterator(tx, iteratorOptions)
 	assert.Nil(t, err)
 	itr.Rewind()
 	for itr.Valid() {

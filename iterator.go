@@ -28,7 +28,7 @@ type IteratorI interface {
 
 type MergeIterator struct {
 	h    IterHeap
-	itrs []*SingleIter
+	itrs []*SingleIter // used for rebuilding heap
 	db   *DB
 }
 
@@ -54,9 +54,14 @@ func (mi *MergeIterator) Seek(key []byte) {
 }
 
 func (mi *MergeIterator) cleanKey(oldKey []byte, rank int) {
+	defer func() {
+		if r := recover(); r != nil {
+			mi.db.mu.Unlock()
+		}
+	}()
 	// delete all key == oldKey && rank < t.rank
 	copyedItrs := make([]*SingleIter, len(mi.itrs))
-	// becouse heap.Remove heap.
+	// becouse heap.Remove heap.Fix may alter the order of elements in the slice.
 	copy(copyedItrs, mi.itrs)
 	for i := 0; i < len(copyedItrs); i++ {
 		singleIter := copyedItrs[i]
@@ -118,8 +123,13 @@ func (mi *MergeIterator) Key() []byte {
 
 // Value get the current value.
 func (mi *MergeIterator) Value() []byte {
+	defer func() {
+		if r := recover(); r != nil {
+			mi.db.mu.Unlock()
+		}
+	}()
 	singleIter := mi.h[0]
-	if singleIter.iType == CursorItr {
+	if singleIter.iType == BptreeItr {
 		keyPos := new(KeyPosition)
 		keyPos.key = singleIter.iter.Key()
 		keyPos.partition = uint32(mi.db.vlog.getKeyPartition(singleIter.iter.Key()))
@@ -132,7 +142,7 @@ func (mi *MergeIterator) Value() []byte {
 	} else if singleIter.iType == MemItr {
 		return singleIter.iter.Value().(y.ValueStruct).Value
 	} else {
-		panic("iType wrong")
+		panic("iType not support")
 	}
 }
 
@@ -154,7 +164,7 @@ func (mi *MergeIterator) Valid() bool {
 		} else {
 			heap.Remove(&mi.h, 0)
 		}
-	} else if singleIter.iType == CursorItr && !singleIter.iter.Valid() {
+	} else if singleIter.iType == BptreeItr && !singleIter.iter.Valid() {
 		heap.Remove(&mi.h, 0)
 	}
 	return mi.h.Len() > 0
@@ -162,14 +172,10 @@ func (mi *MergeIterator) Valid() bool {
 
 // Close the iterator.
 func (mi *MergeIterator) Close() error {
-	defer func() {
-		if r := recover(); r != nil {
-			mi.db.mu.Unlock()
-		}
-	}()
 	for _, v := range mi.itrs {
 		err := v.iter.Close()
 		if err != nil {
+			mi.db.mu.Unlock()
 			return err
 		}
 	}

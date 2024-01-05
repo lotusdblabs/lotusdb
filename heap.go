@@ -7,7 +7,7 @@ import (
 type iterType uint8
 
 const (
-	CursorItr iterType = iota
+	BptreeItr iterType = iota
 	MemItr
 )
 
