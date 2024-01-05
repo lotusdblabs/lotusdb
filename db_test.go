@@ -568,7 +568,7 @@ func TestDBMultiClients(t *testing.T) {
 	})
 }
 
-func Test_DBIterator(t *testing.T) {
+func TestDBIterator(t *testing.T) {
 	options := DefaultOptions
 	path, err := os.MkdirTemp("", "db-test-iter")
 	t.Log(path)
@@ -605,6 +605,8 @@ func Test_DBIterator(t *testing.T) {
 	logRecord_2 := []*LogRecord{
 		// 2
 		{[]byte("k2"), nil, LogRecordDeleted, 0},
+	}
+	logRecord_3 := []*LogRecord{
 		{[]byte("k3"), []byte("v3_1"), LogRecordNormal, 0},
 	}
 
@@ -618,7 +620,7 @@ func Test_DBIterator(t *testing.T) {
 	db.immuMems[0].putBatch(list2Map(logRecord_0), 0, nil)
 	db.immuMems[1].putBatch(list2Map(logRecord_1), 1, nil)
 	db.immuMems[2].putBatch(list2Map(logRecord_2), 2, nil)
-
+	db.activeMem.putBatch(list2Map(logRecord_3), 3, nil)
 	expectedKey := [][]byte{
 		[]byte("k1"),
 		[]byte("k3"),
@@ -702,6 +704,52 @@ func Test_DBIterator(t *testing.T) {
 		i++
 		iter.Next()
 	}
-	iter.Close()
+	err = iter.Close()
+	assert.Nil(t, err)
+
+	for j := 0; j < 3; j++ {
+		db.flushMemtable(db.immuMems[0])
+		iter, err = db.NewIterator(IteratorOptions{
+			Reverse: false,
+		})
+		assert.Nil(t, err)
+
+		iter.Rewind()
+		i = 0
+		for iter.Valid() {
+			if !iter.itrs[0].options.Reverse {
+				assert.Equal(t, expectedKey[i], iter.Key())
+				assert.Equal(t, expectedVal[i], iter.Value())
+			} else {
+				assert.Equal(t, expectedKey[1-i], iter.Key())
+				assert.Equal(t, expectedVal[1-i], iter.Value())
+			}
+			iter.Next()
+			i++
+		}
+		err = iter.Close()
+		assert.Nil(t, err)
+
+		iter, err = db.NewIterator(IteratorOptions{
+			Reverse: true,
+		})
+		assert.Nil(t, err)
+
+		iter.Rewind()
+		i = 0
+		for iter.Valid() {
+			if !iter.itrs[0].options.Reverse {
+				assert.Equal(t, expectedKey[i], iter.Key())
+				assert.Equal(t, expectedVal[i], iter.Value())
+			} else {
+				assert.Equal(t, expectedKey[1-i], iter.Key())
+				assert.Equal(t, expectedVal[1-i], iter.Value())
+			}
+			iter.Next()
+			i++
+		}
+		err = iter.Close()
+		assert.Nil(t, err)
+	}
 
 }

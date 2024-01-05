@@ -103,11 +103,11 @@ func (mi *MergeIterator) Next() {
 				break
 			}
 		}
-		if !singleIter.iter.Valid() {
-			heap.Remove(&mi.h, 0)
-		} else {
-			heap.Fix(&mi.h, 0)
-		}
+	}
+	if !singleIter.iter.Valid() {
+		heap.Remove(&mi.h, 0)
+	} else {
+		heap.Fix(&mi.h, 0)
 	}
 }
 
@@ -154,6 +154,8 @@ func (mi *MergeIterator) Valid() bool {
 		} else {
 			heap.Remove(&mi.h, 0)
 		}
+	} else if singleIter.iType == CursorItr && !singleIter.iter.Valid() {
+		heap.Remove(&mi.h, 0)
 	}
 	return mi.h.Len() > 0
 }
