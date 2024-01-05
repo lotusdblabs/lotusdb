@@ -55,8 +55,7 @@ func (mi *MergeIterator) Seek(key []byte) {
 	}
 }
 
-
-// cleanKey Remove all unused keys from all iterators. 
+// cleanKey Remove all unused keys from all iterators.
 // If the iterators become empty after clearing, remove them from the heap.
 func (mi *MergeIterator) cleanKey(oldKey []byte, rank int) {
 	defer func() {
