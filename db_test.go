@@ -626,10 +626,15 @@ func TestDBIterator(t *testing.T) {
 		}
 		return
 	}
-	db.immuMems[0].putBatch(list2Map(logRecord_0), 0, nil)
-	db.immuMems[1].putBatch(list2Map(logRecord_1), 1, nil)
-	db.immuMems[2].putBatch(list2Map(logRecord_2), 2, nil)
-	db.activeMem.putBatch(list2Map(logRecord_3), 3, nil)
+	err = db.immuMems[0].putBatch(list2Map(logRecord_0), 0, nil)
+	assert.Nil(t, err)
+	err = db.immuMems[1].putBatch(list2Map(logRecord_1), 1, nil)
+	assert.Nil(t, err)
+	err = db.immuMems[2].putBatch(list2Map(logRecord_2), 2, nil)
+	assert.Nil(t, err)
+	err = db.activeMem.putBatch(list2Map(logRecord_3), 3, nil)
+	assert.Nil(t, err)
+
 	expectedKey := [][]byte{
 		[]byte("k1"),
 		[]byte("k3"),
