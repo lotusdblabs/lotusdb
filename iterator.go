@@ -90,33 +90,25 @@ func (mi *MergeIterator) cleanKey(oldKey []byte, rank int) {
 
 // Next moves the iterator to the next key.
 func (mi *MergeIterator) Next() {
-	// top item
-	singleIter := mi.h[0]
-	oldKey := singleIter.iter.Key()
-	mi.cleanKey(oldKey, singleIter.rank)
-	if !singleIter.iter.Valid() {
+	if mi.h.Len() == 0 {
 		return
 	}
-	singleIter.iter.Next()
+	// top item
+	singleIter := mi.h[0]
+	mi.cleanKey(singleIter.iter.Key(), singleIter.rank)
 
 	if singleIter.iType == MemItr {
 		// check is deleteKey
-		for singleIter.iter.Valid() {
-			if valStruct, ok := singleIter.iter.Value().(y.ValueStruct); ok && valStruct.Meta == LogRecordDeleted {
-				mi.cleanKey(singleIter.iter.Key(), singleIter.rank)
-				if !singleIter.iter.Valid() {
-					return
-				}
-				singleIter.iter.Next()
-			} else {
-				break
-			}
+		if valStruct, ok := singleIter.iter.Value().(y.ValueStruct); ok && valStruct.Meta == LogRecordDeleted {
+			singleIter.iter.Next()
+			mi.Next()
 		}
 	}
+	singleIter.iter.Next()
 	if !singleIter.iter.Valid() {
-		heap.Remove(&mi.h, 0)
+		heap.Remove(&mi.h, singleIter.idx)
 	} else {
-		heap.Fix(&mi.h, 0)
+		heap.Fix(&mi.h, singleIter.idx)
 	}
 }
 
@@ -160,13 +152,13 @@ func (mi *MergeIterator) Valid() bool {
 		mi.cleanKey(singleIter.iter.Key(), singleIter.rank)
 		singleIter.iter.Next()
 		if singleIter.iter.Valid() {
-			heap.Fix(&mi.h, 0)
+			heap.Fix(&mi.h, singleIter.idx)
 			return mi.Valid()
 		} else {
-			heap.Remove(&mi.h, 0)
+			heap.Remove(&mi.h, singleIter.idx)
 		}
 	} else if singleIter.iType == BptreeItr && !singleIter.iter.Valid() {
-		heap.Remove(&mi.h, 0)
+		heap.Remove(&mi.h, singleIter.idx)
 	}
 	return mi.h.Len() > 0
 }
