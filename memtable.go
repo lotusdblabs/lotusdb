@@ -264,6 +264,13 @@ func (mi *memtableIterator) Rewind() {
 // greater(less when reverse is true) than or equal to the specified key.
 func (mi *memtableIterator) Seek(key []byte) {
 	mi.iter.Seek(y.KeyWithTs(key, 0))
+	if len(mi.options.Prefix) == 0 {
+		return
+	}
+	// prefix scan
+	for mi.Valid() && !bytes.HasPrefix(mi.Key(), mi.options.Prefix) {
+		mi.Next()
+	}
 }
 
 // Next moves the iterator to the next key.

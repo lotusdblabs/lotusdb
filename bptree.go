@@ -248,6 +248,12 @@ func (bi *bptreeIterator) Seek(key []byte) {
 	if !bytes.Equal(bi.k, key) && bi.options.Reverse {
 		bi.k, bi.v = bi.cursor.Prev()
 	}
+	if len(bi.options.Prefix) == 0 {
+		return
+	}
+	if !bytes.HasPrefix(bi.Key(), bi.options.Prefix) {
+		bi.Next()
+	}
 }
 
 // Next moves the iterator to the next key.

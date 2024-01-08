@@ -47,12 +47,18 @@ func (mi *MergeIterator) Rewind() {
 // Seek move the iterator to the key which is
 // greater(less when reverse is true) than or equal to the specified key.
 func (mi *MergeIterator) Seek(key []byte) {
-	for i, v := range mi.h {
+	seekItrs := make([]*SingleIter, 0)
+	for _, v := range mi.itrs {
 		v.iter.Seek(key)
-		if !v.iter.Valid() {
-			heap.Remove(&mi.h, i)
+		if v.iter.Valid() {
+			// reset idx
+			v.idx = len(seekItrs)
+			seekItrs = append(seekItrs, v)
 		}
 	}
+	h := IterHeap(seekItrs)
+	heap.Init(&h)
+	mi.h = h
 }
 
 // cleanKey Remove all unused keys from all iterators.

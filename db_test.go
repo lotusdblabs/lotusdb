@@ -1,6 +1,7 @@
 package lotusdb
 
 import (
+	"bytes"
 	"os"
 	"sync"
 	"testing"
@@ -768,4 +769,21 @@ func TestDBIterator(t *testing.T) {
 		err = iter.Close()
 		assert.Nil(t, err)
 	}
+
+	iter, err = db.NewIterator(IteratorOptions{
+		Reverse: false,
+		Prefix:  []byte("k"),
+	})
+	assert.Nil(t, err)
+
+	iter.Seek([]byte("k3"))
+	var prev []byte
+	for iter.Valid() {
+		assert.True(t, prev == nil || bytes.Compare(prev, iter.Key()) == -1)
+		assert.True(t, bytes.HasPrefix(iter.Key(), []byte("k3")))
+		prev = iter.Key()
+		iter.Next()
+	}
+	err = iter.Close()
+	assert.Nil(t, err)
 }
