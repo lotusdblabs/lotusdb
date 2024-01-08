@@ -349,7 +349,7 @@ func TestDBFlushMemTables(t *testing.T) {
 
 	db, err := Open(options)
 	assert.Nil(t, err)
-	// defer destroyDB(db)
+	defer destroyDB(db)
 
 	type testLog struct {
 		key   []byte
