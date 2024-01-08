@@ -596,18 +596,27 @@ func TestDBIterator(t *testing.T) {
 		{[]byte("k1"), []byte("v1"), LogRecordNormal, 0},
 		{[]byte("k1"), []byte("v1_1"), LogRecordNormal, 0},
 		{[]byte("k2"), []byte("v1_1"), LogRecordNormal, 0},
+		{[]byte("abc3"), nil, LogRecordDeleted, 0},
+		{[]byte("abc1"), []byte("v1"), LogRecordNormal, 0},
+		{[]byte("abc1"), []byte("v1_1"), LogRecordNormal, 0},
+		{[]byte("abc2"), []byte("v1_1"), LogRecordNormal, 0},
 	}
 	logRecord_1 := []*LogRecord{
 		{[]byte("k1"), []byte("v2_1"), LogRecordNormal, 0},
 		{[]byte("k2"), []byte("v2_1"), LogRecordNormal, 0},
 		{[]byte("k2"), []byte("v2_2"), LogRecordNormal, 0},
+		{[]byte("abc1"), []byte("v2_1"), LogRecordNormal, 0},
+		{[]byte("abc2"), []byte("v2_1"), LogRecordNormal, 0},
+		{[]byte("abc2"), []byte("v2_2"), LogRecordNormal, 0},
 	}
 	logRecord_2 := []*LogRecord{
 		// 2
 		{[]byte("k2"), nil, LogRecordDeleted, 0},
+		{[]byte("abc2"), nil, LogRecordDeleted, 0},
 	}
 	logRecord_3 := []*LogRecord{
 		{[]byte("k3"), []byte("v3_1"), LogRecordNormal, 0},
+		{[]byte("abc3"), []byte("v3_1"), LogRecordNormal, 0},
 	}
 
 	list2Map := func(in []*LogRecord) (out map[string]*LogRecord) {
@@ -631,6 +640,7 @@ func TestDBIterator(t *testing.T) {
 	}
 	iter, err := db.NewIterator(IteratorOptions{
 		Reverse: false,
+		Prefix:  []byte("k"),
 	})
 	assert.Nil(t, err)
 	var i int
@@ -644,7 +654,6 @@ func TestDBIterator(t *testing.T) {
 		} else {
 			assert.Equal(t, expectedKey[2-i], iter.Key())
 			assert.Equal(t, expectedVal[2-i], iter.Value())
-
 		}
 		i++
 		iter.Next()
@@ -670,6 +679,7 @@ func TestDBIterator(t *testing.T) {
 
 	iter, err = db.NewIterator(IteratorOptions{
 		Reverse: true,
+		Prefix:  []byte("k"),
 	})
 	assert.Nil(t, err)
 
@@ -711,6 +721,7 @@ func TestDBIterator(t *testing.T) {
 		db.flushMemtable(db.immuMems[0])
 		iter, err = db.NewIterator(IteratorOptions{
 			Reverse: false,
+			Prefix:  []byte("k"),
 		})
 		assert.Nil(t, err)
 
@@ -732,6 +743,7 @@ func TestDBIterator(t *testing.T) {
 
 		iter, err = db.NewIterator(IteratorOptions{
 			Reverse: true,
+			Prefix:  []byte("k"),
 		})
 		assert.Nil(t, err)
 

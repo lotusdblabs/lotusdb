@@ -325,7 +325,11 @@ func Test_bptreeIterator(t *testing.T) {
 		"key 1": {SegmentId: 1, BlockNumber: 1, ChunkOffset: 1, ChunkSize: 1},
 		"key 2": {SegmentId: 2, BlockNumber: 2, ChunkOffset: 2, ChunkSize: 2},
 	}
-	var keyPositions []*KeyPosition
+	m2 := map[string]*wal.ChunkPosition{
+		"abc 0": {SegmentId: 3, BlockNumber: 3, ChunkOffset: 3, ChunkSize: 3},
+		"abc 1": {SegmentId: 4, BlockNumber: 4, ChunkOffset: 4, ChunkSize: 4},
+	}
+	var keyPositions, keyPositions2 []*KeyPosition
 	keyPositions = append(keyPositions, &KeyPosition{
 		key:       []byte("key 0"),
 		partition: 0,
@@ -340,6 +344,20 @@ func Test_bptreeIterator(t *testing.T) {
 		position:  &wal.ChunkPosition{SegmentId: 2, BlockNumber: 2, ChunkOffset: 2, ChunkSize: 2},
 	},
 	)
+
+	keyPositions2 = append(keyPositions, &KeyPosition{
+		key:       []byte("abc 0"),
+		partition: 0,
+		position:  &wal.ChunkPosition{SegmentId: 3, BlockNumber: 3, ChunkOffset: 3, ChunkSize: 3},
+	}, &KeyPosition{
+		key:       []byte("key abc"),
+		partition: 0,
+		position:  &wal.ChunkPosition{SegmentId: 4, BlockNumber: 4, ChunkOffset: 4, ChunkSize: 4},
+	}, &KeyPosition{
+		key:       []byte("abc 1"),
+		partition: 0,
+		position:  &wal.ChunkPosition{SegmentId: 4, BlockNumber: 4, ChunkOffset: 4, ChunkSize: 4},
+	})
 
 	err = bt.PutBatch(keyPositions)
 	assert.Nil(t, err)
@@ -418,6 +436,44 @@ func Test_bptreeIterator(t *testing.T) {
 
 	itr.Seek([]byte("aye 2"))
 	assert.Equal(t, []byte("key 0"), itr.Key())
+	err = itr.Close()
+	assert.Nil(t, err)
+
+	// prefix
+	err = bt.PutBatch(keyPositions2)
+	assert.Nil(t, err)
+
+	tx, err = tree.Begin(true)
+	assert.Nil(t, err)
+	iteratorOptions = IteratorOptions{
+		Reverse: false,
+		Prefix:  []byte("not valid"),
+	}
+
+	itr, err = NewBptreeIterator(tx, iteratorOptions)
+	assert.Nil(t, err)
+	itr.Rewind()
+	assert.False(t, itr.Valid())
+	err = itr.Close()
+	assert.Nil(t, err)
+
+	tx, err = tree.Begin(true)
+	assert.Nil(t, err)
+	iteratorOptions = IteratorOptions{
+		Reverse: false,
+		Prefix:  []byte("abc"),
+	}
+
+	itr, err = NewBptreeIterator(tx, iteratorOptions)
+	assert.Nil(t, err)
+	itr.Rewind()
+	assert.True(t, itr.Valid())
+
+	for itr.Valid() {
+		assert.True(t, bytes.HasPrefix(itr.Key(), iteratorOptions.Prefix))
+		assert.Equal(t, m2[string(itr.Key())].Encode(), itr.Value())
+		itr.Next()
+	}
 	err = itr.Close()
 	assert.Nil(t, err)
 

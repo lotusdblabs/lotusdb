@@ -224,8 +224,20 @@ func NewBptreeIterator(tx *bbolt.Tx, options IteratorOptions) (*bptreeIterator, 
 func (bi *bptreeIterator) Rewind() {
 	if bi.options.Reverse {
 		bi.k, bi.v = bi.cursor.Last()
+		if len(bi.options.Prefix) == 0 {
+			return
+		}
+		for bi.k != nil && !bytes.HasPrefix(bi.k, bi.options.Prefix) {
+			bi.k, bi.v = bi.cursor.Prev()
+		}
 	} else {
 		bi.k, bi.v = bi.cursor.First()
+		if len(bi.options.Prefix) == 0 {
+			return
+		}
+		for bi.k != nil && !bytes.HasPrefix(bi.k, bi.options.Prefix) {
+			bi.k, bi.v = bi.cursor.Next()
+		}
 	}
 }
 
@@ -242,8 +254,22 @@ func (bi *bptreeIterator) Seek(key []byte) {
 func (bi *bptreeIterator) Next() {
 	if bi.options.Reverse {
 		bi.k, bi.v = bi.cursor.Prev()
+		if len(bi.options.Prefix) == 0 {
+			return
+		}
+		// prefix scan
+		for bi.k != nil && !bytes.HasPrefix(bi.k, bi.options.Prefix) {
+			bi.k, bi.v = bi.cursor.Prev()
+		}
 	} else {
 		bi.k, bi.v = bi.cursor.Next()
+		if len(bi.options.Prefix) == 0 {
+			return
+		}
+		// prefix scan
+		for bi.k != nil && !bytes.HasPrefix(bi.k, bi.options.Prefix) {
+			bi.k, bi.v = bi.cursor.Next()
+		}
 	}
 }
 

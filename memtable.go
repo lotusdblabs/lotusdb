@@ -1,6 +1,7 @@
 package lotusdb
 
 import (
+	"bytes"
 	"fmt"
 	"io"
 	"math"
@@ -250,6 +251,13 @@ func NewMemtableIterator(options IteratorOptions, memtable *memtable) (*memtable
 // Rewind seek the first key in the iterator.
 func (mi *memtableIterator) Rewind() {
 	mi.iter.Rewind()
+	if len(mi.options.Prefix) == 0 {
+		return
+	}
+	// prefix scan
+	for mi.iter.Valid() && !bytes.HasPrefix(mi.iter.Key(), mi.options.Prefix) {
+		mi.iter.Next()
+	}
 }
 
 // Seek move the iterator to the key which is
@@ -261,6 +269,13 @@ func (mi *memtableIterator) Seek(key []byte) {
 // Next moves the iterator to the next key.
 func (mi *memtableIterator) Next() {
 	mi.iter.Next()
+	if len(mi.options.Prefix) == 0 {
+		return
+	}
+	// prefix scan
+	for mi.iter.Valid() && !bytes.HasPrefix(mi.iter.Key(), mi.options.Prefix) {
+		mi.iter.Next()
+	}
 }
 
 // Key get the current key.

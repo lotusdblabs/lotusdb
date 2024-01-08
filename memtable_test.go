@@ -529,7 +529,11 @@ func Test_memtableIterator(t *testing.T) {
 		"key 1": {Key: nil, Value: []byte("value 1"), Type: LogRecordNormal},
 		"key 2": {Key: []byte("key 2"), Value: []byte(""), Type: LogRecordNormal},
 	}
-
+	writeLogs2 := map[string]*LogRecord{
+		"abc 0": {Key: []byte("abc 0"), Value: []byte("value 0"), Type: LogRecordNormal},
+		"key 3": {Key: nil, Value: []byte("key 3"), Type: LogRecordNormal},
+		"abc 1": {Key: []byte("abc 1"), Value: []byte(""), Type: LogRecordNormal},
+	}
 	err = table.putBatch(writeLogs, node.Generate(), writeOpts)
 	assert.Nil(t, err)
 
@@ -594,4 +598,31 @@ func Test_memtableIterator(t *testing.T) {
 
 	err = itr.Close()
 	assert.Nil(t, err)
+
+	// prefix
+	err = table.putBatch(writeLogs2, node.Generate(), writeOpts)
+	assert.Nil(t, err)
+
+	iteratorOptions.Reverse = false
+	iteratorOptions.Prefix = []byte("not valid")
+	itr, err = NewMemtableIterator(iteratorOptions, table)
+	assert.Nil(t, err)
+	itr.Rewind()
+	assert.False(t, itr.Valid())
+	err = itr.Close()
+	assert.Nil(t, err)
+
+	iteratorOptions.Reverse = false
+	iteratorOptions.Prefix = []byte("abc")
+	itr, err = NewMemtableIterator(iteratorOptions, table)
+	assert.Nil(t, err)
+	itr.Rewind()
+	for itr.Valid() {
+		assert.True(t, bytes.HasPrefix(itr.Key(), iteratorOptions.Prefix))
+		assert.Equal(t, writeLogs2[string(itr.Key())].Value, itr.Value().(y.ValueStruct).Value)
+		itr.Next()
+	}
+	err = itr.Close()
+	assert.Nil(t, err)
+
 }
