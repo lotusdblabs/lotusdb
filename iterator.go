@@ -101,6 +101,11 @@ func (mi *MergeIterator) Next() {
 		// check is deleteKey
 		if valStruct, ok := singleIter.iter.Value().(y.ValueStruct); ok && valStruct.Meta == LogRecordDeleted {
 			singleIter.iter.Next()
+			if !singleIter.iter.Valid() {
+				heap.Remove(&mi.h, singleIter.idx)
+			} else {
+				heap.Fix(&mi.h, singleIter.idx)
+			}
 			mi.Next()
 		}
 	}
