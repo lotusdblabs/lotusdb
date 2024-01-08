@@ -158,9 +158,6 @@ func (mi *MergeIterator) Valid() bool {
 	singleIter := mi.h[0]
 	if singleIter.iType == MemItr && singleIter.iter.Value().(y.ValueStruct).Meta == LogRecordDeleted {
 		mi.cleanKey(singleIter.iter.Key(), singleIter.rank)
-		if !singleIter.iter.Valid() {
-			return false
-		}
 		singleIter.iter.Next()
 		if singleIter.iter.Valid() {
 			heap.Fix(&mi.h, 0)
