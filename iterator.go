@@ -74,22 +74,21 @@ func (mi *MergeIterator) cleanKey(oldKey []byte, rank int) {
 	// becouse heap.Remove heap.Fix may alter the order of elements in the slice.
 	copy(copyedItrs, mi.itrs)
 	for i := 0; i < len(copyedItrs); i++ {
-		singleIter := copyedItrs[i]
-		if singleIter.rank == rank || !singleIter.iter.Valid() {
+		itr := copyedItrs[i]
+		if itr.rank == rank || !itr.iter.Valid() {
 			continue
 		}
-		// 这里说明之前还是valid的
-		for singleIter.iter.Valid() &&
-			bytes.Equal(singleIter.iter.Key(), oldKey) {
-			if singleIter.rank > rank {
+		for itr.iter.Valid() &&
+			bytes.Equal(itr.iter.Key(), oldKey) {
+			if itr.rank > rank {
 				panic("rank error")
 			}
-			singleIter.iter.Next()
+			itr.iter.Next()
 		}
-		if !singleIter.iter.Valid() {
-			heap.Remove(&mi.h, singleIter.idx)
+		if !itr.iter.Valid() {
+			heap.Remove(&mi.h, itr.idx)
 		} else {
-			heap.Fix(&mi.h, singleIter.idx)
+			heap.Fix(&mi.h, itr.idx)
 		}
 	}
 }
@@ -99,27 +98,32 @@ func (mi *MergeIterator) Next() {
 	if mi.h.Len() == 0 {
 		return
 	}
-	// top item
-	singleIter := mi.h[0]
-	mi.cleanKey(singleIter.iter.Key(), singleIter.rank)
 
-	if singleIter.iType == MemItr {
-		// check is deleteKey
-		if valStruct, ok := singleIter.iter.Value().(y.ValueStruct); ok && valStruct.Meta == LogRecordDeleted {
-			singleIter.iter.Next()
-			if !singleIter.iter.Valid() {
-				heap.Remove(&mi.h, singleIter.idx)
+	// Get the top item from the heap
+	topIter := mi.h[0]
+	mi.cleanKey(topIter.iter.Key(), topIter.rank)
+
+	// Check if the top item is a MemItr and a deleteKey
+	if topIter.iType == MemItr {
+		if valStruct, ok := topIter.iter.Value().(y.ValueStruct); ok && valStruct.Meta == LogRecordDeleted {
+			// Move to the next key and update the heap
+			topIter.iter.Next()
+			if !topIter.iter.Valid() {
+				heap.Remove(&mi.h, topIter.idx)
 			} else {
-				heap.Fix(&mi.h, singleIter.idx)
+				heap.Fix(&mi.h, topIter.idx)
 			}
+			// Call Next recursively to handle consecutive deleteKeys
 			mi.Next()
 		}
 	}
-	singleIter.iter.Next()
-	if !singleIter.iter.Valid() {
-		heap.Remove(&mi.h, singleIter.idx)
+
+	// Move to the next key and update the heap
+	topIter.iter.Next()
+	if !topIter.iter.Valid() {
+		heap.Remove(&mi.h, topIter.idx)
 	} else {
-		heap.Fix(&mi.h, singleIter.idx)
+		heap.Fix(&mi.h, topIter.idx)
 	}
 }
 
@@ -135,19 +139,19 @@ func (mi *MergeIterator) Value() []byte {
 			mi.db.mu.Unlock()
 		}
 	}()
-	singleIter := mi.h[0]
-	if singleIter.iType == BptreeItr {
+	topIter := mi.h[0]
+	if topIter.iType == BptreeItr {
 		keyPos := new(KeyPosition)
-		keyPos.key = singleIter.iter.Key()
-		keyPos.partition = uint32(mi.db.vlog.getKeyPartition(singleIter.iter.Key()))
-		keyPos.position = wal.DecodeChunkPosition(singleIter.iter.Value().([]byte))
+		keyPos.key = topIter.iter.Key()
+		keyPos.partition = uint32(mi.db.vlog.getKeyPartition(topIter.iter.Key()))
+		keyPos.position = wal.DecodeChunkPosition(topIter.iter.Value().([]byte))
 		record, err := mi.db.vlog.read(keyPos)
 		if err != nil {
 			panic(err)
 		}
 		return record.value
-	} else if singleIter.iType == MemItr {
-		return singleIter.iter.Value().(y.ValueStruct).Value
+	} else if topIter.iType == MemItr {
+		return topIter.iter.Value().(y.ValueStruct).Value
 	} else {
 		panic("iType not support")
 	}
@@ -158,26 +162,26 @@ func (mi *MergeIterator) Valid() bool {
 	if mi.h.Len() == 0 {
 		return false
 	}
-	singleIter := mi.h[0]
-	if singleIter.iType == MemItr && singleIter.iter.Value().(y.ValueStruct).Meta == LogRecordDeleted {
-		mi.cleanKey(singleIter.iter.Key(), singleIter.rank)
-		singleIter.iter.Next()
-		if singleIter.iter.Valid() {
-			heap.Fix(&mi.h, singleIter.idx)
+	topIter := mi.h[0]
+	if topIter.iType == MemItr && topIter.iter.Value().(y.ValueStruct).Meta == LogRecordDeleted {
+		mi.cleanKey(topIter.iter.Key(), topIter.rank)
+		topIter.iter.Next()
+		if topIter.iter.Valid() {
+			heap.Fix(&mi.h, topIter.idx)
 			return mi.Valid()
 		} else {
-			heap.Remove(&mi.h, singleIter.idx)
+			heap.Remove(&mi.h, topIter.idx)
 		}
-	} else if singleIter.iType == BptreeItr && !singleIter.iter.Valid() {
-		heap.Remove(&mi.h, singleIter.idx)
+	} else if topIter.iType == BptreeItr && !topIter.iter.Valid() {
+		heap.Remove(&mi.h, topIter.idx)
 	}
 	return mi.h.Len() > 0
 }
 
 // Close the iterator.
 func (mi *MergeIterator) Close() error {
-	for _, v := range mi.itrs {
-		err := v.iter.Close()
+	for _, itr := range mi.itrs {
+		err := itr.iter.Close()
 		if err != nil {
 			mi.db.mu.Unlock()
 			return err
