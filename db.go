@@ -18,7 +18,6 @@ import (
 	"github.com/gofrs/flock"
 	"github.com/rosedblabs/diskhash"
 	"github.com/rosedblabs/wal"
-	"go.etcd.io/bbolt"
 	"golang.org/x/sync/errgroup"
 )
 
@@ -575,6 +574,9 @@ func (db *DB) rewriteValidRecords(walFile *wal.WAL, validRecords []*ValueLogReco
 }
 
 func (db *DB) NewIterator(options IteratorOptions) (*MergeIterator, error) {
+	if db.options.IndexType != BTree {
+		return nil, ErrDBIteratorUnsupportedType
+	}
 	db.mu.Lock()
 	defer func() {
 		if r := recover(); r != nil {
@@ -583,14 +585,12 @@ func (db *DB) NewIterator(options IteratorOptions) (*MergeIterator, error) {
 	}()
 	itrs := make([]*SingleIter, 0, db.options.PartitionNum+len(db.immuMems)+1)
 	rank := 0
-	txs := make([]*bbolt.Tx, db.options.PartitionNum)
 	index := db.index.(*BPTree)
 	for i := 0; i < db.options.PartitionNum; i++ {
 		tx, err := index.trees[i].Begin(false)
 		if err != nil {
 			return nil, err
 		}
-		txs[i] = tx
 		itr, err := NewBptreeIterator(
 			tx,
 			options,

@@ -786,4 +786,13 @@ func TestDBIterator(t *testing.T) {
 	}
 	err = iter.Close()
 	assert.Nil(t, err)
+
+	// unsupported type
+	options = DefaultOptions
+	options.IndexType = Hash
+	db, err = Open(options)
+	assert.Nil(t, err)
+	itr, err := db.NewIterator(IteratorOptions{Reverse: false})
+	assert.Equal(t, ErrDBIteratorUnsupportedType, err)
+	assert.Nil(t, itr)
 }
