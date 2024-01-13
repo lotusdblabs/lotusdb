@@ -27,15 +27,16 @@ type IteratorI interface {
 	Close() error
 }
 
-// MergeIterator holds a heap and a set of iterators that implement the IteratorI interface
-type MergeIterator struct {
-	h    IterHeap
-	itrs []*SingleIter // used for rebuilding heap
-	db   *DB
+// Iterator holds a heap and a set of iterators that implement the IteratorI interface
+type Iterator struct {
+	h     IterHeap
+	itrs  []*SingleIter       // used for rebuilding heap
+	itrsM map[int]*SingleIter // map rank->singleIter
+	db    *DB
 }
 
 // Rewind seek the first key in the iterator.
-func (mi *MergeIterator) Rewind() {
+func (mi *Iterator) Rewind() {
 	for _, v := range mi.itrs {
 		v.iter.Rewind()
 	}
@@ -46,7 +47,7 @@ func (mi *MergeIterator) Rewind() {
 
 // Seek move the iterator to the key which is
 // greater(less when reverse is true) than or equal to the specified key.
-func (mi *MergeIterator) Seek(key []byte) {
+func (mi *Iterator) Seek(key []byte) {
 	seekItrs := make([]*SingleIter, 0)
 	for _, v := range mi.itrs {
 		v.iter.Seek(key)
@@ -63,19 +64,18 @@ func (mi *MergeIterator) Seek(key []byte) {
 
 // cleanKey Remove all unused keys from all iterators.
 // If the iterators become empty after clearing, remove them from the heap.
-func (mi *MergeIterator) cleanKey(oldKey []byte, rank int) {
+func (mi *Iterator) cleanKey(oldKey []byte, rank int) {
 	defer func() {
 		if r := recover(); r != nil {
 			mi.db.mu.Unlock()
 		}
 	}()
-	// delete all key == oldKey && rank < t.rank
-	copyedItrs := make([]*SingleIter, len(mi.itrs))
-	// becouse heap.Remove heap.Fix may alter the order of elements in the slice.
-	copy(copyedItrs, mi.itrs)
-	for i := 0; i < len(copyedItrs); i++ {
-		itr := copyedItrs[i]
-		if itr.rank == rank || !itr.iter.Valid() {
+	for i := 0; i < len(mi.itrs); i++ {
+		if i == rank {
+			continue
+		}
+		itr := mi.itrsM[i]
+		if !itr.iter.Valid() {
 			continue
 		}
 		for itr.iter.Valid() &&
@@ -94,7 +94,7 @@ func (mi *MergeIterator) cleanKey(oldKey []byte, rank int) {
 }
 
 // Next moves the iterator to the next key.
-func (mi *MergeIterator) Next() {
+func (mi *Iterator) Next() {
 	if mi.h.Len() == 0 {
 		return
 	}
@@ -128,12 +128,12 @@ func (mi *MergeIterator) Next() {
 }
 
 // Key get the current key.
-func (mi *MergeIterator) Key() []byte {
+func (mi *Iterator) Key() []byte {
 	return mi.h[0].iter.Key()
 }
 
 // Value get the current value.
-func (mi *MergeIterator) Value() []byte {
+func (mi *Iterator) Value() []byte {
 	defer func() {
 		if r := recover(); r != nil {
 			mi.db.mu.Unlock()
@@ -158,7 +158,7 @@ func (mi *MergeIterator) Value() []byte {
 }
 
 // Valid returns whether the iterator is exhausted.
-func (mi *MergeIterator) Valid() bool {
+func (mi *Iterator) Valid() bool {
 	if mi.h.Len() == 0 {
 		return false
 	}
@@ -179,7 +179,7 @@ func (mi *MergeIterator) Valid() bool {
 }
 
 // Close the iterator.
-func (mi *MergeIterator) Close() error {
+func (mi *Iterator) Close() error {
 	for _, itr := range mi.itrs {
 		err := itr.iter.Close()
 		if err != nil {
@@ -191,7 +191,7 @@ func (mi *MergeIterator) Close() error {
 	return nil
 }
 
-func (db *DB) NewIterator(options IteratorOptions) (*MergeIterator, error) {
+func (db *DB) NewIterator(options IteratorOptions) (*Iterator, error) {
 	if db.options.IndexType == Hash {
 		return nil, ErrDBIteratorUnsupportedTypeHASH
 	}
@@ -202,6 +202,7 @@ func (db *DB) NewIterator(options IteratorOptions) (*MergeIterator, error) {
 		}
 	}()
 	itrs := make([]*SingleIter, 0, db.options.PartitionNum+len(db.immuMems)+1)
+	itrsM := make(map[int]*SingleIter)
 	rank := 0
 	index := db.index.(*BPTree)
 	for i := 0; i < db.options.PartitionNum; i++ {
@@ -229,7 +230,7 @@ func (db *DB) NewIterator(options IteratorOptions) (*MergeIterator, error) {
 			idx:     rank,
 			iter:    itr,
 		})
-
+		itrsM[rank] = itrs[len(itrs)-1]
 		rank++
 	}
 	memtableList := append(db.immuMems, db.activeMem)
@@ -251,14 +252,16 @@ func (db *DB) NewIterator(options IteratorOptions) (*MergeIterator, error) {
 			idx:     rank,
 			iter:    itr,
 		})
+		itrsM[rank] = itrs[len(itrs)-1]
 		rank++
 	}
 	h := IterHeap(itrs)
 	heap.Init(&h)
 
-	return &MergeIterator{
-		h:    h,
-		itrs: itrs,
-		db:   db,
+	return &Iterator{
+		h:     h,
+		itrs:  itrs,
+		itrsM: itrsM,
+		db:    db,
 	}, nil
 }
