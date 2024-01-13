@@ -1,7 +1,6 @@
 package lotusdb
 
 import (
-	"container/heap"
 	"context"
 	"fmt"
 	"io"
@@ -571,93 +570,4 @@ func (db *DB) rewriteValidRecords(walFile *wal.WAL, validRecords []*ValueLogReco
 		}
 	}
 	return db.index.PutBatch(positions, matchKeys...)
-}
-
-func (db *DB) NewIterator(options IteratorOptions) (*MergeIterator, error) {
-	if db.options.IndexType != BTree {
-		return nil, ErrDBIteratorUnsupportedType
-	}
-	db.mu.Lock()
-	defer func() {
-		if r := recover(); r != nil {
-			db.mu.Unlock()
-		}
-	}()
-	itrs := make([]*SingleIter, 0, db.options.PartitionNum+len(db.immuMems)+1)
-	rank := 0
-	index := db.index.(*BPTree)
-	for i := 0; i < db.options.PartitionNum; i++ {
-		tx, err := index.trees[i].Begin(false)
-		if err != nil {
-			return nil, err
-		}
-		itr, err := NewBptreeIterator(
-			tx,
-			options,
-		)
-		if err != nil {
-			return nil, err
-		}
-		itr.Rewind()
-		// is empty
-		if !itr.Valid() {
-			itr.Close()
-			continue
-		}
-		itrs = append(itrs, &SingleIter{
-			iType:   BptreeItr,
-			options: options,
-			rank:    rank,
-			idx:     rank,
-			iter:    itr,
-		})
-
-		rank++
-	}
-
-	for i := 0; i < len(db.immuMems); i++ {
-		itr, err := NewMemtableIterator(options, db.immuMems[i])
-		if err != nil {
-			return nil, err
-		}
-		itr.Rewind()
-		// is empty
-		if !itr.Valid() {
-			itr.Close()
-			continue
-		}
-		itrs = append(itrs, &SingleIter{
-			iType:   MemItr,
-			options: options,
-			rank:    rank,
-			idx:     rank,
-			iter:    itr,
-		})
-		rank++
-	}
-
-	itr, err := NewMemtableIterator(options, db.activeMem)
-	if err != nil {
-		return nil, err
-	}
-	itr.Rewind()
-	if itr.Valid() {
-		itrs = append(itrs, &SingleIter{
-			iType:   MemItr,
-			options: options,
-			rank:    rank,
-			idx:     rank,
-			iter:    itr,
-		})
-	} else {
-		itr.Close()
-	}
-	h := IterHeap(itrs)
-	heap.Init(&h)
-
-	return &MergeIterator{
-		h:    h,
-		itrs: itrs,
-		db:   db,
-	}, nil
 }

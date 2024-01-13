@@ -190,3 +190,75 @@ func (mi *MergeIterator) Close() error {
 	mi.db.mu.Unlock()
 	return nil
 }
+
+func (db *DB) NewIterator(options IteratorOptions) (*MergeIterator, error) {
+	if db.options.IndexType == Hash {
+		return nil, ErrDBIteratorUnsupportedTypeHASH
+	}
+	db.mu.Lock()
+	defer func() {
+		if r := recover(); r != nil {
+			db.mu.Unlock()
+		}
+	}()
+	itrs := make([]*SingleIter, 0, db.options.PartitionNum+len(db.immuMems)+1)
+	rank := 0
+	index := db.index.(*BPTree)
+	for i := 0; i < db.options.PartitionNum; i++ {
+		tx, err := index.trees[i].Begin(false)
+		if err != nil {
+			return nil, err
+		}
+		itr, err := NewBptreeIterator(
+			tx,
+			options,
+		)
+		if err != nil {
+			return nil, err
+		}
+		itr.Rewind()
+		// is empty
+		if !itr.Valid() {
+			itr.Close()
+			continue
+		}
+		itrs = append(itrs, &SingleIter{
+			iType:   BptreeItr,
+			options: options,
+			rank:    rank,
+			idx:     rank,
+			iter:    itr,
+		})
+
+		rank++
+	}
+	memtableList := append(db.immuMems, db.activeMem)
+	for i := 0; i < len(memtableList); i++ {
+		itr, err := NewMemtableIterator(options, memtableList[i])
+		if err != nil {
+			return nil, err
+		}
+		itr.Rewind()
+		// is empty
+		if !itr.Valid() {
+			itr.Close()
+			continue
+		}
+		itrs = append(itrs, &SingleIter{
+			iType:   MemItr,
+			options: options,
+			rank:    rank,
+			idx:     rank,
+			iter:    itr,
+		})
+		rank++
+	}
+	h := IterHeap(itrs)
+	heap.Init(&h)
+
+	return &MergeIterator{
+		h:    h,
+		itrs: itrs,
+		db:   db,
+	}, nil
+}
