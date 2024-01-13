@@ -11,20 +11,20 @@ const (
 	MemItr
 )
 
-// SingleIter element used to construct the heap，implementing the container.heap interface.
-type SingleIter struct {
+// singleIter element used to construct the heap，implementing the container.heap interface.
+type singleIter struct {
 	iType   iterType
 	options IteratorOptions
 	rank    int //  A higher rank indicates newer data.
 	idx     int //  idx in heap
-	iter    IteratorI
+	iter    baseIterator
 }
 
-type IterHeap []*SingleIter
+type iterHeap []*singleIter
 
 // Len is the number of elements in the collection.
-func (ih IterHeap) Len() int {
-	return len(ih)
+func (ih *iterHeap) Len() int {
+	return len(*ih)
 }
 
 // Less reports whether the element with index i
@@ -42,12 +42,12 @@ func (ih IterHeap) Len() int {
 // Note that floating-point comparison (the < operator on float32 or float64 values)
 // is not a transitive ordering when not-a-number (NaN) values are involved.
 // See Float64Slice.Less for a correct implementation for floating-point values.
-func (ih IterHeap) Less(i int, j int) bool {
-	ki, kj := ih[i].iter.Key(), ih[j].iter.Key()
+func (ih *iterHeap) Less(i int, j int) bool {
+	ki, kj := (*ih)[i].iter.Key(), (*ih)[j].iter.Key()
 	if bytes.Equal(ki, kj) {
-		return ih[i].rank > ih[j].rank
+		return (*ih)[i].rank > (*ih)[j].rank
 	}
-	if ih[i].options.Reverse {
+	if (*ih)[i].options.Reverse {
 		return bytes.Compare(ki, kj) == 1
 	} else {
 		return bytes.Compare(ki, kj) == -1
@@ -55,18 +55,18 @@ func (ih IterHeap) Less(i int, j int) bool {
 }
 
 // Swap swaps the elements with indexes i and j.
-func (ih IterHeap) Swap(i int, j int) {
-	ih[i], ih[j] = ih[j], ih[i]
-	ih[i].idx, ih[j].idx = i, j
+func (ih *iterHeap) Swap(i int, j int) {
+	(*ih)[i], (*ih)[j] = (*ih)[j], (*ih)[i]
+	(*ih)[i].idx, (*ih)[j].idx = i, j
 }
 
 // Push add x as element Len().
-func (ih *IterHeap) Push(x any) {
-	*ih = append(*ih, x.(*SingleIter))
+func (ih *iterHeap) Push(x any) {
+	*ih = append(*ih, x.(*singleIter))
 }
 
 // Pop remove and return element Len() - 1.
-func (ih *IterHeap) Pop() any {
+func (ih *iterHeap) Pop() any {
 	old := *ih
 	n := len(old)
 	x := old[n-1]

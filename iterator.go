@@ -8,8 +8,8 @@ import (
 	"github.com/rosedblabs/wal"
 )
 
-// IteratorI
-type IteratorI interface {
+// baseIterator
+type baseIterator interface {
 	// Rewind seek the first key in the iterator.
 	Rewind()
 	// Seek move the iterator to the key which is
@@ -29,9 +29,9 @@ type IteratorI interface {
 
 // Iterator holds a heap and a set of iterators that implement the IteratorI interface
 type Iterator struct {
-	h     IterHeap
-	itrs  []*SingleIter       // used for rebuilding heap
-	itrsM map[int]*SingleIter // map rank->singleIter
+	h     iterHeap
+	itrs  []*singleIter       // used for rebuilding heap
+	rankMap map[int]*singleIter // map rank->singleIter
 	db    *DB
 }
 
@@ -40,7 +40,7 @@ func (mi *Iterator) Rewind() {
 	for _, v := range mi.itrs {
 		v.iter.Rewind()
 	}
-	h := IterHeap(mi.itrs)
+	h := iterHeap(mi.itrs)
 	heap.Init(&h)
 	mi.h = h
 }
@@ -48,7 +48,7 @@ func (mi *Iterator) Rewind() {
 // Seek move the iterator to the key which is
 // greater(less when reverse is true) than or equal to the specified key.
 func (mi *Iterator) Seek(key []byte) {
-	seekItrs := make([]*SingleIter, 0)
+	seekItrs := make([]*singleIter, 0)
 	for _, v := range mi.itrs {
 		v.iter.Seek(key)
 		if v.iter.Valid() {
@@ -57,7 +57,7 @@ func (mi *Iterator) Seek(key []byte) {
 			seekItrs = append(seekItrs, v)
 		}
 	}
-	h := IterHeap(seekItrs)
+	h := iterHeap(seekItrs)
 	heap.Init(&h)
 	mi.h = h
 }
@@ -74,7 +74,7 @@ func (mi *Iterator) cleanKey(oldKey []byte, rank int) {
 		if i == rank {
 			continue
 		}
-		itr := mi.itrsM[i]
+		itr := mi.rankMap[i]
 		if !itr.iter.Valid() {
 			continue
 		}
@@ -191,6 +191,12 @@ func (mi *Iterator) Close() error {
 	return nil
 }
 
+// NewIterator returns a new iterator.
+// The iterator will iterate all the keys in DB.
+// It's the caller's responsibility to call Close when iterator is no longer
+// used, otherwise resources will be leaked.
+// The iterator is not goroutine-safe, you should not use the same iterator
+// concurrently from multiple goroutines.
 func (db *DB) NewIterator(options IteratorOptions) (*Iterator, error) {
 	if db.options.IndexType == Hash {
 		return nil, ErrDBIteratorUnsupportedTypeHASH
@@ -201,8 +207,8 @@ func (db *DB) NewIterator(options IteratorOptions) (*Iterator, error) {
 			db.mu.Unlock()
 		}
 	}()
-	itrs := make([]*SingleIter, 0, db.options.PartitionNum+len(db.immuMems)+1)
-	itrsM := make(map[int]*SingleIter)
+	itrs := make([]*singleIter, 0, db.options.PartitionNum+len(db.immuMems)+1)
+	itrsM := make(map[int]*singleIter)
 	rank := 0
 	index := db.index.(*BPTree)
 	for i := 0; i < db.options.PartitionNum; i++ {
@@ -210,20 +216,17 @@ func (db *DB) NewIterator(options IteratorOptions) (*Iterator, error) {
 		if err != nil {
 			return nil, err
 		}
-		itr, err := NewBptreeIterator(
+		itr := NewBptreeIterator(
 			tx,
 			options,
 		)
-		if err != nil {
-			return nil, err
-		}
 		itr.Rewind()
 		// is empty
 		if !itr.Valid() {
 			itr.Close()
 			continue
 		}
-		itrs = append(itrs, &SingleIter{
+		itrs = append(itrs, &singleIter{
 			iType:   BptreeItr,
 			options: options,
 			rank:    rank,
@@ -235,17 +238,14 @@ func (db *DB) NewIterator(options IteratorOptions) (*Iterator, error) {
 	}
 	memtableList := append(db.immuMems, db.activeMem)
 	for i := 0; i < len(memtableList); i++ {
-		itr, err := NewMemtableIterator(options, memtableList[i])
-		if err != nil {
-			return nil, err
-		}
+		itr := NewMemtableIterator(options, memtableList[i])
 		itr.Rewind()
 		// is empty
 		if !itr.Valid() {
 			itr.Close()
 			continue
 		}
-		itrs = append(itrs, &SingleIter{
+		itrs = append(itrs, &singleIter{
 			iType:   MemItr,
 			options: options,
 			rank:    rank,
@@ -255,13 +255,13 @@ func (db *DB) NewIterator(options IteratorOptions) (*Iterator, error) {
 		itrsM[rank] = itrs[len(itrs)-1]
 		rank++
 	}
-	h := IterHeap(itrs)
+	h := iterHeap(itrs)
 	heap.Init(&h)
 
 	return &Iterator{
 		h:     h,
 		itrs:  itrs,
-		itrsM: itrsM,
+		rankMap: itrsM,
 		db:    db,
 	}, nil
 }

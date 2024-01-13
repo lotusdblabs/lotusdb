@@ -492,7 +492,7 @@ func TestNewMemtableIterator(t *testing.T) {
 	options := IteratorOptions{
 		Reverse: false,
 	}
-	iter, err := NewMemtableIterator(options, table)
+	iter := NewMemtableIterator(options, table)
 	assert.Nil(t, err)
 
 	err = iter.Close()
@@ -540,7 +540,7 @@ func Test_memtableIterator(t *testing.T) {
 	iteratorOptions := IteratorOptions{
 		Reverse: false,
 	}
-	itr, err := NewMemtableIterator(iteratorOptions, table)
+	itr := NewMemtableIterator(iteratorOptions, table)
 	assert.Nil(t, err)
 	var prev []byte
 	itr.Rewind()
@@ -557,7 +557,7 @@ func Test_memtableIterator(t *testing.T) {
 
 	iteratorOptions.Reverse = true
 	prev = nil
-	itr, err = NewMemtableIterator(iteratorOptions, table)
+	itr = NewMemtableIterator(iteratorOptions, table)
 	assert.Nil(t, err)
 	itr.Rewind()
 	for itr.Valid() {
@@ -572,7 +572,7 @@ func Test_memtableIterator(t *testing.T) {
 	assert.Nil(t, err)
 
 	iteratorOptions.Reverse = false
-	itr, err = NewMemtableIterator(iteratorOptions, table)
+	itr = NewMemtableIterator(iteratorOptions, table)
 	assert.Nil(t, err)
 	itr.Seek([]byte("key 0"))
 	assert.Equal(t, []byte("key 0"), itr.Key())
@@ -585,7 +585,7 @@ func Test_memtableIterator(t *testing.T) {
 	assert.Nil(t, err)
 
 	iteratorOptions.Reverse = true
-	itr, err = NewMemtableIterator(iteratorOptions, table)
+	itr = NewMemtableIterator(iteratorOptions, table)
 	assert.Nil(t, err)
 	itr.Seek([]byte("key 4"))
 	assert.Equal(t, []byte("key 2"), itr.Key())
@@ -605,7 +605,7 @@ func Test_memtableIterator(t *testing.T) {
 
 	iteratorOptions.Reverse = false
 	iteratorOptions.Prefix = []byte("not valid")
-	itr, err = NewMemtableIterator(iteratorOptions, table)
+	itr = NewMemtableIterator(iteratorOptions, table)
 	assert.Nil(t, err)
 	itr.Rewind()
 	assert.False(t, itr.Valid())
@@ -614,7 +614,7 @@ func Test_memtableIterator(t *testing.T) {
 
 	iteratorOptions.Reverse = false
 	iteratorOptions.Prefix = []byte("abc")
-	itr, err = NewMemtableIterator(iteratorOptions, table)
+	itr = NewMemtableIterator(iteratorOptions, table)
 	assert.Nil(t, err)
 	itr.Rewind()
 	for itr.Valid() {

@@ -241,11 +241,11 @@ type memtableIterator struct {
 }
 
 // NewMemtableIterator
-func NewMemtableIterator(options IteratorOptions, memtable *memtable) (*memtableIterator, error) {
+func NewMemtableIterator(options IteratorOptions, memtable *memtable) *memtableIterator {
 	return &memtableIterator{
 		options: options,
 		iter:    memtable.skl.NewUniIterator(options.Reverse),
-	}, nil
+	}
 }
 
 // Rewind seek the first key in the iterator.
