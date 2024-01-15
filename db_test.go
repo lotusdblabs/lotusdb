@@ -207,6 +207,87 @@ func TestDBGet(t *testing.T) {
 	assert.Nil(t, err)
 }
 
+func TestDBGet_More(t *testing.T) {
+	options := DefaultOptions
+	path, err := os.MkdirTemp("", "db-test-get-more")
+	assert.Nil(t, err)
+	options.DirPath = path
+
+	db, err := Open(options)
+	db.immuMems = make([]*memtable, 3)
+	opts := memtableOptions{
+		dirPath:         path,
+		tableId:         0,
+		memSize:         DefaultOptions.MemtableSize,
+		walBytesPerSync: DefaultOptions.BytesPerSync,
+		walSync:         DefaultBatchOptions.Sync,
+		walBlockCache:   DefaultOptions.BlockCache,
+	}
+	for i := 0; i < 3; i++ {
+		opts.tableId = uint32(i)
+		db.immuMems[i], err = openMemtable(opts)
+		assert.Nil(t, err)
+	}
+	assert.Nil(t, err)
+	defer destroyDB(db)
+
+	logRecord_0 := []*LogRecord{
+		// 0
+		{[]byte("k0"), []byte("v0"), LogRecordNormal, 0},
+		{[]byte("k1"), []byte("v1"), LogRecordNormal, 0},
+		{[]byte("k2"), []byte("v2"), LogRecordNormal, 0},
+		{[]byte("k3"), []byte("v3"), LogRecordNormal, 0},
+	}
+	logRecord_1 := []*LogRecord{
+		{[]byte("k1"), []byte("v1_1"), LogRecordNormal, 0},
+		{[]byte("k2"), []byte("v2_1"), LogRecordNormal, 0},
+		{[]byte("k2"), []byte("v2_2"), LogRecordNormal, 0},
+		{[]byte("k4"), []byte("v4"), LogRecordNormal, 0},
+	}
+	logRecord_2 := []*LogRecord{
+		// 2
+		{[]byte("k2"), nil, LogRecordDeleted, 0},
+		{[]byte("abc2"), nil, LogRecordDeleted, 0},
+	}
+	logRecord_3 := []*LogRecord{
+		{[]byte("k3"), []byte("v3_1"), LogRecordNormal, 0},
+		{[]byte("abc3"), []byte("v3_1"), LogRecordNormal, 0},
+	}
+
+	list2Map := func(in []*LogRecord) (out map[string]*LogRecord) {
+		out = make(map[string]*LogRecord)
+		for _, v := range in {
+			out[string(v.Key)] = v
+		}
+		return
+	}
+	err = db.immuMems[0].putBatch(list2Map(logRecord_0), 0, nil)
+	assert.Nil(t, err)
+	err = db.immuMems[1].putBatch(list2Map(logRecord_1), 1, nil)
+	assert.Nil(t, err)
+	err = db.immuMems[2].putBatch(list2Map(logRecord_2), 2, nil)
+	assert.Nil(t, err)
+	err = db.activeMem.putBatch(list2Map(logRecord_3), 3, nil)
+	assert.Nil(t, err)
+
+	// get from immutable memtable
+	v0, err := db.Get([]byte("k0"))
+	assert.Nil(t, err)
+	assert.Equal(t, []byte("v0"), v0)
+	// get from activate memtable
+	v3, err := db.Get([]byte("k3"))
+	assert.Nil(t, err)
+	assert.Equal(t, []byte("v3_1"), v3)
+
+	db.flushMemtable(db.immuMems[0])
+	db.immuMems = db.immuMems[1:]
+
+	// get from index
+	v0, err = db.Get([]byte("k0"))
+	assert.Nil(t, err)
+	assert.Equal(t, []byte("v0"), v0)
+}
+
 func TestDBDelete(t *testing.T) {
 	options := DefaultOptions
 	path, err := os.MkdirTemp("", "db-test-delete")
