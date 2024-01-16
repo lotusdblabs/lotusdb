@@ -9,12 +9,15 @@ import (
 	"os/signal"
 	"path/filepath"
 	"reflect"
+	"strconv"
 	"sync"
+	"sync/atomic"
 	"syscall"
 	"time"
 
 	"github.com/dgraph-io/badger/v4/y"
 	"github.com/gofrs/flock"
+	"github.com/lotusdblabs/lotusdb/v2/util"
 	"github.com/rosedblabs/diskhash"
 	"github.com/rosedblabs/wal"
 	"golang.org/x/sync/errgroup"
@@ -35,18 +38,22 @@ const (
 // It combines the advantages of LSM tree and B+ tree, read and write are both very fast.
 // It is also very memory efficient, and can store billions of key-value pairs in a single machine.
 type DB struct {
-	activeMem *memtable      // Active memtable for writing.
-	immuMems  []*memtable    // Immutable memtables, waiting to be flushed to disk.
-	index     Index          // index is multi-partition indexes to store key and chunk position.
-	vlog      *valueLog      // vlog is the value log.
-	fileLock  *flock.Flock   // fileLock to prevent multiple processes from using the same database directory.
-	flushChan chan *memtable // flushChan is used to notify the flush goroutine to flush memtable to disk.
-	flushLock sync.Mutex     // flushLock is to prevent flush running while compaction doesn't occur
-	mu        sync.RWMutex
-	closed    bool
-	closeChan chan struct{}
-	options   Options
-	batchPool sync.Pool // batchPool is a pool of batch, to reduce the cost of memory allocation.
+	activeMem      *memtable      // Active memtable for writing.
+	immuMems       []*memtable    // Immutable memtables, waiting to be flushed to disk.
+	index          Index          // index is multi-partition indexes to store key and chunk position.
+	vlog           *valueLog      // vlog is the value log.
+	fileLock       *flock.Flock   // fileLock to prevent multiple processes from using the same database directory.
+	flushChan      chan *memtable // flushChan is used to notify the flush goroutine to flush memtable to disk.
+	flushLock      sync.Mutex     // flushLock is to prevent flush running while compaction doesn't occur
+	mu             sync.RWMutex
+	closed         bool
+	closeChan      chan struct{}
+	options        Options
+	batchPool      sync.Pool     // batchPool is a pool of batch, to reduce the cost of memory allocation.
+	compactChan    chan struct{} // compactChan is to start compaction of value log.
+	allEntries     int           // number of all entries in value log.
+	invalidEntries int           // number of invalide entries in value log.
+	infoFile       *wal.WAL      // store db.allEntries and db.invalidEntries on disk.
 }
 
 // Open a database with the specified options.
@@ -99,27 +106,37 @@ func Open(options Options) (*DB, error) {
 
 	// open value log
 	vlog, err := openValueLog(valueLogOptions{
-		dirPath:           options.DirPath,
-		segmentSize:       options.ValueLogFileSize,
-		blockCache:        options.BlockCache,
-		partitionNum:      uint32(options.PartitionNum),
-		hashKeyFunction:   options.KeyHashFunction,
-		compactBatchCount: options.CompactBatchCount,
+		dirPath:              options.DirPath,
+		segmentSize:          options.ValueLogFileSize,
+		blockCache:           options.BlockCache,
+		partitionNum:         uint32(options.PartitionNum),
+		hashKeyFunction:      options.KeyHashFunction,
+		compactBatchCapacity: options.CompactBatchCapacity,
 	})
 	if err != nil {
 		return nil, err
 	}
 
+	// open infoFile
+	allEntries, invalidEntries, infoFile, err := openInfoFile(options)
+	if err != nil {
+		return nil, err
+	}
+
 	db := &DB{
-		activeMem: memtables[len(memtables)-1],
-		immuMems:  memtables[:len(memtables)-1],
-		index:     index,
-		vlog:      vlog,
-		fileLock:  fileLock,
-		flushChan: make(chan *memtable, options.MemtableNums-1),
-		closeChan: make(chan struct{}),
-		options:   options,
-		batchPool: sync.Pool{New: makeBatch},
+		activeMem:      memtables[len(memtables)-1],
+		immuMems:       memtables[:len(memtables)-1],
+		index:          index,
+		vlog:           vlog,
+		fileLock:       fileLock,
+		flushChan:      make(chan *memtable, options.MemtableNums-1),
+		closeChan:      make(chan struct{}),
+		options:        options,
+		batchPool:      sync.Pool{New: makeBatch},
+		compactChan:    make(chan struct{}, 1),
+		infoFile:       infoFile,
+		allEntries:     allEntries,
+		invalidEntries: invalidEntries,
 	}
 
 	// if there are some immutable memtables when opening the database, flush them to disk
@@ -132,6 +149,7 @@ func Open(options Options) (*DB, error) {
 	// start flush memtables goroutine asynchronously,
 	// memtables with new coming writes will be flushed to disk if the active memtable is full.
 	go db.listenMemtableFlush()
+	go db.listenValueLogCompact()
 
 	return db, nil
 }
@@ -157,10 +175,17 @@ func (db *DB) Close() error {
 	if err := db.index.Close(); err != nil {
 		return err
 	}
+
 	// close value log
 	if err := db.vlog.close(); err != nil {
 		return err
 	}
+
+	// close infoFile
+	if err := db.closeInfoFile(); err != nil {
+		return err
+	}
+
 	// release file lock
 	if err := db.fileLock.Unlock(); err != nil {
 		return err
@@ -338,9 +363,11 @@ func (db *DB) waitMemtableSpace() error {
 // 3. Write all keys and positions to index.
 // 4. Delete the deleted keys from index.
 // 5. Delete the wal.
+// 6. Returns the total number of entries and the number of invalid entries written.
 func (db *DB) flushMemtable(table *memtable) {
 	db.flushLock.Lock()
 	defer db.flushLock.Unlock()
+
 	sklIter := table.skl.NewIterator()
 	var deletedKeys [][]byte
 	var logRecords []*ValueLogRecord
@@ -378,7 +405,8 @@ func (db *DB) flushMemtable(table *memtable) {
 			putMatchKeys[i] = MatchKeyFunc(db, keyPos[i].key, nil, nil)
 		}
 	}
-	if err := db.index.PutBatch(keyPos, putMatchKeys...); err != nil {
+	invalidWrite, err := db.index.PutBatch(keyPos, putMatchKeys...)
+	if err != nil {
 		log.Println("index PutBatch failed:", err)
 		return
 	}
@@ -390,7 +418,8 @@ func (db *DB) flushMemtable(table *memtable) {
 			deleteMatchKeys[i] = MatchKeyFunc(db, deletedKeys[i], nil, nil)
 		}
 	}
-	if err := db.index.DeleteBatch(deletedKeys, deleteMatchKeys...); err != nil {
+	invalidDelete, err := db.index.DeleteBatch(deletedKeys, deleteMatchKeys...)
+	if err != nil {
 		log.Println("index DeleteBatch failed:", err)
 		return
 	}
@@ -424,6 +453,10 @@ func (db *DB) flushMemtable(table *memtable) {
 			db.immuMems = db.immuMems[1:]
 		}
 	}
+
+	db.allEntries += len(keyPos)
+	db.invalidEntries += invalidWrite + invalidDelete
+	db.compactChan <- struct{}{}
 
 	db.mu.Unlock()
 }
@@ -469,18 +502,20 @@ func (db *DB) Compact() error {
 	}
 
 	g, _ := errgroup.WithContext(context.Background())
+	var capacity int64 = 0
+	var capacityList []int64 = make([]int64, db.options.PartitionNum)
 	for i := 0; i < int(db.vlog.options.partitionNum); i++ {
 		part := i
 		g.Go(func() error {
 			newVlogFile := openVlogFile(part, tempValueLogFileExt)
 
-			validRecords := make([]*ValueLogRecord, 0, db.vlog.options.compactBatchCount)
+			validRecords := make([]*ValueLogRecord, 0)
 			reader := db.vlog.walFiles[part].NewReader()
-			count := 0
 			// iterate all records in wal, find the valid records
 			for {
-				count++
 				chunk, pos, err := reader.Next()
+				atomic.AddInt64(&capacity, int64(len(chunk)))
+				capacityList[part] += int64(len(chunk))
 				if err != nil {
 					if err == io.EOF {
 						break
@@ -512,13 +547,15 @@ func (db *DB) Compact() error {
 					validRecords = append(validRecords, record)
 				}
 
-				if count%db.vlog.options.compactBatchCount == 0 {
+				if capacity >= int64(db.vlog.options.compactBatchCapacity) {
 					err := db.rewriteValidRecords(newVlogFile, validRecords, part)
 					if err != nil {
 						_ = newVlogFile.Delete()
 						return err
 					}
 					validRecords = validRecords[:0]
+					atomic.AddInt64(&capacity, -capacityList[part])
+					capacityList[part] = 0
 				}
 			}
 
@@ -545,6 +582,66 @@ func (db *DB) Compact() error {
 	return g.Wait()
 }
 
+func (db *DB) listenValueLogCompact() {
+	sig := make(chan os.Signal, 1)
+	signal.Notify(sig, os.Interrupt, syscall.SIGHUP, syscall.SIGINT, syscall.SIGTERM, syscall.SIGQUIT)
+	for {
+		select {
+		case <-db.compactChan:
+			if float64(db.invalidEntries)/float64(db.allEntries) > db.options.CompactThreshold {
+				db.allEntries, db.invalidEntries = 0, 0
+				db.Compact()
+			}
+		case <-sig:
+			// Persist data
+			db.closeInfoFile()
+		}
+	}
+}
+
+func openInfoFile(options Options) (int, int, *wal.WAL, error) {
+	infoFile, err := wal.Open(wal.Options{
+		DirPath:        options.DirPath,
+		SegmentSize:    options.ValueLogFileSize,
+		SegmentFileExt: infoFileExt,
+		BlockCache:     options.BlockCache,
+		Sync:           true,
+		BytesPerSync:   0,
+	})
+	if err != nil {
+		return 0, 0, nil, err
+	}
+	allEntries, invalidEntries, err := util.ReadInfoFile(infoFile)
+	if err != nil {
+		return 0, 0, nil, err
+	}
+	return allEntries, invalidEntries, infoFile, nil
+}
+
+func (db *DB) closeInfoFile() error {
+	infoFile, _ := wal.Open(wal.Options{
+		DirPath:        db.options.DirPath,
+		SegmentSize:    db.options.ValueLogFileSize,
+		SegmentFileExt: infoFileExt,
+		BlockCache:     db.options.BlockCache,
+		Sync:           true,
+		BytesPerSync:   0,
+	})
+	_, err := infoFile.Write([]byte(strconv.Itoa(db.allEntries)))
+	if err != nil {
+		return err
+	}
+	_, err = infoFile.Write([]byte(strconv.Itoa(db.invalidEntries)))
+	if err != nil {
+		return err
+	}
+	err = infoFile.Close()
+	if err != nil {
+		return err
+	}
+	return nil
+}
+
 func (db *DB) rewriteValidRecords(walFile *wal.WAL, validRecords []*ValueLogRecord, part int) error {
 	for _, record := range validRecords {
 		walFile.PendingWrites(encodeValueLogRecord(record))
@@ -569,5 +666,7 @@ func (db *DB) rewriteValidRecords(walFile *wal.WAL, validRecords []*ValueLogReco
 			matchKeys[i] = MatchKeyFunc(db, positions[i].key, nil, nil)
 		}
 	}
-	return db.index.PutBatch(positions, matchKeys...)
+	_, err = db.index.PutBatch(positions, matchKeys...)
+	db.allEntries += len(positions)
+	return err
 }
