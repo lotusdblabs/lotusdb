@@ -4,6 +4,7 @@ import (
 	"context"
 	"fmt"
 	"path/filepath"
+	"sync/atomic"
 
 	"github.com/rosedblabs/diskhash"
 	"github.com/rosedblabs/wal"
@@ -84,9 +85,9 @@ func (bt *BPTree) Get(key []byte, _ ...diskhash.MatchKeyFunc) (*KeyPosition, err
 }
 
 // PutBatch puts the specified key positions into the index.
-func (bt *BPTree) PutBatch(positions []*KeyPosition, _ ...diskhash.MatchKeyFunc) error {
+func (bt *BPTree) PutBatch(positions []*KeyPosition, _ ...diskhash.MatchKeyFunc) (error, int) {
 	if len(positions) == 0 {
-		return nil
+		return nil, 0
 	}
 
 	// group positions by partition
@@ -97,6 +98,7 @@ func (bt *BPTree) PutBatch(positions []*KeyPosition, _ ...diskhash.MatchKeyFunc)
 	}
 
 	g, ctx := errgroup.WithContext(context.Background())
+	var invalidNum int32 = 0
 	for i := range partitionRecords {
 		partition := i
 		if len(partitionRecords[partition]) == 0 {
@@ -114,11 +116,12 @@ func (bt *BPTree) PutBatch(positions []*KeyPosition, _ ...diskhash.MatchKeyFunc)
 						return ctx.Err()
 					default:
 						encPos := record.position.Encode()
-						if err := bucket.Put(record.key, encPos); err != nil {
-							if err == bbolt.ErrKeyRequired {
-								return ErrKeyIsEmpty
-							}
+						err, keyExist := bucket.Put(record.key, encPos)
+						if err != nil {
 							return err
+						}
+						if keyExist {
+							atomic.AddInt32(&invalidNum, 1)
 						}
 					}
 				}
@@ -126,13 +129,14 @@ func (bt *BPTree) PutBatch(positions []*KeyPosition, _ ...diskhash.MatchKeyFunc)
 			})
 		})
 	}
-	return g.Wait()
+	err := g.Wait()
+	return err, int(invalidNum)
 }
 
 // DeleteBatch deletes the specified keys from the index.
-func (bt *BPTree) DeleteBatch(keys [][]byte, _ ...diskhash.MatchKeyFunc) error {
+func (bt *BPTree) DeleteBatch(keys [][]byte, _ ...diskhash.MatchKeyFunc) (error, int) {
 	if len(keys) == 0 {
-		return nil
+		return nil, 0
 	}
 
 	// group keys by partition
@@ -144,6 +148,7 @@ func (bt *BPTree) DeleteBatch(keys [][]byte, _ ...diskhash.MatchKeyFunc) error {
 
 	// delete keys from each partition
 	g, ctx := errgroup.WithContext(context.Background())
+	var invalidNum int32 = 0
 	for i := range partitionKeys {
 		partition := i
 		if len(partitionKeys[partition]) == 0 {
@@ -160,11 +165,12 @@ func (bt *BPTree) DeleteBatch(keys [][]byte, _ ...diskhash.MatchKeyFunc) error {
 					case <-ctx.Done():
 						return ctx.Err()
 					default:
-						if len(key) == 0 {
-							return ErrKeyIsEmpty
-						}
-						if err := bucket.Delete(key); err != nil {
+						err, keyExist := bucket.Delete(key)
+						if err != nil {
 							return err
+						}
+						if keyExist {
+							atomic.AddInt32(&invalidNum, 1)
 						}
 					}
 				}
@@ -172,7 +178,8 @@ func (bt *BPTree) DeleteBatch(keys [][]byte, _ ...diskhash.MatchKeyFunc) error {
 			})
 		})
 	}
-	return g.Wait()
+	err := g.Wait()
+	return err, int(invalidNum)
 }
 
 // Close releases all boltdb database resources.

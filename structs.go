@@ -101,6 +101,12 @@ type KeyPosition struct {
 	position  *wal.ChunkPosition
 }
 
+// Record the number of entries and invalid entries while writing in batch.
+type InfoEntries struct {
+	AllEntries     int
+	InvalidEntries int
+}
+
 // ValueLogRecord is the record of the key/value pair in the value log.
 type ValueLogRecord struct {
 	key   []byte

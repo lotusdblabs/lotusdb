@@ -11,6 +11,7 @@ import (
 const (
 	valueLogFileExt     = ".VLOG.%d"
 	tempValueLogFileExt = ".VLOG.%d.temp"
+	infoFileExt         = ".Info"
 )
 
 // valueLog value log is named after the concept in Wisckey paper

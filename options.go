@@ -64,6 +64,9 @@ type Options struct {
 	// If the timeout is exceeded, the write operation will fail, you can try again later.
 	// Default value is 100ms.
 	WaitMemSpaceTimeout time.Duration
+
+	// While invalid data in value log accounts for more than CompactThreshold in the total data, Compact will be started.
+	CompactThreshold float32
 }
 
 // BatchOptions specifies the options for creating a batch.
@@ -126,6 +129,7 @@ var DefaultOptions = Options{
 	IndexType:           BTree,
 	CompactBatchCount:   10000,
 	WaitMemSpaceTimeout: 100 * time.Millisecond,
+	CompactThreshold:    0.8,
 }
 
 var DefaultBatchOptions = BatchOptions{
