@@ -41,4 +41,4 @@ require (
 
 // replace go.etcd.io/bbolt v1.3.8 => github.com/yanxiaoqi932/bbolt v1.3.9-0.20240115123442-fcafe1b1680d
 
-replace go.etcd.io/bbolt v1.3.8 => ../bbolt
+replace go.etcd.io/bbolt v1.3.8 => github.com/yanxiaoqi932/bbolt v1.3.9-0.20240115123442-fcafe1b1680d
