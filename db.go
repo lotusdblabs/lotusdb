@@ -11,6 +11,7 @@ import (
 	"reflect"
 	"strconv"
 	"sync"
+	"sync/atomic"
 	"syscall"
 	"time"
 
@@ -46,6 +47,7 @@ type DB struct {
 	flushLock      sync.Mutex     // flushLock is to prevent flush running while compaction doesn't occur
 	mu             sync.RWMutex
 	closed         bool
+	closeChan      chan struct{}
 	options        Options
 	batchPool      sync.Pool     // batchPool is a pool of batch, to reduce the cost of memory allocation.
 	compactChan    chan struct{} // compactChan is to start compaction of value log.
@@ -104,12 +106,12 @@ func Open(options Options) (*DB, error) {
 
 	// open value log
 	vlog, err := openValueLog(valueLogOptions{
-		dirPath:           options.DirPath,
-		segmentSize:       options.ValueLogFileSize,
-		blockCache:        options.BlockCache,
-		partitionNum:      uint32(options.PartitionNum),
-		hashKeyFunction:   options.KeyHashFunction,
-		compactBatchCount: options.CompactBatchCount,
+		dirPath:              options.DirPath,
+		segmentSize:          options.ValueLogFileSize,
+		blockCache:           options.BlockCache,
+		partitionNum:         uint32(options.PartitionNum),
+		hashKeyFunction:      options.KeyHashFunction,
+		compactBatchCapacity: options.CompactBatchCapacity,
 	})
 	if err != nil {
 		return nil, err
@@ -128,6 +130,7 @@ func Open(options Options) (*DB, error) {
 		vlog:           vlog,
 		fileLock:       fileLock,
 		flushChan:      make(chan *memtable, options.MemtableNums-1),
+		closeChan:      make(chan struct{}),
 		options:        options,
 		batchPool:      sync.Pool{New: makeBatch},
 		compactChan:    make(chan struct{}, 1),
@@ -177,6 +180,12 @@ func (db *DB) Close() error {
 	if err := db.vlog.close(); err != nil {
 		return err
 	}
+
+	// close infoFile
+	if err := db.closeInfoFile(); err != nil {
+		return err
+	}
+
 	// release file lock
 	if err := db.fileLock.Unlock(); err != nil {
 		return err
@@ -358,6 +367,7 @@ func (db *DB) waitMemtableSpace() error {
 func (db *DB) flushMemtable(table *memtable) {
 	db.flushLock.Lock()
 	defer db.flushLock.Unlock()
+
 	sklIter := table.skl.NewIterator()
 	var deletedKeys [][]byte
 	var logRecords []*ValueLogRecord
@@ -395,7 +405,7 @@ func (db *DB) flushMemtable(table *memtable) {
 			putMatchKeys[i] = MatchKeyFunc(db, keyPos[i].key, nil, nil)
 		}
 	}
-	err, invalidWrite := db.index.PutBatch(keyPos, putMatchKeys...)
+	invalidWrite, err := db.index.PutBatch(keyPos, putMatchKeys...)
 	if err != nil {
 		log.Println("index PutBatch failed:", err)
 		return
@@ -408,7 +418,7 @@ func (db *DB) flushMemtable(table *memtable) {
 			deleteMatchKeys[i] = MatchKeyFunc(db, deletedKeys[i], nil, nil)
 		}
 	}
-	err, invalidDelete := db.index.DeleteBatch(deletedKeys, deleteMatchKeys...)
+	invalidDelete, err := db.index.DeleteBatch(deletedKeys, deleteMatchKeys...)
 	if err != nil {
 		log.Println("index DeleteBatch failed:", err)
 		return
@@ -449,7 +459,6 @@ func (db *DB) flushMemtable(table *memtable) {
 	db.compactChan <- struct{}{}
 
 	db.mu.Unlock()
-	db.flushLock.Unlock()
 }
 
 func (db *DB) listenMemtableFlush() {
@@ -493,18 +502,20 @@ func (db *DB) Compact() error {
 	}
 
 	g, _ := errgroup.WithContext(context.Background())
+	var capacity int64 = 0
+	var capacityList []int64 = make([]int64, db.options.PartitionNum)
 	for i := 0; i < int(db.vlog.options.partitionNum); i++ {
 		part := i
 		g.Go(func() error {
 			newVlogFile := openVlogFile(part, tempValueLogFileExt)
 
-			validRecords := make([]*ValueLogRecord, 0, db.vlog.options.compactBatchCount)
+			validRecords := make([]*ValueLogRecord, 0)
 			reader := db.vlog.walFiles[part].NewReader()
-			count := 0
 			// iterate all records in wal, find the valid records
 			for {
-				count++
 				chunk, pos, err := reader.Next()
+				atomic.AddInt64(&capacity, int64(len(chunk)))
+				capacityList[part] += int64(len(chunk))
 				if err != nil {
 					if err == io.EOF {
 						break
@@ -536,13 +547,15 @@ func (db *DB) Compact() error {
 					validRecords = append(validRecords, record)
 				}
 
-				if count%db.vlog.options.compactBatchCount == 0 {
+				if capacity >= int64(db.vlog.options.compactBatchCapacity) {
 					err := db.rewriteValidRecords(newVlogFile, validRecords, part)
 					if err != nil {
 						_ = newVlogFile.Delete()
 						return err
 					}
 					validRecords = validRecords[:0]
+					atomic.AddInt64(&capacity, -capacityList[part])
+					capacityList[part] = 0
 				}
 			}
 
@@ -575,7 +588,7 @@ func (db *DB) listenValueLogCompact() {
 	for {
 		select {
 		case <-db.compactChan:
-			if float32(db.invalidEntries)/float32(db.allEntries) > db.options.CompactThreshold {
+			if float64(db.invalidEntries)/float64(db.allEntries) > db.options.CompactThreshold {
 				db.allEntries, db.invalidEntries = 0, 0
 				db.Compact()
 			}
@@ -653,7 +666,7 @@ func (db *DB) rewriteValidRecords(walFile *wal.WAL, validRecords []*ValueLogReco
 			matchKeys[i] = MatchKeyFunc(db, positions[i].key, nil, nil)
 		}
 	}
-	err, _ = db.index.PutBatch(positions, matchKeys...)
+	_, err = db.index.PutBatch(positions, matchKeys...)
 	db.allEntries += len(positions)
 	return err
 }

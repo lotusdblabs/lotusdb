@@ -107,7 +107,7 @@ func testbptreeGet(t *testing.T, partitionNum int) {
 		partition: uint32(bt.options.getKeyPartition([]byte("exist"))),
 		position:  &wal.ChunkPosition{},
 	})
-	err, _ = bt.PutBatch(keyPositions)
+	_, err = bt.PutBatch(keyPositions)
 	assert.Nil(t, err)
 
 	tests := []struct {
@@ -186,7 +186,7 @@ func testbptreePutbatch(t *testing.T, partitionNum int) {
 	}
 	for _, tt := range tests {
 		t.Run(tt.name, func(t *testing.T) {
-			if err, _ := bt.PutBatch(tt.positions); (err != nil) != tt.wantErr {
+			if _, err := bt.PutBatch(tt.positions); (err != nil) != tt.wantErr {
 				t.Errorf("BPTree.PutBatch() error = %v, wantErr %v", err, tt.wantErr)
 			}
 		})
@@ -226,7 +226,7 @@ func testbptreeDeletebatch(t *testing.T, partitionNum int) {
 		position:  &wal.ChunkPosition{},
 	})
 
-	err, _ = bt.PutBatch(keyPositions)
+	_, err = bt.PutBatch(keyPositions)
 	assert.Nil(t, err)
 
 	tests := []struct {
@@ -241,7 +241,7 @@ func testbptreeDeletebatch(t *testing.T, partitionNum int) {
 	}
 	for _, tt := range tests {
 		t.Run(tt.name, func(t *testing.T) {
-			if err, _ := bt.DeleteBatch(tt.keys); (err != nil) != tt.wantErr {
+			if _, err := bt.DeleteBatch(tt.keys); (err != nil) != tt.wantErr {
 				t.Errorf("BPTree.DeleteBatch() error = %v, wantErr %v", err, tt.wantErr)
 			}
 		})

@@ -2,6 +2,7 @@ package lotusdb
 
 import (
 	"os"
+	"strconv"
 	"sync"
 	"testing"
 	"time"
@@ -349,7 +350,7 @@ func TestDBFlushMemTables(t *testing.T) {
 
 	db, err := Open(options)
 	assert.Nil(t, err)
-	// defer destroyDB(db)
+	defer destroyDB(db)
 
 	type testLog struct {
 		key   []byte
@@ -393,7 +394,8 @@ func TestDBCompact(t *testing.T) {
 	path, err := os.MkdirTemp("", "db-test-compact")
 	assert.Nil(t, err)
 	options.DirPath = path
-	options.CompactBatchCount = 2 << 5
+	options.CompactThreshold = 0.5
+	options.CompactBatchCapacity = 1 << 6
 
 	db, err := Open(options)
 	assert.Nil(t, err)
@@ -416,11 +418,11 @@ func TestDBCompact(t *testing.T) {
 		})
 	}
 
-	numLogs := 64
+	numLogs := 70
 	var logs []*testLog
 	for i := 0; i < numLogs; i++ {
 		// the size of a logRecord is about 1MB (a little bigger than 1MB due to encode)
-		log := &testLog{key: util.RandomValue(2 << 18), value: util.RandomValue(2 << 18)}
+		log := &testLog{key: []byte(strconv.Itoa(i)), value: util.RandomValue(1 << 20)}
 		logs = append(logs, log)
 	}
 	for _, log := range logs {
@@ -429,23 +431,41 @@ func TestDBCompact(t *testing.T) {
 			DisableWal: false,
 		})
 	}
-	for _, log := range logs {
+
+	// wait for flush to complete
+	time.Sleep(time.Millisecond * 1000)
+	db.flushLock.Lock()
+	ratio := float64(db.invalidEntries) / float64(db.allEntries)
+	assert.Equal(t, ratio, float64(0.0))
+	allEntries := db.allEntries
+	db.flushLock.Unlock()
+
+	for _, log := range logs[:32] {
+		_ = db.Put(log.key, log.value, &WriteOptions{
+			Sync:       true,
+			DisableWal: false,
+		})
 		_ = db.Delete(log.key, &WriteOptions{
 			Sync:       true,
 			DisableWal: false,
 		})
 	}
+	for _, log := range logs[32:] {
+		_ = db.Put(log.key, log.value, &WriteOptions{
+			Sync:       true,
+			DisableWal: false,
+		})
+	}
+
 	t.Run("test compaction", func(t *testing.T) {
-		time.Sleep(time.Millisecond * 500)
-		size, err := util.DirSize(db.options.DirPath)
-		assert.Nil(t, err)
-
-		err = db.Compact()
-		assert.Nil(t, err)
-
-		sizeCompact, err := util.DirSize(db.options.DirPath)
-		assert.Nil(t, err)
-		assert.Greater(t, size, sizeCompact)
+		// wait for compact to complete
+		time.Sleep(time.Millisecond * 1000)
+		db.flushLock.Lock()
+		ratio = float64(db.invalidEntries) / float64(db.allEntries)
+		assert.Less(t, ratio, db.options.CompactThreshold)
+		assert.Less(t, db.allEntries, allEntries)
+		assert.Equal(t, db.invalidEntries, 0)
+		db.flushLock.Unlock()
 
 		for _, log := range testlogs {
 			value, err := getValueFromVlog(db, log.key)
@@ -480,6 +500,59 @@ func getValueFromVlog(db *DB, key []byte) ([]byte, error) {
 		return nil, err
 	}
 	return record.value, nil
+}
+
+func TestInfoFile(t *testing.T) {
+	options := DefaultOptions
+	path, err := os.MkdirTemp("", "db-test-infoFile")
+	assert.Nil(t, err)
+	options.DirPath = path
+	options.CompactThreshold = 0.8
+	options.CompactBatchCapacity = 1 << 6
+
+	db, err := Open(options)
+	assert.Nil(t, err)
+	defer destroyDB(db)
+
+	type testLog struct {
+		key   []byte
+		value []byte
+	}
+
+	numLogs := 70
+	var logs []*testLog
+	for i := 0; i < numLogs; i++ {
+		// the size of a logRecord is about 1MB (a little bigger than 1MB due to encode)
+		log := &testLog{key: []byte(strconv.Itoa(i)), value: util.RandomValue(1 << 20)}
+		logs = append(logs, log)
+	}
+	for _, log := range logs {
+		_ = db.Put(log.key, log.value, &WriteOptions{
+			Sync:       true,
+			DisableWal: false,
+		})
+	}
+	// overwrite previous logs partially
+	for _, log := range logs {
+		_ = db.Put(log.key, log.value, &WriteOptions{
+			Sync:       true,
+			DisableWal: false,
+		})
+	}
+	// wait for flush to complete
+	time.Sleep(time.Millisecond * 1000)
+	db.flushLock.Lock()
+	allEntries, invalidEntries := db.allEntries, db.invalidEntries
+	db.flushLock.Unlock()
+
+	// restart db
+	err = db.Close()
+	assert.Nil(t, err)
+	db, err = Open(options)
+	assert.Nil(t, err)
+
+	assert.Equal(t, allEntries, db.allEntries)
+	assert.Equal(t, invalidEntries, db.invalidEntries)
 }
 
 func TestDBMultiClients(t *testing.T) {

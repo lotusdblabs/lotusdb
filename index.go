@@ -15,13 +15,13 @@ const (
 // But you can implement your own index if you want.
 type Index interface {
 	// PutBatch put batch records to index
-	PutBatch(keyPositions []*KeyPosition, matchKeyFunc ...diskhash.MatchKeyFunc) (error, int)
+	PutBatch(keyPositions []*KeyPosition, matchKeyFunc ...diskhash.MatchKeyFunc) (int, error)
 
 	// Get chunk position by key
 	Get(key []byte, matchKeyFunc ...diskhash.MatchKeyFunc) (*KeyPosition, error)
 
 	// DeleteBatch delete batch records from index
-	DeleteBatch(keys [][]byte, matchKeyFunc ...diskhash.MatchKeyFunc) (error, int)
+	DeleteBatch(keys [][]byte, matchKeyFunc ...diskhash.MatchKeyFunc) (int, error)
 
 	// Sync sync index data to disk
 	Sync() error

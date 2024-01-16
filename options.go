@@ -54,8 +54,8 @@ type Options struct {
 	// default value is bptree.
 	IndexType IndexType
 
-	// writing entries to disk after reading the specified number of entries.
-	CompactBatchCount int
+	// writing entries to disk after reading the specified memory capacity of entries.
+	CompactBatchCapacity int
 
 	// WaitMemSpaceTimeout specifies the timeout for waiting for space in the memtable.
 	// When all memtables are full, it will be flushed to disk by the background goroutine.
@@ -66,7 +66,7 @@ type Options struct {
 	WaitMemSpaceTimeout time.Duration
 
 	// While invalid data in value log accounts for more than CompactThreshold in the total data, Compact will be started.
-	CompactThreshold float32
+	CompactThreshold float64
 }
 
 // BatchOptions specifies the options for creating a batch.
@@ -117,19 +117,19 @@ const (
 )
 
 var DefaultOptions = Options{
-	DirPath:             tempDBDir(),
-	MemtableSize:        64 * MB,
-	MemtableNums:        15,
-	BlockCache:          0,
-	Sync:                false,
-	BytesPerSync:        0,
-	PartitionNum:        3,
-	KeyHashFunction:     xxhash.Sum64,
-	ValueLogFileSize:    1 * GB,
-	IndexType:           BTree,
-	CompactBatchCount:   10000,
-	WaitMemSpaceTimeout: 100 * time.Millisecond,
-	CompactThreshold:    0.8,
+	DirPath:              tempDBDir(),
+	MemtableSize:         64 * MB,
+	MemtableNums:         15,
+	BlockCache:           0,
+	Sync:                 false,
+	BytesPerSync:         0,
+	PartitionNum:         3,
+	KeyHashFunction:      xxhash.Sum64,
+	ValueLogFileSize:     1 * GB,
+	IndexType:            BTree,
+	CompactBatchCapacity: 1 << 30,
+	WaitMemSpaceTimeout:  100 * time.Millisecond,
+	CompactThreshold:     0.8,
 }
 
 var DefaultBatchOptions = BatchOptions{

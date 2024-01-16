@@ -39,8 +39,8 @@ type valueLogOptions struct {
 	// hash function for sharding
 	hashKeyFunction func([]byte) uint64
 
-	// writing validEntries to disk after reading the specified number of entries.
-	compactBatchCount int
+	// writing validEntries to disk after reading the specified memory capacity of entries.
+	compactBatchCapacity int
 }
 
 // open wal files for value log, it will open several wal files for concurrent writing and reading

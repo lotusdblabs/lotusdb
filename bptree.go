@@ -85,9 +85,9 @@ func (bt *BPTree) Get(key []byte, _ ...diskhash.MatchKeyFunc) (*KeyPosition, err
 }
 
 // PutBatch puts the specified key positions into the index.
-func (bt *BPTree) PutBatch(positions []*KeyPosition, _ ...diskhash.MatchKeyFunc) (error, int) {
+func (bt *BPTree) PutBatch(positions []*KeyPosition, _ ...diskhash.MatchKeyFunc) (int, error) {
 	if len(positions) == 0 {
-		return nil, 0
+		return 0, nil
 	}
 
 	// group positions by partition
@@ -118,6 +118,9 @@ func (bt *BPTree) PutBatch(positions []*KeyPosition, _ ...diskhash.MatchKeyFunc)
 						encPos := record.position.Encode()
 						err, keyExist := bucket.Put(record.key, encPos)
 						if err != nil {
+							if err == bbolt.ErrKeyRequired {
+								return ErrKeyIsEmpty
+							}
 							return err
 						}
 						if keyExist {
@@ -130,13 +133,13 @@ func (bt *BPTree) PutBatch(positions []*KeyPosition, _ ...diskhash.MatchKeyFunc)
 		})
 	}
 	err := g.Wait()
-	return err, int(invalidNum)
+	return int(invalidNum), err
 }
 
 // DeleteBatch deletes the specified keys from the index.
-func (bt *BPTree) DeleteBatch(keys [][]byte, _ ...diskhash.MatchKeyFunc) (error, int) {
+func (bt *BPTree) DeleteBatch(keys [][]byte, _ ...diskhash.MatchKeyFunc) (int, error) {
 	if len(keys) == 0 {
-		return nil, 0
+		return 0, nil
 	}
 
 	// group keys by partition
@@ -165,6 +168,9 @@ func (bt *BPTree) DeleteBatch(keys [][]byte, _ ...diskhash.MatchKeyFunc) (error,
 					case <-ctx.Done():
 						return ctx.Err()
 					default:
+						if len(key) == 0 {
+							return ErrKeyIsEmpty
+						}
 						err, keyExist := bucket.Delete(key)
 						if err != nil {
 							return err
@@ -179,7 +185,7 @@ func (bt *BPTree) DeleteBatch(keys [][]byte, _ ...diskhash.MatchKeyFunc) (error,
 		})
 	}
 	err := g.Wait()
-	return err, int(invalidNum)
+	return int(invalidNum), err
 }
 
 // Close releases all boltdb database resources.

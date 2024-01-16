@@ -136,7 +136,7 @@ func testHashTablePutBatch(t *testing.T, partitionNum int) {
 	}
 	for _, tt := range tests {
 		t.Run(tt.name, func(t *testing.T) {
-			if err := ht.PutBatch(tt.positions, tt.matchKeyFunc...); (err != nil) != tt.wantErr {
+			if _, err := ht.PutBatch(tt.positions, tt.matchKeyFunc...); (err != nil) != tt.wantErr {
 				t.Errorf("HashTable.PutBatch() error = %v, wantErr %v", err, tt.wantErr)
 			}
 		})
@@ -171,7 +171,7 @@ func testHashTableGet(t *testing.T, partitionNum int) {
 	matchKeyFuncs := []diskhash.MatchKeyFunc{
 		testMatchFunc(true), testMatchFunc(false),
 	}
-	err = ht.PutBatch(keyPositions, matchKeyFuncs[:1]...)
+	_, err = ht.PutBatch(keyPositions, matchKeyFuncs[:1]...)
 	assert.Nil(t, err)
 
 	tests := []struct {
@@ -226,7 +226,7 @@ func testHashTableDeleteBatch(t *testing.T, partitionNum int) {
 		partition: uint32(ht.options.getKeyPartition([]byte("normal"))),
 		position:  &wal.ChunkPosition{},
 	})
-	err = ht.PutBatch(keyPositions, []diskhash.MatchKeyFunc{testMatchFunc(true)}...)
+	_, err = ht.PutBatch(keyPositions, []diskhash.MatchKeyFunc{testMatchFunc(true)}...)
 	assert.Nil(t, err)
 
 	matchKeyFuncs := []diskhash.MatchKeyFunc{
@@ -245,7 +245,7 @@ func testHashTableDeleteBatch(t *testing.T, partitionNum int) {
 	}
 	for _, tt := range tests {
 		t.Run(tt.name, func(t *testing.T) {
-			if err := ht.DeleteBatch(tt.keys, tt.matchKeyFunc...); (err != nil) != tt.wantErr {
+			if _, err := ht.DeleteBatch(tt.keys, tt.matchKeyFunc...); (err != nil) != tt.wantErr {
 				t.Errorf("HashTable.DeleteBatch() error = %v, wantErr %v", err, tt.wantErr)
 			}
 		})
