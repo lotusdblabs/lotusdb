@@ -284,8 +284,8 @@ func (bi *bptreeIterator) Key() []byte {
 }
 
 // Value get the current value.
-func (ci *bptreeIterator) Value() any {
-	return ci.value
+func (bi *bptreeIterator) Value() any {
+	return bi.value
 }
 
 // Valid returns whether the iterator is exhausted.

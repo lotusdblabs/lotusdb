@@ -29,10 +29,10 @@ type baseIterator interface {
 
 // Iterator holds a heap and a set of iterators that implement the IteratorI interface
 type Iterator struct {
-	h     iterHeap
-	itrs  []*singleIter       // used for rebuilding heap
+	h       iterHeap
+	itrs    []*singleIter       // used for rebuilding heap
 	rankMap map[int]*singleIter // map rank->singleIter
-	db    *DB
+	db      *DB
 }
 
 // Rewind seek the first key in the iterator.
@@ -259,9 +259,9 @@ func (db *DB) NewIterator(options IteratorOptions) (*Iterator, error) {
 	heap.Init(&h)
 
 	return &Iterator{
-		h:     h,
-		itrs:  itrs,
+		h:       h,
+		itrs:    itrs,
 		rankMap: itrsM,
-		db:    db,
+		db:      db,
 	}, nil
 }
