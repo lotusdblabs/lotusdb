@@ -1,10 +1,12 @@
 package lotusdb
 
 import (
+	"bytes"
 	"os"
 	"testing"
 
 	"github.com/bwmarrin/snowflake"
+	"github.com/dgraph-io/badger/v4/y"
 	"github.com/lotusdblabs/lotusdb/v2/util"
 	"github.com/stretchr/testify/assert"
 )
@@ -464,4 +466,163 @@ func TestMemtableClose(t *testing.T) {
 		err = table.close()
 		assert.Nil(t, err)
 	})
+}
+
+func TestNewMemtableIterator(t *testing.T) {
+	path, err := os.MkdirTemp("", "memtable-test-iterator-new")
+	assert.Nil(t, err)
+
+	defer func() {
+		_ = os.RemoveAll(path)
+	}()
+
+	opts := memtableOptions{
+		dirPath:         path,
+		tableId:         0,
+		memSize:         DefaultOptions.MemtableSize,
+		walBytesPerSync: DefaultOptions.BytesPerSync,
+		walSync:         DefaultBatchOptions.Sync,
+		walBlockCache:   DefaultOptions.BlockCache,
+	}
+
+	table, err := openMemtable(opts)
+	defer table.close()
+	assert.Nil(t, err)
+
+	options := IteratorOptions{
+		Reverse: false,
+	}
+	iter := NewMemtableIterator(options, table)
+	assert.Nil(t, err)
+
+	err = iter.Close()
+	assert.Nil(t, err)
+}
+
+func Test_memtableIterator(t *testing.T) {
+	path, err := os.MkdirTemp("", "memtable-test-iterator-rewind")
+	assert.Nil(t, err)
+
+	defer func() {
+		_ = os.RemoveAll(path)
+	}()
+
+	opts := memtableOptions{
+		dirPath:         path,
+		tableId:         0,
+		memSize:         DefaultOptions.MemtableSize,
+		walBytesPerSync: DefaultOptions.BytesPerSync,
+		walSync:         DefaultBatchOptions.Sync,
+		walBlockCache:   DefaultOptions.BlockCache,
+	}
+	table, err := openMemtable(opts)
+	assert.Nil(t, err)
+
+	writeOpts := &WriteOptions{
+		Sync:       false,
+		DisableWal: false,
+	}
+	node, err := snowflake.NewNode(1)
+	assert.Nil(t, err)
+	writeLogs := map[string]*LogRecord{
+		"key 0": {Key: []byte("key 0"), Value: []byte("value 0"), Type: LogRecordNormal},
+		"key 1": {Key: nil, Value: []byte("value 1"), Type: LogRecordNormal},
+		"key 2": {Key: []byte("key 2"), Value: []byte(""), Type: LogRecordNormal},
+	}
+	writeLogs2 := map[string]*LogRecord{
+		"abc 0": {Key: []byte("abc 0"), Value: []byte("value 0"), Type: LogRecordNormal},
+		"key 3": {Key: nil, Value: []byte("key 3"), Type: LogRecordNormal},
+		"abc 1": {Key: []byte("abc 1"), Value: []byte(""), Type: LogRecordNormal},
+	}
+	err = table.putBatch(writeLogs, node.Generate(), writeOpts)
+	assert.Nil(t, err)
+
+	iteratorOptions := IteratorOptions{
+		Reverse: false,
+	}
+	itr := NewMemtableIterator(iteratorOptions, table)
+	assert.Nil(t, err)
+	var prev []byte
+	itr.Rewind()
+	for itr.Valid() {
+		currKey := itr.Key()
+		assert.True(t, prev == nil || bytes.Compare(prev, currKey) == -1)
+		assert.Equal(t, writeLogs[string(currKey)].Value, itr.Value().(y.ValueStruct).Value)
+		assert.Equal(t, writeLogs[string(currKey)].Type, itr.Value().(y.ValueStruct).Meta)
+		prev = currKey
+		itr.Next()
+	}
+	err = itr.Close()
+	assert.Nil(t, err)
+
+	iteratorOptions.Reverse = true
+	prev = nil
+	itr = NewMemtableIterator(iteratorOptions, table)
+	assert.Nil(t, err)
+	itr.Rewind()
+	for itr.Valid() {
+		currKey := itr.Key()
+		assert.True(t, prev == nil || bytes.Compare(prev, currKey) == 1)
+		prev = currKey
+		assert.Equal(t, writeLogs[string(currKey)].Value, itr.Value().(y.ValueStruct).Value)
+		assert.Equal(t, writeLogs[string(currKey)].Type, itr.Value().(y.ValueStruct).Meta)
+		itr.Next()
+	}
+	err = itr.Close()
+	assert.Nil(t, err)
+
+	iteratorOptions.Reverse = false
+	itr = NewMemtableIterator(iteratorOptions, table)
+	assert.Nil(t, err)
+	itr.Seek([]byte("key 0"))
+	assert.Equal(t, []byte("key 0"), itr.Key())
+	itr.Seek([]byte("key 4"))
+	assert.False(t, itr.Valid())
+
+	itr.Seek([]byte("aye 2"))
+	assert.Equal(t, []byte("key 0"), itr.Key())
+	err = itr.Close()
+	assert.Nil(t, err)
+
+	iteratorOptions.Reverse = true
+	itr = NewMemtableIterator(iteratorOptions, table)
+	assert.Nil(t, err)
+	itr.Seek([]byte("key 4"))
+	assert.Equal(t, []byte("key 2"), itr.Key())
+
+	itr.Seek([]byte("key 2"))
+	assert.Equal(t, []byte("key 2"), itr.Key())
+
+	itr.Seek([]byte("aye 2"))
+	assert.False(t, itr.Valid())
+
+	err = itr.Close()
+	assert.Nil(t, err)
+
+	// prefix
+	err = table.putBatch(writeLogs2, node.Generate(), writeOpts)
+	assert.Nil(t, err)
+
+	iteratorOptions.Reverse = false
+	iteratorOptions.Prefix = []byte("not valid")
+	itr = NewMemtableIterator(iteratorOptions, table)
+	assert.Nil(t, err)
+	itr.Rewind()
+	assert.False(t, itr.Valid())
+	err = itr.Close()
+	assert.Nil(t, err)
+
+	iteratorOptions.Reverse = false
+	iteratorOptions.Prefix = []byte("abc")
+	itr = NewMemtableIterator(iteratorOptions, table)
+	assert.Nil(t, err)
+	itr.Rewind()
+	for itr.Valid() {
+		assert.True(t, bytes.HasPrefix(itr.Key(), iteratorOptions.Prefix))
+		assert.Equal(t, writeLogs2[string(itr.Key())].Value, itr.Value().(y.ValueStruct).Value)
+		itr.Next()
+	}
+	err = itr.Close()
+	assert.Nil(t, err)
+
 }

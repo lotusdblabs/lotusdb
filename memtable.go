@@ -1,6 +1,7 @@
 package lotusdb
 
 import (
+	"bytes"
 	"fmt"
 	"io"
 	"math"
@@ -180,7 +181,7 @@ func (mt *memtable) putBatch(pendingWrites map[string]*LogRecord,
 			return err
 		}
 		// flush wal if necessary
-		if options.Sync && !mt.options.walSync {
+		if options != nil && options.Sync && !mt.options.walSync {
 			if err := mt.wal.Sync(); err != nil {
 				return err
 			}
@@ -231,4 +232,75 @@ func (mt *memtable) sync() error {
 		return mt.wal.Sync()
 	}
 	return nil
+}
+
+// memtableIterator implement IteratorI
+type memtableIterator struct {
+	options IteratorOptions
+	iter    *arenaskl.UniIterator
+}
+
+// NewMemtableIterator
+func NewMemtableIterator(options IteratorOptions, memtable *memtable) *memtableIterator {
+	return &memtableIterator{
+		options: options,
+		iter:    memtable.skl.NewUniIterator(options.Reverse),
+	}
+}
+
+// Rewind seek the first key in the iterator.
+func (mi *memtableIterator) Rewind() {
+	mi.iter.Rewind()
+	if len(mi.options.Prefix) == 0 {
+		return
+	}
+	// prefix scan
+	for mi.iter.Valid() && !bytes.HasPrefix(mi.iter.Key(), mi.options.Prefix) {
+		mi.iter.Next()
+	}
+}
+
+// Seek move the iterator to the key which is
+// greater(less when reverse is true) than or equal to the specified key.
+func (mi *memtableIterator) Seek(key []byte) {
+	mi.iter.Seek(y.KeyWithTs(key, 0))
+	if len(mi.options.Prefix) == 0 {
+		return
+	}
+	// prefix scan
+	for mi.Valid() && !bytes.HasPrefix(mi.Key(), mi.options.Prefix) {
+		mi.Next()
+	}
+}
+
+// Next moves the iterator to the next key.
+func (mi *memtableIterator) Next() {
+	mi.iter.Next()
+	if len(mi.options.Prefix) == 0 {
+		return
+	}
+	// prefix scan
+	for mi.iter.Valid() && !bytes.HasPrefix(mi.iter.Key(), mi.options.Prefix) {
+		mi.iter.Next()
+	}
+}
+
+// Key get the current key.
+func (mi *memtableIterator) Key() []byte {
+	return y.ParseKey(mi.iter.Key())
+}
+
+// Value get the current value.
+func (mi *memtableIterator) Value() any {
+	return mi.iter.Value()
+}
+
+// Valid returns whether the iterator is exhausted.
+func (mi *memtableIterator) Valid() bool {
+	return mi.iter.Valid()
+}
+
+// Close the iterator.
+func (mi *memtableIterator) Close() error {
+	return mi.iter.Close()
 }

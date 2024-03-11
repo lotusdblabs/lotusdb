@@ -1,6 +1,7 @@
 package lotusdb
 
 import (
+	"bytes"
 	"os"
 	"path/filepath"
 	"strconv"
@@ -302,4 +303,178 @@ func testbptreeSync(t *testing.T, partitionNum int) {
 	assert.Nil(t, err)
 	err = bt.Sync()
 	assert.Nil(t, err)
+}
+
+func Test_bptreeIterator(t *testing.T) {
+	options := indexOptions{
+		indexType:       BTree,
+		dirPath:         filepath.Join(os.TempDir(), "bptree-cursorIterator"+strconv.Itoa(1)),
+		partitionNum:    1,
+		keyHashFunction: xxhash.Sum64,
+	}
+
+	err := os.MkdirAll(options.dirPath, os.ModePerm)
+	assert.Nil(t, err)
+	defer func() {
+		_ = os.RemoveAll(options.dirPath)
+	}()
+	bt, err := openBTreeIndex(options)
+	assert.Nil(t, err)
+	m := map[string]*wal.ChunkPosition{
+		"key 0": {SegmentId: 0, BlockNumber: 0, ChunkOffset: 0, ChunkSize: 0},
+		"key 1": {SegmentId: 1, BlockNumber: 1, ChunkOffset: 1, ChunkSize: 1},
+		"key 2": {SegmentId: 2, BlockNumber: 2, ChunkOffset: 2, ChunkSize: 2},
+	}
+	m2 := map[string]*wal.ChunkPosition{
+		"abc 0": {SegmentId: 3, BlockNumber: 3, ChunkOffset: 3, ChunkSize: 3},
+		"abc 1": {SegmentId: 4, BlockNumber: 4, ChunkOffset: 4, ChunkSize: 4},
+	}
+	var keyPositions, keyPositions2 []*KeyPosition
+	keyPositions = append(keyPositions, &KeyPosition{
+		key:       []byte("key 0"),
+		partition: 0,
+		position:  &wal.ChunkPosition{SegmentId: 0, BlockNumber: 0, ChunkOffset: 0, ChunkSize: 0},
+	}, &KeyPosition{
+		key:       []byte("key 1"),
+		partition: 0,
+		position:  &wal.ChunkPosition{SegmentId: 1, BlockNumber: 1, ChunkOffset: 1, ChunkSize: 1},
+	}, &KeyPosition{
+		key:       []byte("key 2"),
+		partition: 0,
+		position:  &wal.ChunkPosition{SegmentId: 2, BlockNumber: 2, ChunkOffset: 2, ChunkSize: 2},
+	},
+	)
+
+	keyPositions2 = append(keyPositions, &KeyPosition{
+		key:       []byte("abc 0"),
+		partition: 0,
+		position:  &wal.ChunkPosition{SegmentId: 3, BlockNumber: 3, ChunkOffset: 3, ChunkSize: 3},
+	}, &KeyPosition{
+		key:       []byte("key abc"),
+		partition: 0,
+		position:  &wal.ChunkPosition{SegmentId: 4, BlockNumber: 4, ChunkOffset: 4, ChunkSize: 4},
+	}, &KeyPosition{
+		key:       []byte("abc 1"),
+		partition: 0,
+		position:  &wal.ChunkPosition{SegmentId: 4, BlockNumber: 4, ChunkOffset: 4, ChunkSize: 4},
+	})
+
+	err = bt.PutBatch(keyPositions)
+	assert.Nil(t, err)
+
+	tree := bt.trees[0]
+	tx, err := tree.Begin(true)
+	assert.Nil(t, err)
+	iteratorOptions := IteratorOptions{
+		Reverse: false,
+	}
+
+	itr := NewBptreeIterator(tx, iteratorOptions)
+	assert.Nil(t, err)
+	var prev []byte
+	itr.Rewind()
+	for itr.Valid() {
+		currKey := itr.Key()
+		assert.True(t, prev == nil || bytes.Compare(prev, currKey) == -1)
+		assert.Equal(t, m[string(itr.Key())].Encode(), itr.Value())
+		prev = currKey
+		itr.Next()
+	}
+	err = itr.Close()
+	assert.Nil(t, err)
+
+	tx, err = tree.Begin(true)
+	assert.Nil(t, err)
+	iteratorOptions = IteratorOptions{
+		Reverse: true,
+	}
+	prev = nil
+
+	itr = NewBptreeIterator(tx, iteratorOptions)
+	assert.Nil(t, err)
+	itr.Rewind()
+	for itr.Valid() {
+		currKey := itr.Key()
+		assert.True(t, prev == nil || bytes.Compare(prev, currKey) == 1)
+		assert.Equal(t, m[string(itr.Key())].Encode(), itr.Value())
+		prev = currKey
+		itr.Next()
+	}
+	itr.Seek([]byte("key 4"))
+	assert.Equal(t, []byte("key 2"), itr.Key())
+
+	itr.Seek([]byte("key 2"))
+	assert.Equal(t, []byte("key 2"), itr.Key())
+
+	itr.Seek([]byte("aye 2"))
+	assert.False(t, itr.Valid())
+	err = itr.Close()
+	assert.Nil(t, err)
+
+	tx, err = tree.Begin(true)
+	assert.Nil(t, err)
+	iteratorOptions = IteratorOptions{
+		Reverse: false,
+	}
+	prev = nil
+
+	itr = NewBptreeIterator(tx, iteratorOptions)
+	assert.Nil(t, err)
+	itr.Rewind()
+	for itr.Valid() {
+		currKey := itr.Key()
+		assert.True(t, prev == nil || bytes.Compare(prev, currKey) == -1)
+		assert.Equal(t, m[string(itr.Key())].Encode(), itr.Value())
+		prev = currKey
+		itr.Next()
+	}
+
+	itr.Seek([]byte("key 0"))
+	assert.Equal(t, []byte("key 0"), itr.Key())
+	itr.Seek([]byte("key 4"))
+	assert.False(t, itr.Valid())
+
+	itr.Seek([]byte("aye 2"))
+	assert.Equal(t, []byte("key 0"), itr.Key())
+	err = itr.Close()
+	assert.Nil(t, err)
+
+	// prefix
+	err = bt.PutBatch(keyPositions2)
+	assert.Nil(t, err)
+
+	tx, err = tree.Begin(true)
+	assert.Nil(t, err)
+	iteratorOptions = IteratorOptions{
+		Reverse: false,
+		Prefix:  []byte("not valid"),
+	}
+
+	itr = NewBptreeIterator(tx, iteratorOptions)
+	assert.Nil(t, err)
+	itr.Rewind()
+	assert.False(t, itr.Valid())
+	err = itr.Close()
+	assert.Nil(t, err)
+
+	tx, err = tree.Begin(true)
+	assert.Nil(t, err)
+	iteratorOptions = IteratorOptions{
+		Reverse: false,
+		Prefix:  []byte("abc"),
+	}
+
+	itr = NewBptreeIterator(tx, iteratorOptions)
+	assert.Nil(t, err)
+	itr.Rewind()
+	assert.True(t, itr.Valid())
+
+	for itr.Valid() {
+		assert.True(t, bytes.HasPrefix(itr.Key(), iteratorOptions.Prefix))
+		assert.Equal(t, m2[string(itr.Key())].Encode(), itr.Value())
+		itr.Next()
+	}
+	err = itr.Close()
+	assert.Nil(t, err)
+
 }
