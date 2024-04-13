@@ -369,7 +369,7 @@ func Test_bptreeIterator(t *testing.T) {
 		Reverse: false,
 	}
 
-	itr := NewBptreeIterator(tx, iteratorOptions)
+	itr := newBptreeIterator(tx, iteratorOptions)
 	assert.Nil(t, err)
 	var prev []byte
 	itr.Rewind()
@@ -390,7 +390,7 @@ func Test_bptreeIterator(t *testing.T) {
 	}
 	prev = nil
 
-	itr = NewBptreeIterator(tx, iteratorOptions)
+	itr = newBptreeIterator(tx, iteratorOptions)
 	assert.Nil(t, err)
 	itr.Rewind()
 	for itr.Valid() {
@@ -418,7 +418,7 @@ func Test_bptreeIterator(t *testing.T) {
 	}
 	prev = nil
 
-	itr = NewBptreeIterator(tx, iteratorOptions)
+	itr = newBptreeIterator(tx, iteratorOptions)
 	assert.Nil(t, err)
 	itr.Rewind()
 	for itr.Valid() {
@@ -450,7 +450,7 @@ func Test_bptreeIterator(t *testing.T) {
 		Prefix:  []byte("not valid"),
 	}
 
-	itr = NewBptreeIterator(tx, iteratorOptions)
+	itr = newBptreeIterator(tx, iteratorOptions)
 	assert.Nil(t, err)
 	itr.Rewind()
 	assert.False(t, itr.Valid())
@@ -464,7 +464,7 @@ func Test_bptreeIterator(t *testing.T) {
 		Prefix:  []byte("abc"),
 	}
 
-	itr = NewBptreeIterator(tx, iteratorOptions)
+	itr = newBptreeIterator(tx, iteratorOptions)
 	assert.Nil(t, err)
 	itr.Rewind()
 	assert.True(t, itr.Valid())

@@ -240,8 +240,7 @@ type memtableIterator struct {
 	iter    *arenaskl.UniIterator
 }
 
-// NewMemtableIterator
-func NewMemtableIterator(options IteratorOptions, memtable *memtable) *memtableIterator {
+func newMemtableIterator(options IteratorOptions, memtable *memtable) *memtableIterator {
 	return &memtableIterator{
 		options: options,
 		iter:    memtable.skl.NewUniIterator(options.Reverse),

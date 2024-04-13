@@ -209,11 +209,10 @@ type bptreeIterator struct {
 	options IteratorOptions
 }
 
-// NewBptreeIterator
-func NewBptreeIterator(tx *bbolt.Tx, options IteratorOptions) *bptreeIterator {
-	cursor := tx.Bucket(indexBucketName).Cursor()
+// create a boltdb based btree iterator
+func newBptreeIterator(tx *bbolt.Tx, options IteratorOptions) *bptreeIterator {
 	return &bptreeIterator{
-		cursor:  cursor,
+		cursor:  tx.Bucket(indexBucketName).Cursor(),
 		options: options,
 		tx:      tx,
 	}

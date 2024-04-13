@@ -207,23 +207,25 @@ func (db *DB) NewIterator(options IteratorOptions) (*Iterator, error) {
 			db.mu.Unlock()
 		}
 	}()
+
 	itrs := make([]*singleIter, 0, db.options.PartitionNum+len(db.immuMems)+1)
 	itrsM := make(map[int]*singleIter)
 	rank := 0
 	index := db.index.(*BPTree)
+
 	for i := 0; i < db.options.PartitionNum; i++ {
 		tx, err := index.trees[i].Begin(false)
 		if err != nil {
 			return nil, err
 		}
-		itr := NewBptreeIterator(
+		itr := newBptreeIterator(
 			tx,
 			options,
 		)
 		itr.Rewind()
 		// is empty
 		if !itr.Valid() {
-			itr.Close()
+			_ = itr.Close()
 			continue
 		}
 		itrs = append(itrs, &singleIter{
@@ -236,13 +238,14 @@ func (db *DB) NewIterator(options IteratorOptions) (*Iterator, error) {
 		itrsM[rank] = itrs[len(itrs)-1]
 		rank++
 	}
+
 	memtableList := append(db.immuMems, db.activeMem)
 	for i := 0; i < len(memtableList); i++ {
-		itr := NewMemtableIterator(options, memtableList[i])
+		itr := newMemtableIterator(options, memtableList[i])
 		itr.Rewind()
 		// is empty
 		if !itr.Valid() {
-			itr.Close()
+			_ = itr.Close()
 			continue
 		}
 		itrs = append(itrs, &singleIter{
@@ -255,6 +258,7 @@ func (db *DB) NewIterator(options IteratorOptions) (*Iterator, error) {
 		itrsM[rank] = itrs[len(itrs)-1]
 		rank++
 	}
+
 	h := iterHeap(itrs)
 	heap.Init(&h)
 
