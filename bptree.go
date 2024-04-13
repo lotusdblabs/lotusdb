@@ -1,6 +1,7 @@
 package lotusdb
 
 import (
+	"bytes"
 	"context"
 	"fmt"
 	"path/filepath"
@@ -197,4 +198,102 @@ func (bt *BPTree) Sync() error {
 		}
 	}
 	return nil
+}
+
+// bptreeIterator implement IteratorI
+type bptreeIterator struct {
+	key     []byte
+	value   []byte
+	tx      *bbolt.Tx
+	cursor  *bbolt.Cursor
+	options IteratorOptions
+}
+
+// NewBptreeIterator
+func NewBptreeIterator(tx *bbolt.Tx, options IteratorOptions) *bptreeIterator {
+	cursor := tx.Bucket(indexBucketName).Cursor()
+	return &bptreeIterator{
+		cursor:  cursor,
+		options: options,
+		tx:      tx,
+	}
+}
+
+// Rewind seek the first key in the iterator.
+func (bi *bptreeIterator) Rewind() {
+	if bi.options.Reverse {
+		bi.key, bi.value = bi.cursor.Last()
+		if len(bi.options.Prefix) == 0 {
+			return
+		}
+		for bi.key != nil && !bytes.HasPrefix(bi.key, bi.options.Prefix) {
+			bi.key, bi.value = bi.cursor.Prev()
+		}
+	} else {
+		bi.key, bi.value = bi.cursor.First()
+		if len(bi.options.Prefix) == 0 {
+			return
+		}
+		for bi.key != nil && !bytes.HasPrefix(bi.key, bi.options.Prefix) {
+			bi.key, bi.value = bi.cursor.Next()
+		}
+	}
+}
+
+// Seek move the iterator to the key which is
+// greater(less when reverse is true) than or equal to the specified key.
+func (bi *bptreeIterator) Seek(key []byte) {
+	bi.key, bi.value = bi.cursor.Seek(key)
+	if !bytes.Equal(bi.key, key) && bi.options.Reverse {
+		bi.key, bi.value = bi.cursor.Prev()
+	}
+	if len(bi.options.Prefix) == 0 {
+		return
+	}
+	if !bytes.HasPrefix(bi.Key(), bi.options.Prefix) {
+		bi.Next()
+	}
+}
+
+// Next moves the iterator to the next key.
+func (bi *bptreeIterator) Next() {
+	if bi.options.Reverse {
+		bi.key, bi.value = bi.cursor.Prev()
+		if len(bi.options.Prefix) == 0 {
+			return
+		}
+		// prefix scan
+		for bi.key != nil && !bytes.HasPrefix(bi.key, bi.options.Prefix) {
+			bi.key, bi.value = bi.cursor.Prev()
+		}
+	} else {
+		bi.key, bi.value = bi.cursor.Next()
+		if len(bi.options.Prefix) == 0 {
+			return
+		}
+		// prefix scan
+		for bi.key != nil && !bytes.HasPrefix(bi.key, bi.options.Prefix) {
+			bi.key, bi.value = bi.cursor.Next()
+		}
+	}
+}
+
+// Key get the current key.
+func (bi *bptreeIterator) Key() []byte {
+	return bi.key
+}
+
+// Value get the current value.
+func (bi *bptreeIterator) Value() any {
+	return bi.value
+}
+
+// Valid returns whether the iterator is exhausted.
+func (bi *bptreeIterator) Valid() bool {
+	return bi.key != nil
+}
+
+// Close the iterator.
+func (bi *bptreeIterator) Close() error {
+	return bi.tx.Rollback()
 }
