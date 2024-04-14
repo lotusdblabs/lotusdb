@@ -125,7 +125,7 @@ func TestDBPut(t *testing.T) {
 
 	for _, tt := range tests {
 		t.Run(tt.name, func(t *testing.T) {
-			err = db.Put(tt.args.log.key, tt.args.log.value, &WriteOptions{
+			err = db.PutWithOptions(tt.args.log.key, tt.args.log.value, WriteOptions{
 				Sync:       true,
 				DisableWal: false,
 			})
@@ -186,7 +186,7 @@ func TestDBGet(t *testing.T) {
 	}
 
 	for _, log := range logs {
-		err := db.Put(log.key, log.value, &WriteOptions{
+		err := db.PutWithOptions(log.key, log.value, WriteOptions{
 			Sync:       true,
 			DisableWal: false,
 		})
@@ -248,7 +248,7 @@ func TestDBDelete(t *testing.T) {
 	}
 
 	for _, log := range logs {
-		err := db.Put(log.key, log.value, &WriteOptions{
+		err := db.PutWithOptions(log.key, log.value, WriteOptions{
 			Sync:       true,
 			DisableWal: false,
 		})
@@ -257,7 +257,7 @@ func TestDBDelete(t *testing.T) {
 
 	for _, tt := range tests {
 		t.Run(tt.name, func(t *testing.T) {
-			err := db.Delete(tt.args.log.key, &WriteOptions{
+			err := db.DeleteWithOptions(tt.args.log.key, WriteOptions{
 				Sync:       true,
 				DisableWal: false,
 			})
@@ -321,7 +321,7 @@ func TestDBExist(t *testing.T) {
 	}
 
 	for _, log := range logs {
-		err := db.Put(log.key, log.value, &WriteOptions{
+		err := db.PutWithOptions(log.key, log.value, WriteOptions{
 			Sync:       true,
 			DisableWal: false,
 		})
@@ -364,7 +364,7 @@ func TestDBFlushMemTables(t *testing.T) {
 		{key: []byte("key 2"), value: []byte("value 2")},
 	}
 	for _, log := range logs {
-		_ = db.Put(log.key, log.value, &WriteOptions{
+		_ = db.PutWithOptions(log.key, log.value, WriteOptions{
 			Sync:       true,
 			DisableWal: false,
 		})
@@ -372,7 +372,7 @@ func TestDBFlushMemTables(t *testing.T) {
 	for i := 0; i < numLogs; i++ {
 		// the size of a logRecord is about 1MB (a little bigger than 1MB due to encode)
 		log := &testLog{key: util.RandomValue(2 << 18), value: util.RandomValue(2 << 18)}
-		_ = db.Put(log.key, log.value, &WriteOptions{
+		_ = db.PutWithOptions(log.key, log.value, WriteOptions{
 			Sync:       true,
 			DisableWal: false,
 		})
@@ -411,7 +411,7 @@ func TestDBCompact(t *testing.T) {
 		{key: []byte("key 2"), value: []byte("value 2")},
 	}
 	for _, log := range testlogs {
-		_ = db.Put(log.key, log.value, &WriteOptions{
+		_ = db.PutWithOptions(log.key, log.value, WriteOptions{
 			Sync:       true,
 			DisableWal: false,
 		})
@@ -425,13 +425,13 @@ func TestDBCompact(t *testing.T) {
 		logs = append(logs, log)
 	}
 	for _, log := range logs {
-		_ = db.Put(log.key, log.value, &WriteOptions{
+		_ = db.PutWithOptions(log.key, log.value, WriteOptions{
 			Sync:       true,
 			DisableWal: false,
 		})
 	}
 	for _, log := range logs {
-		_ = db.Delete(log.key, &WriteOptions{
+		_ = db.DeleteWithOptions(log.key, WriteOptions{
 			Sync:       true,
 			DisableWal: false,
 		})
@@ -516,7 +516,7 @@ func TestDBMultiClients(t *testing.T) {
 			wg.Add(1)
 			go func(i int) {
 				for _, log := range logs[i] {
-					_ = db.Put(log.key, log.value, &WriteOptions{
+					_ = db.PutWithOptions(log.key, log.value, WriteOptions{
 						Sync:       true,
 						DisableWal: false,
 					})
@@ -543,7 +543,7 @@ func TestDBMultiClients(t *testing.T) {
 			wg.Add(1)
 			go func(i int) {
 				for _, log := range logs[i] {
-					_ = db.Delete(log.key, &WriteOptions{
+					_ = db.DeleteWithOptions(log.key, WriteOptions{
 						Sync:       true,
 						DisableWal: false,
 					})
@@ -627,13 +627,13 @@ func TestDBIterator(t *testing.T) {
 		}
 		return
 	}
-	err = db.immuMems[0].putBatch(list2Map(logRecord0), 0, nil)
+	err = db.immuMems[0].putBatch(list2Map(logRecord0), 0, DefaultWriteOptions)
 	assert.Nil(t, err)
-	err = db.immuMems[1].putBatch(list2Map(logRecord1), 1, nil)
+	err = db.immuMems[1].putBatch(list2Map(logRecord1), 1, DefaultWriteOptions)
 	assert.Nil(t, err)
-	err = db.immuMems[2].putBatch(list2Map(logRecord2), 2, nil)
+	err = db.immuMems[2].putBatch(list2Map(logRecord2), 2, DefaultWriteOptions)
 	assert.Nil(t, err)
-	err = db.activeMem.putBatch(list2Map(logRecord3), 3, nil)
+	err = db.activeMem.putBatch(list2Map(logRecord3), 3, DefaultWriteOptions)
 	assert.Nil(t, err)
 
 	expectedKey := [][]byte{

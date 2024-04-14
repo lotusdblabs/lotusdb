@@ -68,8 +68,8 @@ type Options struct {
 
 // BatchOptions specifies the options for creating a batch.
 type BatchOptions struct {
-	// Sync has the same semantics as Options.Sync.
-	Sync bool
+	// WriteOptions used in batch operation
+	WriteOptions
 
 	// ReadOnly specifies whether the batch is read only.
 	ReadOnly bool
@@ -129,8 +129,13 @@ var DefaultOptions = Options{
 }
 
 var DefaultBatchOptions = BatchOptions{
-	Sync:     true,
-	ReadOnly: false,
+	WriteOptions: DefaultWriteOptions,
+	ReadOnly:     false,
+}
+
+var DefaultWriteOptions = WriteOptions{
+	Sync:       false,
+	DisableWal: false,
 }
 
 func tempDBDir() string {
