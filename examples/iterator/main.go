@@ -23,11 +23,11 @@ func main() {
 
 	// put key
 	for i := 0; i < 100; i++ {
-		err = db.Put([]byte(fmt.Sprintf("key %d", i)), []byte(fmt.Sprintf("key %d", i)), nil)
+		err = db.Put([]byte(fmt.Sprintf("key %d", i)), []byte(fmt.Sprintf("key %d", i)))
 		if err != nil {
 			panic(err)
 		}
-		err = db.Put([]byte(fmt.Sprintf("abc %d", i)), []byte(fmt.Sprintf("abc %d", i)), nil)
+		err = db.Put([]byte(fmt.Sprintf("abc %d", i)), []byte(fmt.Sprintf("abc %d", i)))
 		if err != nil {
 			panic(err)
 		}

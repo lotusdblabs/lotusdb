@@ -91,7 +91,7 @@ func TestMemTablePutAllKindsEntries(t *testing.T) {
 	table, err := openMemtable(opts)
 	assert.Nil(t, err)
 
-	writeOpts := &WriteOptions{
+	writeOpts := WriteOptions{
 		Sync:       false,
 		DisableWal: false,
 	}
@@ -149,7 +149,7 @@ func TestMemTablePutBatch(t *testing.T) {
 	table, err := openMemtable(opts)
 	assert.Nil(t, err)
 
-	writeOpts := &WriteOptions{
+	writeOpts := WriteOptions{
 		Sync:       false,
 		DisableWal: false,
 	}
@@ -191,7 +191,7 @@ func TestMemTablePutBatchReopen(t *testing.T) {
 	table, err := openMemtable(opts)
 	assert.Nil(t, err)
 
-	writeOpts := &WriteOptions{
+	writeOpts := WriteOptions{
 		Sync:       false,
 		DisableWal: false,
 	}
@@ -241,7 +241,7 @@ func TestMemTableGet(t *testing.T) {
 	table, err := openMemtable(opts)
 	assert.Nil(t, err)
 
-	writeOpts := &WriteOptions{
+	writeOpts := WriteOptions{
 		Sync:       false,
 		DisableWal: false,
 	}
@@ -300,7 +300,7 @@ func TestMemTableGetReopen(t *testing.T) {
 		walBlockCache:   DefaultOptions.BlockCache,
 	}
 
-	writeOpts := &WriteOptions{
+	writeOpts := WriteOptions{
 		Sync:       false,
 		DisableWal: false,
 	}
@@ -416,7 +416,7 @@ func TestMemTableSync(t *testing.T) {
 	table, err := openMemtable(opts)
 	assert.Nil(t, err)
 
-	writeOpts := &WriteOptions{
+	writeOpts := WriteOptions{
 		Sync:       false,
 		DisableWal: false,
 	}
@@ -521,7 +521,7 @@ func Test_memtableIterator(t *testing.T) {
 	table, err := openMemtable(opts)
 	assert.Nil(t, err)
 
-	writeOpts := &WriteOptions{
+	writeOpts := WriteOptions{
 		Sync:       false,
 		DisableWal: false,
 	}

@@ -34,7 +34,7 @@ func BenchmarkPut(b *testing.B) {
 	b.ResetTimer()
 
 	for i := 0; i < b.N; i++ {
-		err := db.Put(util.GetTestKey(i), util.RandomValue(1024), nil)
+		err := db.Put(util.GetTestKey(i), util.RandomValue(1024))
 		assert.Nil(b, err)
 	}
 }
@@ -43,7 +43,7 @@ func BenchmarkGet(b *testing.B) {
 	destroy := openDB()
 	defer destroy()
 	for i := 0; i < 1000000; i++ {
-		err := db.Put(util.GetTestKey(i), util.RandomValue(128), nil)
+		err := db.Put(util.GetTestKey(i), util.RandomValue(128))
 		assert.Nil(b, err)
 	}
 	b.ReportAllocs()
