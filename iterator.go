@@ -27,7 +27,7 @@ type baseIterator interface {
 	Close() error
 }
 
-// Iterator holds a heap and a set of iterators that implement the IteratorI interface
+// Iterator holds a heap and a set of iterators that implement the baseIterator interface
 type Iterator struct {
 	h       iterHeap
 	itrs    []*singleIter       // used for rebuilding heap
@@ -85,10 +85,10 @@ func (mi *Iterator) cleanKey(oldKey []byte, rank int) {
 			}
 			itr.iter.Next()
 		}
-		if !itr.iter.Valid() {
-			heap.Remove(&mi.h, itr.idx)
-		} else {
+		if itr.iter.Valid() {
 			heap.Fix(&mi.h, itr.idx)
+		} else {
+			heap.Remove(&mi.h, itr.idx)
 		}
 	}
 }
@@ -102,21 +102,6 @@ func (mi *Iterator) Next() {
 	// Get the top item from the heap
 	topIter := mi.h[0]
 	mi.cleanKey(topIter.iter.Key(), topIter.rank)
-
-	// Check if the top item is a MemItr and a deleteKey
-	if topIter.iType == MemItr {
-		if valStruct, ok := topIter.iter.Value().(y.ValueStruct); ok && valStruct.Meta == LogRecordDeleted {
-			// Move to the next key and update the heap
-			topIter.iter.Next()
-			if !topIter.iter.Valid() {
-				heap.Remove(&mi.h, topIter.idx)
-			} else {
-				heap.Fix(&mi.h, topIter.idx)
-			}
-			// Call Next recursively to handle consecutive deleteKeys
-			mi.Next()
-		}
-	}
 
 	// Move to the next key and update the heap
 	topIter.iter.Next()
@@ -168,26 +153,23 @@ func (mi *Iterator) Valid() bool {
 		topIter.iter.Next()
 		if topIter.iter.Valid() {
 			heap.Fix(&mi.h, topIter.idx)
-			return mi.Valid()
 		} else {
 			heap.Remove(&mi.h, topIter.idx)
 		}
-	} else if topIter.iType == BptreeItr && !topIter.iter.Valid() {
-		heap.Remove(&mi.h, topIter.idx)
+		return mi.Valid()
 	}
-	return mi.h.Len() > 0
+	return true
 }
 
 // Close the iterator.
 func (mi *Iterator) Close() error {
+	defer mi.db.mu.Unlock()
 	for _, itr := range mi.itrs {
 		err := itr.iter.Close()
 		if err != nil {
-			mi.db.mu.Unlock()
 			return err
 		}
 	}
-	mi.db.mu.Unlock()
 	return nil
 }
 
