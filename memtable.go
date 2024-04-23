@@ -129,18 +129,18 @@ func openMemtable(options memtableOptions) (*memtable, error) {
 	// from wal to rebuild the content of the skip list
 	reader := table.wal.NewReader()
 	for {
-		chunk, _, err := reader.Next()
-		if err != nil {
-			if errors.Is(err, io.EOF) {
+		chunk, _, errNext := reader.Next()
+		if errNext != nil {
+			if errors.Is(errNext, io.EOF) {
 				break
 			}
-			return nil, err
+			return nil, errNext
 		}
 		record := decodeLogRecord(chunk)
 		if record.Type == LogRecordBatchFinished {
-			batchID, err := snowflake.ParseBytes(record.Key)
-			if err != nil {
-				return nil, err
+			batchID, errParseBytes := snowflake.ParseBytes(record.Key)
+			if errParseBytes != nil {
+				return nil, errParseBytes
 			}
 			for _, idxRecord := range indexRecords[uint64(batchID)] {
 				table.skl.Put(y.KeyWithTs(idxRecord.Key, 0),
@@ -159,7 +159,6 @@ func openMemtable(options memtableOptions) (*memtable, error) {
 // putBatch writes a batch of entries to memtable.
 func (mt *memtable) putBatch(pendingWrites map[string]*LogRecord,
 	batchID snowflake.ID, options WriteOptions) error {
-
 	// if wal is not disabled, write to wal first to ensure durability and atomicity
 	if !options.DisableWal {
 		// add record to wal.pendingWrites
@@ -234,7 +233,7 @@ func (mt *memtable) sync() error {
 	return nil
 }
 
-// memtableIterator implement baseIterator
+// memtableIterator implement baseIterator.
 type memtableIterator struct {
 	options IteratorOptions
 	iter    *arenaskl.UniIterator

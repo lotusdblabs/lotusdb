@@ -28,8 +28,8 @@ func TestDirSize(t *testing.T) {
 	require.NoError(t, err)
 
 	t.Run("test DirSize", func(t *testing.T) {
-		size, err := DirSize(dirPath)
-		assert.Nil(t, err)
+		size, errDirSize := DirSize(dirPath)
+		require.NoError(t, errDirSize)
 		assert.Greater(t, size, int64(0))
 	})
 }

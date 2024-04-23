@@ -70,7 +70,7 @@ func decodeLogRecord(buf []byte) *LogRecord {
 
 	var index uint32 = 1
 	// batch id
-	batchId, n := binary.Uvarint(buf[index:])
+	batchID, n := binary.Uvarint(buf[index:])
 	index += uint32(n)
 
 	// key size
@@ -91,7 +91,7 @@ func decodeLogRecord(buf []byte) *LogRecord {
 	copy(value, buf[index:index+uint32(valueSize)])
 
 	return &LogRecord{Key: key, Value: value,
-		BatchID: batchId, Type: recordType}
+		BatchID: batchID, Type: recordType}
 }
 
 // KeyPosition is the position of the key in the value log.

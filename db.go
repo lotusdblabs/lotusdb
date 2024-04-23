@@ -197,7 +197,7 @@ func (db *DB) Sync() error {
 	return nil
 }
 
-// Put put with defaultWriteOptions
+// Put put with defaultWriteOptions.
 func (db *DB) Put(key []byte, value []byte) error {
 	return db.PutWithOptions(key, value, DefaultWriteOptions)
 }
@@ -206,7 +206,10 @@ func (db *DB) Put(key []byte, value []byte) error {
 // Actually, it will open a new batch and commit it.
 // You can think the batch has only one Put operation.
 func (db *DB) PutWithOptions(key []byte, value []byte, options WriteOptions) error {
-	batch := db.batchPool.Get().(*Batch)
+	batch, ok := db.batchPool.Get().(*Batch)
+	if !ok {
+		panic("batchPoll.Get failed")
+	}
 	batch.options.WriteOptions = options
 	defer func() {
 		batch.reset()
@@ -227,7 +230,10 @@ func (db *DB) PutWithOptions(key []byte, value []byte, options WriteOptions) err
 // Actually, it will open a new batch and commit it.
 // You can think the batch has only one Get operation.
 func (db *DB) Get(key []byte) ([]byte, error) {
-	batch := db.batchPool.Get().(*Batch)
+	batch, ok := db.batchPool.Get().(*Batch)
+	if !ok {
+		panic("batchPoll.Get failed")
+	}
 	batch.init(true, false, true, db)
 	defer func() {
 		_ = batch.Commit()
@@ -237,7 +243,7 @@ func (db *DB) Get(key []byte) ([]byte, error) {
 	return batch.Get(key)
 }
 
-// Delete delete with defaultWriteOptions
+// Delete delete with defaultWriteOptions.
 func (db *DB) Delete(key []byte) error {
 	return db.DeleteWithOptions(key, DefaultWriteOptions)
 }
@@ -246,7 +252,10 @@ func (db *DB) Delete(key []byte) error {
 // Actually, it will open a new batch and commit it.
 // You can think the batch has only one Delete operation.
 func (db *DB) DeleteWithOptions(key []byte, options WriteOptions) error {
-	batch := db.batchPool.Get().(*Batch)
+	batch, ok := db.batchPool.Get().(*Batch)
+	if !ok {
+		panic("batchPoll.Get failed")
+	}
 	batch.options.WriteOptions = options
 	defer func() {
 		batch.reset()
@@ -267,7 +276,10 @@ func (db *DB) DeleteWithOptions(key []byte, options WriteOptions) error {
 // Actually, it will open a new batch and commit it.
 // You can think the batch has only one Exist operation.
 func (db *DB) Exist(key []byte) (bool, error) {
-	batch := db.batchPool.Get().(*Batch)
+	batch, ok := db.batchPool.Get().(*Batch)
+	if !ok {
+		panic("batchPoll.Get failed")
+	}
 	batch.init(true, false, true, db)
 	defer func() {
 		_ = batch.Commit()

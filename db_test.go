@@ -190,11 +190,11 @@ func TestDBGet(t *testing.T) {
 	}
 
 	for _, log := range logs {
-		err := db.PutWithOptions(log.key, log.value, WriteOptions{
+		errPutWithOptions := db.PutWithOptions(log.key, log.value, WriteOptions{
 			Sync:       true,
 			DisableWal: false,
 		})
-		assert.Equal(t, log.wantErr, err != nil)
+		assert.Equal(t, log.wantErr, errPutWithOptions != nil)
 	}
 	var value []byte
 	for _, tt := range tests {
@@ -252,21 +252,21 @@ func TestDBDelete(t *testing.T) {
 	}
 
 	for _, log := range logs {
-		err := db.PutWithOptions(log.key, log.value, WriteOptions{
+		errPutWithOptions := db.PutWithOptions(log.key, log.value, WriteOptions{
 			Sync:       true,
 			DisableWal: false,
 		})
-		require.NoError(t, err)
+		require.NoError(t, errPutWithOptions)
 	}
 
 	var value []byte
 	for _, tt := range tests {
 		t.Run(tt.name, func(t *testing.T) {
-			err := db.DeleteWithOptions(tt.args.log.key, WriteOptions{
+			errDeleteWithOptions := db.DeleteWithOptions(tt.args.log.key, WriteOptions{
 				Sync:       true,
 				DisableWal: false,
 			})
-			if (err != nil) != tt.wantErr {
+			if (errDeleteWithOptions != nil) != tt.wantErr {
 				t.Errorf("Get(key) error = %v, wantErr = %v", err, tt.wantErr)
 			}
 			value, err = db.Get(tt.args.log.key)
@@ -326,11 +326,11 @@ func TestDBExist(t *testing.T) {
 	}
 
 	for _, log := range logs {
-		err := db.PutWithOptions(log.key, log.value, WriteOptions{
+		errPutWithOptions := db.PutWithOptions(log.key, log.value, WriteOptions{
 			Sync:       true,
 			DisableWal: false,
 		})
-		assert.Equal(t, log.wantErr, err != nil)
+		assert.Equal(t, log.wantErr, errPutWithOptions != nil)
 	}
 
 	var isExist bool
@@ -634,13 +634,13 @@ func TestDBIterator(t *testing.T) {
 		return out
 	}
 	err = db.immuMems[0].putBatch(list2Map(logRecord0), 0, DefaultWriteOptions)
-	assert.Nil(t, err)
+	require.NoError(t, err)
 	err = db.immuMems[1].putBatch(list2Map(logRecord1), 1, DefaultWriteOptions)
-	assert.Nil(t, err)
+	require.NoError(t, err)
 	err = db.immuMems[2].putBatch(list2Map(logRecord2), 2, DefaultWriteOptions)
-	assert.Nil(t, err)
+	require.NoError(t, err)
 	err = db.activeMem.putBatch(list2Map(logRecord3), 3, DefaultWriteOptions)
-	assert.Nil(t, err)
+	require.NoError(t, err)
 
 	expectedKey := [][]byte{
 		[]byte("k1"),

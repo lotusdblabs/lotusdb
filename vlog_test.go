@@ -28,8 +28,8 @@ func TestOpenValueLog(t *testing.T) {
 		hashKeyFunction: DefaultOptions.KeyHashFunction,
 	}
 	t.Run("open vlog files", func(t *testing.T) {
-		vlog, err := openValueLog(opts)
-		require.NoError(t, err)
+		vlog, errOpen := openValueLog(opts)
+		require.NoError(t, errOpen)
 		err = vlog.close()
 		assert.NoError(t, err)
 	})
@@ -122,7 +122,6 @@ func TestValueLogWriteBatch(t *testing.T) {
 
 	for _, tt := range tests {
 		t.Run(tt.name, func(t *testing.T) {
-			var err error
 			for _, numRW := range numRWList {
 				err = writeBatch(opts, numRW, tt.numPart)
 				if (err != nil) != tt.wantErr {
@@ -235,8 +234,8 @@ func TestValueLogRead(t *testing.T) {
 
 	for i, tt := range tests {
 		t.Run(tt.name, func(t *testing.T) {
-			readLogs, err := vlog.read(pos[i])
-			if (err != nil) != tt.wantErr {
+			readLogs, errRead := vlog.read(pos[i])
+			if (errRead != nil) != tt.wantErr {
 				t.Errorf("read(pos) error = %v, wantErr = %v", err, tt.wantErr)
 			}
 			assert.Equal(t, kv[string(pos[i].key)], string(readLogs.value))
@@ -285,8 +284,8 @@ func TestValueLogReadReopen(t *testing.T) {
 		vlog, err = openValueLog(opts)
 		require.NoError(t, err)
 		for i := 0; i < len(logs); i++ {
-			record, err := vlog.read(pos[i])
-			require.NoError(t, err)
+			record, errRead := vlog.read(pos[i])
+			require.NoError(t, errRead)
 			assert.Equal(t, kv[string(pos[i].key)], string(record.value))
 		}
 		err = vlog.close()
@@ -316,8 +315,8 @@ func TestValueLogSync(t *testing.T) {
 	require.NoError(t, err)
 
 	t.Run("test value log sync", func(t *testing.T) {
-		err := vlog.sync()
-		assert.NoError(t, err)
+		errSync := vlog.sync()
+		assert.NoError(t, errSync)
 	})
 	err = vlog.close()
 	assert.NoError(t, err)
@@ -342,8 +341,8 @@ func TestValueLogClose(t *testing.T) {
 	}()
 
 	t.Run("test close value log", func(t *testing.T) {
-		err := vlog.close()
-		assert.NoError(t, err)
+		errClose := vlog.close()
+		assert.NoError(t, errClose)
 	})
 }
 
@@ -375,8 +374,8 @@ func TestValueLogMultiSegmentFiles(t *testing.T) {
 				_ = os.RemoveAll(path)
 			}()
 
-			vlog, err := openValueLog(opts)
-			require.NoError(t, err)
+			vlog, errOpen := openValueLog(opts)
+			require.NoError(t, errOpen)
 
 			var logs []*ValueLogRecord
 			numLogs := (tt.NumSeg - 0.5) * 100
@@ -389,8 +388,8 @@ func TestValueLogMultiSegmentFiles(t *testing.T) {
 			_, err = vlog.writeBatch(logs)
 			assert.Equal(t, tt.want, err)
 
-			entries, err := os.ReadDir(path)
-			require.NoError(t, err)
+			entries, errRead := os.ReadDir(path)
+			require.NoError(t, errRead)
 			assert.Len(t, tt.wantNumSeg, len(entries))
 
 			err = vlog.close()
