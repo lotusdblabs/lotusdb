@@ -43,7 +43,7 @@ type valueLogOptions struct {
 }
 
 // open wal files for value log, it will open several wal files for concurrent writing and reading
-// the number of wal files is specified by the partitionNum
+// the number of wal files is specified by the partitionNum.
 func openValueLog(options valueLogOptions) (*valueLog, error) {
 	var walFiles []*wal.WAL
 
@@ -65,7 +65,7 @@ func openValueLog(options valueLogOptions) (*valueLog, error) {
 	return &valueLog{walFiles: walFiles, options: options}, nil
 }
 
-// read the value log record from the specified position
+// read the value log record from the specified position.
 func (vlog *valueLog) read(pos *KeyPosition) (*ValueLogRecord, error) {
 	buf, err := vlog.walFiles[pos.partition].Read(pos.position)
 	if err != nil {
@@ -94,7 +94,8 @@ func (vlog *valueLog) writeBatch(records []*ValueLogRecord) ([]*KeyPosition, err
 		}
 
 		part := i
-		g.Go(func() (err error) {
+		g.Go(func() error {
+			var err error
 			defer func() {
 				if err != nil {
 					vlog.walFiles[part].ClearPendingWrites()
@@ -107,7 +108,7 @@ func (vlog *valueLog) writeBatch(records []*ValueLogRecord) ([]*KeyPosition, err
 				select {
 				case <-ctx.Done():
 					err = ctx.Err()
-					return
+					return err
 				default:
 					vlog.walFiles[part].PendingWrites(encodeValueLogRecord(record))
 				}
@@ -143,7 +144,7 @@ func (vlog *valueLog) writeBatch(records []*ValueLogRecord) ([]*KeyPosition, err
 	return keyPositions, nil
 }
 
-// sync the value log to disk
+// sync the value log to disk.
 func (vlog *valueLog) sync() error {
 	for _, walFile := range vlog.walFiles {
 		if err := walFile.Sync(); err != nil {
@@ -153,7 +154,7 @@ func (vlog *valueLog) sync() error {
 	return nil
 }
 
-// close the value log
+// close the value log.
 func (vlog *valueLog) close() error {
 	for _, walFile := range vlog.walFiles {
 		if err := walFile.Close(); err != nil {

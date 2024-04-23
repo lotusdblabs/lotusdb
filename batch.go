@@ -25,7 +25,7 @@ type Batch struct {
 	options       BatchOptions
 	mu            sync.RWMutex
 	committed     bool
-	batchId       *snowflake.Node
+	batchID       *snowflake.Node
 }
 
 // NewBatch creates a new Batch instance.
@@ -41,7 +41,7 @@ func (db *DB) NewBatch(options BatchOptions) *Batch {
 		if err != nil {
 			panic(fmt.Sprintf("snowflake.NewNode(1) failed: %v", err))
 		}
-		batch.batchId = node
+		batch.batchID = node
 	}
 	batch.lock()
 	return batch
@@ -54,7 +54,7 @@ func makeBatch() interface{} {
 	}
 	return &Batch{
 		options: DefaultBatchOptions,
-		batchId: node,
+		batchID: node,
 	}
 }
 
@@ -66,9 +66,8 @@ func (b *Batch) init(rdonly, sync bool, db *DB) *Batch {
 	return b
 }
 
-func (b *Batch) withPendingWrites() *Batch {
+func (b *Batch) withPendingWrites() {
 	b.pendingWrites = make(map[string]*LogRecord)
-	return b
 }
 
 func (b *Batch) reset() {
@@ -281,9 +280,9 @@ func (b *Batch) Commit(options *WriteOptions) error {
 	if err := b.db.waitMemtableSpace(); err != nil {
 		return err
 	}
-	batchId := b.batchId.Generate()
+	batchID := b.batchID.Generate()
 	// call memtable put batch
-	err := b.db.activeMem.putBatch(b.pendingWrites, batchId, options)
+	err := b.db.activeMem.putBatch(b.pendingWrites, batchID, options)
 	if err != nil {
 		return err
 	}

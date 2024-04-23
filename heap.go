@@ -49,9 +49,8 @@ func (ih *iterHeap) Less(i int, j int) bool {
 	}
 	if (*ih)[i].options.Reverse {
 		return bytes.Compare(ki, kj) == 1
-	} else {
-		return bytes.Compare(ki, kj) == -1
 	}
+	return bytes.Compare(ki, kj) == -1
 }
 
 // Swap swaps the elements with indexes i and j.

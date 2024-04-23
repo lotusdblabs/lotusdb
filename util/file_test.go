@@ -6,25 +6,26 @@ import (
 	"testing"
 
 	"github.com/stretchr/testify/assert"
+	"github.com/stretchr/testify/require"
 )
 
 func TestDirSize(t *testing.T) {
 	dirPath, err := os.MkdirTemp("", "db-test-DirSize")
-	assert.Nil(t, err)
+	require.NoError(t, err)
 
 	defer func() {
 		_ = os.RemoveAll(dirPath)
 	}()
 
 	err = os.MkdirAll(dirPath, os.ModePerm)
-	assert.Nil(t, err)
+	require.NoError(t, err)
 	file, err := os.Create(fmt.Sprintf("%s/test.txt", dirPath))
-	assert.Nil(t, err)
+	require.NoError(t, err)
 	byteSilces := []byte("test")
 	_, err = file.Write(byteSilces)
-	assert.Nil(t, err)
+	require.NoError(t, err)
 	err = file.Close()
-	assert.Nil(t, err)
+	require.NoError(t, err)
 
 	t.Run("test DirSize", func(t *testing.T) {
 		size, err := DirSize(dirPath)

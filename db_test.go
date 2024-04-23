@@ -29,10 +29,11 @@ func TestDBOpen(t *testing.T) {
 	t.Run("Valid options", func(t *testing.T) {
 		options := DefaultOptions
 		path, err := os.MkdirTemp("", "db-test-open")
-		assert.Nil(t, err)
+		require.NoError(t, err)
+		assert.NotEqual(t, "", path)
 		options.DirPath = path
 		db, err := Open(options)
-		assert.Nil(t, err)
+		require.NoError(t, err)
 		defer destroyDB(db)
 
 		assert.NotNil(t, db, "DB should not be nil")
@@ -44,7 +45,7 @@ func TestDBOpen(t *testing.T) {
 		assert.NotNil(t, db.flushChan, "DB flushChan should not be nil")
 
 		err = db.Close()
-		assert.Nil(t, err)
+		assert.NoError(t, err)
 	})
 	t.Run("Invalid options - no directory path", func(t *testing.T) {
 		options := DefaultOptions
@@ -57,42 +58,43 @@ func TestDBOpen(t *testing.T) {
 func TestDBClose(t *testing.T) {
 	options := DefaultOptions
 	path, err := os.MkdirTemp("", "db-test-close")
-	assert.Nil(t, err)
+	require.NoError(t, err)
+	assert.NotEqual(t, "", path)
 	options.DirPath = path
 	db, err := Open(options)
 	defer destroyDB(db)
-	assert.Nil(t, err)
+	require.NoError(t, err)
 	t.Run("test close db", func(t *testing.T) {
-		err := db.Close()
-		assert.Nil(t, err)
+		err = db.Close()
+		assert.NoError(t, err)
 	})
 }
 
 func TestDBSync(t *testing.T) {
 	options := DefaultOptions
 	path, err := os.MkdirTemp("", "db-test-sync")
-	assert.Nil(t, err)
+	require.NoError(t, err)
 	options.DirPath = path
 	db, err := Open(options)
-	assert.Nil(t, err)
+	require.NoError(t, err)
 	defer destroyDB(db)
 
 	t.Run("test sync db", func(t *testing.T) {
-		err := db.Sync()
-		assert.Nil(t, err)
+		err = db.Sync()
+		assert.NoError(t, err)
 	})
 	err = db.Close()
-	assert.Nil(t, err)
+	assert.NoError(t, err)
 }
 
 func TestDBPut(t *testing.T) {
 	options := DefaultOptions
 	path, err := os.MkdirTemp("", "db-test-put")
-	assert.Nil(t, err)
+	require.NoError(t, err)
 	options.DirPath = path
 
 	db, err := Open(options)
-	assert.Nil(t, err)
+	require.NoError(t, err)
 	defer destroyDB(db)
 
 	type testLog struct {
@@ -136,17 +138,19 @@ func TestDBPut(t *testing.T) {
 	}
 
 	err = db.Close()
-	assert.Nil(t, err)
+	assert.NoError(t, err)
 }
 
 func TestDBGet(t *testing.T) {
 	options := DefaultOptions
 	path, err := os.MkdirTemp("", "db-test-get")
-	assert.Nil(t, err)
+	if assert.NoError(t, err) {
+		assert.NotEqual(t, "", path)
+	}
 	options.DirPath = path
 
 	db, err := Open(options)
-	assert.Nil(t, err)
+	require.NoError(t, err)
 	defer destroyDB(db)
 
 	type testLog struct {
@@ -186,16 +190,16 @@ func TestDBGet(t *testing.T) {
 	}
 
 	for _, log := range logs {
-		err := db.Put(log.key, log.value, &WriteOptions{
+		err = db.Put(log.key, log.value, &WriteOptions{
 			Sync:       true,
 			DisableWal: false,
 		})
-		assert.Equal(t, err != nil, log.wantErr)
+		assert.Equal(t, log.wantErr, err != nil)
 	}
-
+	var value []byte
 	for _, tt := range tests {
 		t.Run(tt.name, func(t *testing.T) {
-			value, err := db.Get(tt.args.log.key)
+			value, err = db.Get(tt.args.log.key)
 			if (err != nil) != tt.wantErr {
 				t.Errorf("Get(key) error = %v, wantErr = %v", err, tt.wantErr)
 			}
@@ -204,17 +208,17 @@ func TestDBGet(t *testing.T) {
 	}
 
 	err = db.Close()
-	assert.Nil(t, err)
+	assert.NoError(t, err)
 }
 
 func TestDBDelete(t *testing.T) {
 	options := DefaultOptions
 	path, err := os.MkdirTemp("", "db-test-delete")
-	assert.Nil(t, err)
+	require.NoError(t, err)
 	options.DirPath = path
 
 	db, err := Open(options)
-	assert.Nil(t, err)
+	require.NoError(t, err)
 	defer destroyDB(db)
 
 	type testLog struct {
@@ -248,40 +252,41 @@ func TestDBDelete(t *testing.T) {
 	}
 
 	for _, log := range logs {
-		err := db.Put(log.key, log.value, &WriteOptions{
+		err = db.Put(log.key, log.value, &WriteOptions{
 			Sync:       true,
 			DisableWal: false,
 		})
-		assert.Nil(t, err)
+		require.NoError(t, err)
 	}
 
+	var value []byte
 	for _, tt := range tests {
 		t.Run(tt.name, func(t *testing.T) {
-			err := db.Delete(tt.args.log.key, &WriteOptions{
+			err = db.Delete(tt.args.log.key, &WriteOptions{
 				Sync:       true,
 				DisableWal: false,
 			})
 			if (err != nil) != tt.wantErr {
 				t.Errorf("Get(key) error = %v, wantErr = %v", err, tt.wantErr)
 			}
-			value, err := db.Get(tt.args.log.key)
-			assert.NotNil(t, err)
+			value, err = db.Get(tt.args.log.key)
+			require.NoError(t, err)
 			assert.Equal(t, []byte(nil), value)
 		})
 	}
 
 	err = db.Close()
-	assert.Nil(t, err)
+	assert.NoError(t, err)
 }
 
 func TestDBExist(t *testing.T) {
 	options := DefaultOptions
 	path, err := os.MkdirTemp("", "db-test-exist")
-	assert.Nil(t, err)
+	require.NoError(t, err)
 	options.DirPath = path
 
 	db, err := Open(options)
-	assert.Nil(t, err)
+	require.NoError(t, err)
 	defer destroyDB(db)
 
 	type testLog struct {
@@ -321,16 +326,17 @@ func TestDBExist(t *testing.T) {
 	}
 
 	for _, log := range logs {
-		err := db.Put(log.key, log.value, &WriteOptions{
+		err = db.Put(log.key, log.value, &WriteOptions{
 			Sync:       true,
 			DisableWal: false,
 		})
-		assert.Equal(t, err != nil, log.wantErr)
+		assert.Equal(t, log.wantErr, err != nil)
 	}
 
+	var isExist bool
 	for _, tt := range tests {
 		t.Run(tt.name, func(t *testing.T) {
-			isExist, err := db.Exist(tt.args.log.key)
+			isExist, err = db.Exist(tt.args.log.key)
 			if (err != nil) != tt.wantErr {
 				t.Errorf("Get(key) error = %v, wantErr = %v", err, tt.wantErr)
 			}
@@ -339,17 +345,17 @@ func TestDBExist(t *testing.T) {
 	}
 
 	err = db.Close()
-	assert.Nil(t, err)
+	assert.NoError(t, err)
 }
 
 func TestDBFlushMemTables(t *testing.T) {
 	options := DefaultOptions
 	path, err := os.MkdirTemp("", "db-test-flush")
-	assert.Nil(t, err)
+	require.NoError(t, err)
 	options.DirPath = path
 
 	db, err := Open(options)
-	assert.Nil(t, err)
+	require.NoError(t, err)
 	defer destroyDB(db)
 
 	type testLog struct {
@@ -380,24 +386,24 @@ func TestDBFlushMemTables(t *testing.T) {
 
 	t.Run("test flushMemtables", func(t *testing.T) {
 		time.Sleep(time.Second * 1)
+		var value []byte
 		for _, log := range logs {
-			value, err := getValueFromVlog(db, log.key)
-			assert.Nil(t, err)
+			value, err = getValueFromVlog(db, log.key)
+			require.NoError(t, err)
 			assert.Equal(t, log.value, value)
 		}
 	})
-
 }
 
 func TestDBCompact(t *testing.T) {
 	options := DefaultOptions
 	path, err := os.MkdirTemp("", "db-test-compact")
-	assert.Nil(t, err)
+	require.NoError(t, err)
 	options.DirPath = path
 	options.CompactBatchCount = 2 << 5
 
 	db, err := Open(options)
-	assert.Nil(t, err)
+	require.NoError(t, err)
 	defer destroyDB(db)
 
 	type testLog struct {
@@ -437,24 +443,24 @@ func TestDBCompact(t *testing.T) {
 		})
 	}
 	t.Run("test compaction", func(t *testing.T) {
+		var size, sizeCompact int64
 		time.Sleep(time.Millisecond * 500)
-		size, err := util.DirSize(db.options.DirPath)
-		assert.Nil(t, err)
+		size, err = util.DirSize(db.options.DirPath)
+		require.NoError(t, err)
 
 		err = db.Compact()
-		assert.Nil(t, err)
+		require.NoError(t, err)
 
-		sizeCompact, err := util.DirSize(db.options.DirPath)
-		assert.Nil(t, err)
-		assert.Greater(t, size, sizeCompact)
-
+		sizeCompact, err = util.DirSize(db.options.DirPath)
+		require.NoError(t, err)
+		require.Greater(t, size, sizeCompact)
+		var value []byte
 		for _, log := range testlogs {
-			value, err := getValueFromVlog(db, log.key)
-			assert.Nil(t, err)
+			value, err = getValueFromVlog(db, log.key)
+			require.NoError(t, err)
 			assert.Equal(t, log.value, value)
 		}
 	})
-
 }
 
 func getValueFromVlog(db *DB, key []byte) ([]byte, error) {
@@ -502,13 +508,13 @@ func TestDBMultiClients(t *testing.T) {
 
 	options := DefaultOptions
 	path, err := os.MkdirTemp("", "db-test-multi-client")
-	assert.Nil(t, err)
+	require.NoError(t, err)
 	options.DirPath = path
 	db, err := Open(options)
-	assert.Nil(t, err)
+	require.NoError(t, err)
 	defer destroyDB(db)
 
-	t.Run("multi client running", func(t *testing.T) {
+	t.Run("multi client running", func(_ *testing.T) {
 		var wg sync.WaitGroup
 
 		// 2 clients to put
@@ -572,24 +578,24 @@ func TestDBMultiClients(t *testing.T) {
 func TestDBIterator(t *testing.T) {
 	options := DefaultOptions
 	path, err := os.MkdirTemp("", "db-test-iter")
-	assert.Nil(t, err)
+	require.NoError(t, err)
 	options.DirPath = path
 	db, err := Open(options)
 	defer destroyDB(db)
-	assert.Nil(t, err)
+	require.NoError(t, err)
 	db.immuMems = make([]*memtable, 3)
 	opts := memtableOptions{
 		dirPath:         path,
-		tableId:         0,
+		tableID:         0,
 		memSize:         DefaultOptions.MemtableSize,
 		walBytesPerSync: DefaultOptions.BytesPerSync,
 		walSync:         DefaultBatchOptions.Sync,
 		walBlockCache:   DefaultOptions.BlockCache,
 	}
 	for i := 0; i < 3; i++ {
-		opts.tableId = uint32(i)
+		opts.tableID = uint32(i)
 		db.immuMems[i], err = openMemtable(opts)
-		assert.Nil(t, err)
+		require.NoError(t, err)
 	}
 	logRecord0 := []*LogRecord{
 		// 0
@@ -620,21 +626,21 @@ func TestDBIterator(t *testing.T) {
 		{[]byte("abc3"), []byte("v3_1"), LogRecordNormal, 0},
 	}
 
-	list2Map := func(in []*LogRecord) (out map[string]*LogRecord) {
-		out = make(map[string]*LogRecord)
+	list2Map := func(in []*LogRecord) map[string]*LogRecord {
+		out := make(map[string]*LogRecord)
 		for _, v := range in {
 			out[string(v.Key)] = v
 		}
-		return
+		return out
 	}
 	err = db.immuMems[0].putBatch(list2Map(logRecord0), 0, nil)
-	assert.Nil(t, err)
+	require.NoError(t, err)
 	err = db.immuMems[1].putBatch(list2Map(logRecord1), 1, nil)
-	assert.Nil(t, err)
+	require.NoError(t, err)
 	err = db.immuMems[2].putBatch(list2Map(logRecord2), 2, nil)
-	assert.Nil(t, err)
+	require.NoError(t, err)
 	err = db.activeMem.putBatch(list2Map(logRecord3), 3, nil)
-	assert.Nil(t, err)
+	require.NoError(t, err)
 
 	expectedKey := [][]byte{
 		[]byte("k1"),
@@ -648,7 +654,7 @@ func TestDBIterator(t *testing.T) {
 		Reverse: false,
 		Prefix:  []byte("k"),
 	})
-	assert.Nil(t, err)
+	require.NoError(t, err)
 	var i int
 	iter.Rewind()
 	i = 0
@@ -656,7 +662,6 @@ func TestDBIterator(t *testing.T) {
 		if !iter.itrs[0].options.Reverse {
 			assert.Equal(t, expectedKey[i], iter.Key())
 			assert.Equal(t, expectedVal[i], iter.Value())
-
 		} else {
 			assert.Equal(t, expectedKey[2-i], iter.Key())
 			assert.Equal(t, expectedVal[2-i], iter.Value())
@@ -671,23 +676,21 @@ func TestDBIterator(t *testing.T) {
 		if !iter.itrs[0].options.Reverse {
 			assert.Equal(t, expectedKey[i], iter.Key())
 			assert.Equal(t, expectedVal[i], iter.Value())
-
 		} else {
 			assert.Equal(t, expectedKey[2-i], iter.Key())
 			assert.Equal(t, expectedVal[2-i], iter.Value())
-
 		}
 		i++
 		iter.Next()
 	}
 	err = iter.Close()
-	assert.Nil(t, err)
+	require.NoError(t, err)
 
 	iter, err = db.NewIterator(IteratorOptions{
 		Reverse: true,
 		Prefix:  []byte("k"),
 	})
-	assert.Nil(t, err)
+	require.NoError(t, err)
 
 	iter.Rewind()
 	i = 0
@@ -695,11 +698,9 @@ func TestDBIterator(t *testing.T) {
 		if !iter.itrs[0].options.Reverse {
 			assert.Equal(t, expectedKey[i], iter.Key())
 			assert.Equal(t, expectedVal[i], iter.Value())
-
 		} else {
 			assert.Equal(t, expectedKey[1-i], iter.Key())
 			assert.Equal(t, expectedVal[1-i], iter.Value())
-
 		}
 		i++
 		iter.Next()
@@ -711,17 +712,15 @@ func TestDBIterator(t *testing.T) {
 		if !iter.itrs[0].options.Reverse {
 			assert.Equal(t, expectedKey[i], iter.Key())
 			assert.Equal(t, expectedVal[i], iter.Value())
-
 		} else {
 			assert.Equal(t, expectedKey[1-i], iter.Key())
 			assert.Equal(t, expectedVal[1-i], iter.Value())
-
 		}
 		i++
 		iter.Next()
 	}
 	err = iter.Close()
-	assert.Nil(t, err)
+	require.NoError(t, err)
 
 	for j := 0; j < 3; j++ {
 		db.flushMemtable(db.immuMems[0])
@@ -729,7 +728,7 @@ func TestDBIterator(t *testing.T) {
 			Reverse: false,
 			Prefix:  []byte("k"),
 		})
-		assert.Nil(t, err)
+		require.NoError(t, err)
 
 		iter.Rewind()
 		i = 0
@@ -745,13 +744,13 @@ func TestDBIterator(t *testing.T) {
 			i++
 		}
 		err = iter.Close()
-		assert.Nil(t, err)
+		require.NoError(t, err)
 
 		iter, err = db.NewIterator(IteratorOptions{
 			Reverse: true,
 			Prefix:  []byte("k"),
 		})
-		assert.Nil(t, err)
+		require.NoError(t, err)
 
 		iter.Rewind()
 		i = 0
@@ -767,14 +766,14 @@ func TestDBIterator(t *testing.T) {
 			i++
 		}
 		err = iter.Close()
-		assert.Nil(t, err)
+		require.NoError(t, err)
 	}
 
 	iter, err = db.NewIterator(IteratorOptions{
 		Reverse: false,
 		Prefix:  []byte("k"),
 	})
-	assert.Nil(t, err)
+	require.NoError(t, err)
 
 	iter.Seek([]byte("k3"))
 	var prev []byte
@@ -785,13 +784,13 @@ func TestDBIterator(t *testing.T) {
 		iter.Next()
 	}
 	err = iter.Close()
-	assert.Nil(t, err)
+	require.NoError(t, err)
 
 	// unsupported type
 	options = DefaultOptions
 	options.IndexType = Hash
 	db, err = Open(options)
-	assert.Nil(t, err)
+	require.NoError(t, err)
 	itr, err := db.NewIterator(IteratorOptions{Reverse: false})
 	assert.Equal(t, ErrDBIteratorUnsupportedTypeHASH, err)
 	assert.Nil(t, itr)

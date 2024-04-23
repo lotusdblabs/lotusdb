@@ -2,6 +2,7 @@ package lotusdb
 
 import (
 	"context"
+	"errors"
 	"fmt"
 	"io"
 	"log"
@@ -65,7 +66,7 @@ func Open(options Options) (*DB, error) {
 
 	// create data directory if not exist
 	if _, err := os.Stat(options.DirPath); err != nil {
-		if err := os.MkdirAll(options.DirPath, os.ModePerm); err != nil {
+		if err = os.MkdirAll(options.DirPath, os.ModePerm); err != nil {
 			return nil, err
 		}
 	}
@@ -200,7 +201,10 @@ func (db *DB) Sync() error {
 // Actually, it will open a new batch and commit it.
 // You can think the batch has only one Put operation.
 func (db *DB) Put(key []byte, value []byte, options *WriteOptions) error {
-	batch := db.batchPool.Get().(*Batch)
+	batch, ok := db.batchPool.Get().(*Batch)
+	if !ok {
+		panic("batchPool.Get() failed")
+	}
 	defer func() {
 		batch.reset()
 		db.batchPool.Put(batch)
@@ -220,7 +224,10 @@ func (db *DB) Put(key []byte, value []byte, options *WriteOptions) error {
 // Actually, it will open a new batch and commit it.
 // You can think the batch has only one Get operation.
 func (db *DB) Get(key []byte) ([]byte, error) {
-	batch := db.batchPool.Get().(*Batch)
+	batch, ok := db.batchPool.Get().(*Batch)
+	if !ok {
+		panic("batchPool.Get() failed")
+	}
 	batch.init(true, false, db)
 	defer func() {
 		_ = batch.Commit(nil)
@@ -234,7 +241,10 @@ func (db *DB) Get(key []byte) ([]byte, error) {
 // Actually, it will open a new batch and commit it.
 // You can think the batch has only one Delete operation.
 func (db *DB) Delete(key []byte, options *WriteOptions) error {
-	batch := db.batchPool.Get().(*Batch)
+	batch, ok := db.batchPool.Get().(*Batch)
+	if !ok {
+		panic("batchPool.Get() failed")
+	}
 	defer func() {
 		batch.reset()
 		db.batchPool.Put(batch)
@@ -254,7 +264,10 @@ func (db *DB) Delete(key []byte, options *WriteOptions) error {
 // Actually, it will open a new batch and commit it.
 // You can think the batch has only one Exist operation.
 func (db *DB) Exist(key []byte) (bool, error) {
-	batch := db.batchPool.Get().(*Batch)
+	batch, ok := db.batchPool.Get().(*Batch)
+	if !ok {
+		panic("batchPool.Get() failed")
+	}
 	batch.init(true, false, db)
 	defer func() {
 		_ = batch.Commit(nil)
@@ -270,16 +283,16 @@ func validateOptions(options *Options) error {
 		return ErrDBDirectoryISEmpty
 	}
 	if options.MemtableSize <= 0 {
-		options.MemtableSize = 64 << 20 // 64MB
+		options.MemtableSize = DefaultOptions.MemtableSize
 	}
 	if options.MemtableNums <= 0 {
-		options.MemtableNums = 15
+		options.MemtableNums = DefaultOptions.MemtableNums
 	}
 	if options.PartitionNum <= 0 {
-		options.PartitionNum = 5
+		options.PartitionNum = DefaultOptions.PartitionNum
 	}
 	if options.ValueLogFileSize <= 0 {
-		options.ValueLogFileSize = 1 << 30 // 1GB
+		options.ValueLogFileSize = DefaultOptions.ValueLogFileSize
 	}
 	// assure ValueLogFileSize >= MemtableSize
 	if options.ValueLogFileSize < int64(options.MemtableSize) {
@@ -317,7 +330,7 @@ func (db *DB) waitMemtableSpace() error {
 	case db.flushChan <- db.activeMem:
 		db.immuMems = append(db.immuMems, db.activeMem)
 		options := db.activeMem.options
-		options.tableId++
+		options.tableID++
 		// open a new memtable for writing
 		table, err := openMemtable(options)
 		if err != nil {
@@ -365,7 +378,7 @@ func (db *DB) flushMemtable(table *memtable) {
 	}
 
 	// sync the value log
-	if err := db.vlog.sync(); err != nil {
+	if err = db.vlog.sync(); err != nil {
 		log.Println("vlog sync failed:", err)
 		return
 	}
@@ -378,7 +391,7 @@ func (db *DB) flushMemtable(table *memtable) {
 			putMatchKeys[i] = MatchKeyFunc(db, keyPos[i].key, nil, nil)
 		}
 	}
-	if err := db.index.PutBatch(keyPos, putMatchKeys...); err != nil {
+	if err = db.index.PutBatch(keyPos, putMatchKeys...); err != nil {
 		log.Println("index PutBatch failed:", err)
 		return
 	}
@@ -390,18 +403,18 @@ func (db *DB) flushMemtable(table *memtable) {
 			deleteMatchKeys[i] = MatchKeyFunc(db, deletedKeys[i], nil, nil)
 		}
 	}
-	if err := db.index.DeleteBatch(deletedKeys, deleteMatchKeys...); err != nil {
+	if err = db.index.DeleteBatch(deletedKeys, deleteMatchKeys...); err != nil {
 		log.Println("index DeleteBatch failed:", err)
 		return
 	}
 	// sync the index
-	if err := db.index.Sync(); err != nil {
+	if err = db.index.Sync(); err != nil {
 		log.Println("index sync failed:", err)
 		return
 	}
 
 	// delete the wal
-	if err := table.deleteWAl(); err != nil {
+	if err = table.deleteWAl(); err != nil {
 		log.Println("delete wal failed:", err)
 		return
 	}
@@ -410,9 +423,9 @@ func (db *DB) flushMemtable(table *memtable) {
 	db.mu.Lock()
 	if table == db.activeMem {
 		options := db.activeMem.options
-		options.tableId++
+		options.tableID++
 		// open a new memtable for writing
-		table, err := openMemtable(options)
+		table, err = openMemtable(options)
 		if err != nil {
 			panic("flush activate memtable wrong")
 		}
@@ -482,7 +495,7 @@ func (db *DB) Compact() error {
 				count++
 				chunk, pos, err := reader.Next()
 				if err != nil {
-					if err == io.EOF {
+					if errors.Is(err, io.EOF) {
 						break
 					}
 					_ = newVlogFile.Delete()
@@ -513,7 +526,7 @@ func (db *DB) Compact() error {
 				}
 
 				if count%db.vlog.options.compactBatchCount == 0 {
-					err := db.rewriteValidRecords(newVlogFile, validRecords, part)
+					err = db.rewriteValidRecords(newVlogFile, validRecords, part)
 					if err != nil {
 						_ = newVlogFile.Delete()
 						return err

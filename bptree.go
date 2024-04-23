@@ -3,7 +3,9 @@ package lotusdb
 import (
 	"bytes"
 	"context"
+	"errors"
 	"fmt"
+	"os"
 	"path/filepath"
 
 	"github.com/rosedblabs/diskhash"
@@ -12,7 +14,12 @@ import (
 	"golang.org/x/sync/errgroup"
 )
 
-// bucket name for bolt db to store index data
+const (
+	defaultFileMode        os.FileMode = 0600
+	defaultInitialMmapSize int         = 1024
+)
+
+// bucket name for bolt db to store index data.
 var indexBucketName = []byte("lotusdb-index")
 
 // BPTree is the BoltDB index implementation.
@@ -31,10 +38,10 @@ func openBTreeIndex(options indexOptions, _ ...diskhash.MatchKeyFunc) (*BPTree, 
 		// open bolt db
 		tree, err := bbolt.Open(
 			filepath.Join(options.dirPath, fmt.Sprintf(indexFileExt, i)),
-			0600,
+			defaultFileMode,
 			&bbolt.Options{
 				NoSync:          true,
-				InitialMmapSize: 1024,
+				InitialMmapSize: defaultInitialMmapSize,
 				FreelistType:    bbolt.FreelistMapType,
 			},
 		)
@@ -47,10 +54,10 @@ func openBTreeIndex(options indexOptions, _ ...diskhash.MatchKeyFunc) (*BPTree, 
 		if err != nil {
 			return nil, err
 		}
-		if _, err := tx.CreateBucketIfNotExists(indexBucketName); err != nil {
+		if _, err = tx.CreateBucketIfNotExists(indexBucketName); err != nil {
 			return nil, err
 		}
-		if err := tx.Commit(); err != nil {
+		if err = tx.Commit(); err != nil {
 			return nil, err
 		}
 		trees[i] = tree
@@ -116,7 +123,7 @@ func (bt *BPTree) PutBatch(positions []*KeyPosition, _ ...diskhash.MatchKeyFunc)
 					default:
 						encPos := record.position.Encode()
 						if err := bucket.Put(record.key, encPos); err != nil {
-							if err == bbolt.ErrKeyRequired {
+							if errors.Is(err, bbolt.ErrKeyRequired) {
 								return ErrKeyIsEmpty
 							}
 							return err
@@ -200,7 +207,7 @@ func (bt *BPTree) Sync() error {
 	return nil
 }
 
-// bptreeIterator implement baseIterator
+// bptreeIterator implement baseIterator.
 type bptreeIterator struct {
 	key     []byte
 	value   []byte
@@ -209,7 +216,7 @@ type bptreeIterator struct {
 	options IteratorOptions
 }
 
-// create a boltdb based btree iterator
+// create a boltdb based btree iterator.
 func newBptreeIterator(tx *bbolt.Tx, options IteratorOptions) *bptreeIterator {
 	return &bptreeIterator{
 		cursor:  tx.Bucket(indexBucketName).Cursor(),

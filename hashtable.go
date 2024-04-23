@@ -12,7 +12,8 @@ import (
 	"golang.org/x/sync/errgroup"
 )
 
-// diskhash requires fixed-size value, so we set the slotValueLength to `binary.MaxVarintLen32*3 + binary.MaxVarintLen64`.
+// diskhash requires fixed-size value
+// so we set the slotValueLength to `binary.MaxVarintLen32*3 + binary.MaxVarintLen64`.
 // This is the maximum length after wal.chunkPosition encoding.
 const slotValueLength = binary.MaxVarintLen32*3 + binary.MaxVarintLen64
 
@@ -45,7 +46,7 @@ func openHashIndex(options indexOptions) (*HashTable, error) {
 	}, nil
 }
 
-// PutBatch put batch records to index
+// PutBatch put batch records to index.
 func (ht *HashTable) PutBatch(positions []*KeyPosition, matchKeyFunc ...diskhash.MatchKeyFunc) error {
 	if len(positions) == 0 {
 		return nil
@@ -88,7 +89,7 @@ func (ht *HashTable) PutBatch(positions []*KeyPosition, matchKeyFunc ...diskhash
 	return g.Wait()
 }
 
-// Get chunk position by key
+// Get chunk position by key.
 func (ht *HashTable) Get(key []byte, matchKeyFunc ...diskhash.MatchKeyFunc) (*KeyPosition, error) {
 	if len(key) == 0 {
 		return nil, ErrKeyIsEmpty
@@ -103,7 +104,7 @@ func (ht *HashTable) Get(key []byte, matchKeyFunc ...diskhash.MatchKeyFunc) (*Ke
 	return nil, nil
 }
 
-// DeleteBatch delete batch records from index
+// DeleteBatch delete batch records from index.
 func (ht *HashTable) DeleteBatch(keys [][]byte, matchKeyFunc ...diskhash.MatchKeyFunc) error {
 	if len(keys) == 0 {
 		return nil
@@ -143,7 +144,7 @@ func (ht *HashTable) DeleteBatch(keys [][]byte, matchKeyFunc ...diskhash.MatchKe
 	return g.Wait()
 }
 
-// Sync sync index data to disk
+// Sync sync index data to disk.
 func (ht *HashTable) Sync() error {
 	for _, table := range ht.tables {
 		err := table.Sync()
@@ -154,7 +155,7 @@ func (ht *HashTable) Sync() error {
 	return nil
 }
 
-// Close index
+// Close close index.
 func (ht *HashTable) Close() error {
 	for _, table := range ht.tables {
 		err := table.Close()
@@ -165,7 +166,7 @@ func (ht *HashTable) Close() error {
 	return nil
 }
 
-// MatchKeyFunc Set nil if do not need keyPos or value
+// MatchKeyFunc Set nil if do not need keyPos or value.
 func MatchKeyFunc(db *DB, key []byte, keyPos **KeyPosition, value *[]byte) func(slot diskhash.Slot) (bool, error) {
 	return func(slot diskhash.Slot) (bool, error) {
 		chunkPosition := wal.DecodeChunkPosition(slot.Value)
