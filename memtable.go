@@ -234,7 +234,7 @@ func (mt *memtable) sync() error {
 	return nil
 }
 
-// memtableIterator implement IteratorI
+// memtableIterator implement baseIterator
 type memtableIterator struct {
 	options IteratorOptions
 	iter    *arenaskl.UniIterator

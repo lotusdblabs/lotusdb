@@ -200,7 +200,7 @@ func (bt *BPTree) Sync() error {
 	return nil
 }
 
-// bptreeIterator implement IteratorI
+// bptreeIterator implement baseIterator
 type bptreeIterator struct {
 	key     []byte
 	value   []byte
