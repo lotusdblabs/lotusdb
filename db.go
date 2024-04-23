@@ -197,14 +197,16 @@ func (db *DB) Sync() error {
 	return nil
 }
 
+// Put put with defaultWriteOptions
+func (db *DB) Put(key []byte, value []byte) error {
+	return db.PutWithOptions(key, value, DefaultWriteOptions)
+}
+
 // Put a key-value pair into the database.
 // Actually, it will open a new batch and commit it.
 // You can think the batch has only one Put operation.
-func (db *DB) Put(key []byte, value []byte, options *WriteOptions) error {
-	batch, ok := db.batchPool.Get().(*Batch)
-	if !ok {
-		panic("batchPool.Get() failed")
-	}
+func (db *DB) PutWithOptions(key []byte, value []byte, options WriteOptions) error {
+	batch := db.batchPool.Get().(*Batch)
 	defer func() {
 		batch.reset()
 		db.batchPool.Put(batch)
@@ -212,39 +214,38 @@ func (db *DB) Put(key []byte, value []byte, options *WriteOptions) error {
 	// This is a single put operation, we can set Sync to false.
 	// Because the data will be written to the WAL,
 	// and the WAL file will be synced to disk according to the DB options.
-	batch.init(false, false, db).withPendingWrites()
+	batch.init(false, false, false, db).withPendingWrites()
 	if err := batch.Put(key, value); err != nil {
 		batch.unlock()
 		return err
 	}
-	return batch.Commit(options)
+	return batch.Commit()
 }
 
 // Get the value of the specified key from the database.
 // Actually, it will open a new batch and commit it.
 // You can think the batch has only one Get operation.
 func (db *DB) Get(key []byte) ([]byte, error) {
-	batch, ok := db.batchPool.Get().(*Batch)
-	if !ok {
-		panic("batchPool.Get() failed")
-	}
-	batch.init(true, false, db)
+	batch := db.batchPool.Get().(*Batch)
+	batch.init(true, false, true, db)
 	defer func() {
-		_ = batch.Commit(nil)
+		_ = batch.Commit()
 		batch.reset()
 		db.batchPool.Put(batch)
 	}()
 	return batch.Get(key)
 }
 
+// Delete delete with defaultWriteOptions
+func (db *DB) Delete(key []byte) error {
+	return db.DeleteWithOptions(key, DefaultWriteOptions)
+}
+
 // Delete the specified key from the database.
 // Actually, it will open a new batch and commit it.
 // You can think the batch has only one Delete operation.
-func (db *DB) Delete(key []byte, options *WriteOptions) error {
-	batch, ok := db.batchPool.Get().(*Batch)
-	if !ok {
-		panic("batchPool.Get() failed")
-	}
+func (db *DB) DeleteWithOptions(key []byte, options WriteOptions) error {
+	batch := db.batchPool.Get().(*Batch)
 	defer func() {
 		batch.reset()
 		db.batchPool.Put(batch)
@@ -252,25 +253,22 @@ func (db *DB) Delete(key []byte, options *WriteOptions) error {
 	// This is a single delete operation, we can set Sync to false.
 	// Because the data will be written to the WAL,
 	// and the WAL file will be synced to disk according to the DB options.
-	batch.init(false, false, db).withPendingWrites()
+	batch.init(false, false, false, db).withPendingWrites()
 	if err := batch.Delete(key); err != nil {
 		batch.unlock()
 		return err
 	}
-	return batch.Commit(options)
+	return batch.Commit()
 }
 
 // Exist checks if the specified key exists in the database.
 // Actually, it will open a new batch and commit it.
 // You can think the batch has only one Exist operation.
 func (db *DB) Exist(key []byte) (bool, error) {
-	batch, ok := db.batchPool.Get().(*Batch)
-	if !ok {
-		panic("batchPool.Get() failed")
-	}
-	batch.init(true, false, db)
+	batch := db.batchPool.Get().(*Batch)
+	batch.init(true, false, true, db)
 	defer func() {
-		_ = batch.Commit(nil)
+		_ = batch.Commit()
 		batch.reset()
 		db.batchPool.Put(batch)
 	}()

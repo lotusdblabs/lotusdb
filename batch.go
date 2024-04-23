@@ -58,9 +58,10 @@ func makeBatch() interface{} {
 	}
 }
 
-func (b *Batch) init(rdonly, sync bool, db *DB) *Batch {
+func (b *Batch) init(rdonly, sync bool, disableWal bool, db *DB) *Batch {
 	b.options.ReadOnly = rdonly
 	b.options.Sync = sync
+	b.options.DisableWal = disableWal
 	b.db = db
 	b.lock()
 	return b
@@ -253,12 +254,7 @@ func (b *Batch) Exist(key []byte) (bool, error) {
 // It will iterate the pendingWrites and write the data to the database,
 // then write a record to indicate the end of the batch to guarantee atomicity.
 // Finally, it will write the index.
-func (b *Batch) Commit(options *WriteOptions) error {
-	// use the default options if options is nil
-	if options == nil {
-		options = &WriteOptions{Sync: false, DisableWal: false}
-	}
-
+func (b *Batch) Commit() error {
 	defer b.unlock()
 	if b.db.closed {
 		return ErrDBClosed
@@ -282,7 +278,7 @@ func (b *Batch) Commit(options *WriteOptions) error {
 	}
 	batchID := b.batchID.Generate()
 	// call memtable put batch
-	err := b.db.activeMem.putBatch(b.pendingWrites, batchID, options)
+	err := b.db.activeMem.putBatch(b.pendingWrites, batchID, b.options.WriteOptions)
 	if err != nil {
 		return err
 	}

@@ -158,9 +158,10 @@ func openMemtable(options memtableOptions) (*memtable, error) {
 
 // putBatch writes a batch of entries to memtable.
 func (mt *memtable) putBatch(pendingWrites map[string]*LogRecord,
-	batchID snowflake.ID, options *WriteOptions) error {
+	batchID snowflake.ID, options WriteOptions) error {
+
 	// if wal is not disabled, write to wal first to ensure durability and atomicity
-	if options == nil || !options.DisableWal {
+	if !options.DisableWal {
 		// add record to wal.pendingWrites
 		for _, record := range pendingWrites {
 			record.BatchID = uint64(batchID)
@@ -180,7 +181,7 @@ func (mt *memtable) putBatch(pendingWrites map[string]*LogRecord,
 			return err
 		}
 		// flush wal if necessary
-		if options != nil && options.Sync && !mt.options.walSync {
+		if options.Sync && !mt.options.walSync {
 			if err := mt.wal.Sync(); err != nil {
 				return err
 			}

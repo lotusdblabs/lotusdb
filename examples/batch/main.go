@@ -33,7 +33,7 @@ func main() {
 	_ = batch.Delete([]byte("name"))
 
 	// commit the batch
-	_ = batch.Commit(nil)
+	_ = batch.Commit()
 
 	// _ = batch.Put([]byte("name1"), []byte("lotusdb1")) // don't do this!!!
 }
