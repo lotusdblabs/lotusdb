@@ -207,6 +207,7 @@ func (db *DB) Put(key []byte, value []byte) error {
 // You can think the batch has only one Put operation.
 func (db *DB) PutWithOptions(key []byte, value []byte, options WriteOptions) error {
 	batch := db.batchPool.Get().(*Batch)
+	batch.options.WriteOptions = options
 	defer func() {
 		batch.reset()
 		db.batchPool.Put(batch)
@@ -246,6 +247,7 @@ func (db *DB) Delete(key []byte) error {
 // You can think the batch has only one Delete operation.
 func (db *DB) DeleteWithOptions(key []byte, options WriteOptions) error {
 	batch := db.batchPool.Get().(*Batch)
+	batch.options.WriteOptions = options
 	defer func() {
 		batch.reset()
 		db.batchPool.Put(batch)
