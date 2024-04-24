@@ -109,9 +109,10 @@ type ValueLogRecord struct {
 
 func encodeValueLogRecord(record *ValueLogRecord) []byte {
 	buf := make([]byte, 4+len(record.key)+len(record.value))
+	keySize := 4
 	index := 0
-	binary.LittleEndian.PutUint32(buf[index:index+4], uint32(len(record.key)))
-	index += 4
+	binary.LittleEndian.PutUint32(buf[index:keySize], uint32(len(record.key)))
+	index += keySize
 
 	copy(buf[index:index+len(record.key)], record.key)
 	index += len(record.key)
@@ -120,10 +121,11 @@ func encodeValueLogRecord(record *ValueLogRecord) []byte {
 }
 
 func decodeValueLogRecord(buf []byte) *ValueLogRecord {
-	keyLen := binary.LittleEndian.Uint32(buf[:4])
+	var keySize uint32 = 4
+	keyLen := binary.LittleEndian.Uint32(buf[:keySize])
 	key := make([]byte, keyLen)
-	copy(key, buf[4:4+keyLen])
-	value := make([]byte, uint32(len(buf))-keyLen-4)
-	copy(value, buf[4+keyLen:])
+	copy(key, buf[keySize:keySize+keyLen])
+	value := make([]byte, uint32(len(buf))-keyLen-keySize)
+	copy(value, buf[keySize+keyLen:])
 	return &ValueLogRecord{key: key, value: value}
 }

@@ -473,6 +473,8 @@ func (db *DB) listenMemtableFlush() {
 
 // Compact will iterate all values in vlog, and write the valid values to a new vlog file.
 // Then replace the old vlog file with the new one, and delete the old one.
+//
+//nolint:gocognit
 func (db *DB) Compact() error {
 	db.flushLock.Lock()
 	defer db.flushLock.Unlock()

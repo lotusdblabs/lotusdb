@@ -100,7 +100,7 @@ func (ht *HashTable) Get(key []byte, matchKeyFunc ...diskhash.MatchKeyFunc) (*Ke
 	if err != nil {
 		return nil, err
 	}
-	// hashTable will not use keyPosition, so return nil, nil
+	//nolint:nilnil // hashTable will not use keyPosition, so return nil, nil
 	return nil, nil
 }
 

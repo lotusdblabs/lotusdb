@@ -107,6 +107,7 @@ func openAllMemtables(options Options) ([]*memtable, error) {
 // and load all entries from wal to rebuild the content of the skip list.
 func openMemtable(options memtableOptions) (*memtable, error) {
 	// init skip list
+	//nolint:gomnd // default size
 	skl := arenaskl.NewSkiplist(int64(float64(options.memSize) * 1.5))
 	table := &memtable{options: options, skl: skl}
 

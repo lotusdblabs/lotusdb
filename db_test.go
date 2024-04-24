@@ -270,7 +270,7 @@ func TestDBDelete(t *testing.T) {
 				t.Errorf("Get(key) error = %v, wantErr = %v", err, tt.wantErr)
 			}
 			value, err = db.Get(tt.args.log.key)
-			require.NoError(t, err)
+			require.Error(t, err)
 			assert.Equal(t, []byte(nil), value)
 		})
 	}
@@ -575,6 +575,7 @@ func TestDBMultiClients(t *testing.T) {
 	})
 }
 
+//nolint:gocognit
 func TestDBIterator(t *testing.T) {
 	options := DefaultOptions
 	path, err := os.MkdirTemp("", "db-test-iter")

@@ -390,7 +390,7 @@ func TestValueLogMultiSegmentFiles(t *testing.T) {
 
 			entries, errRead := os.ReadDir(path)
 			require.NoError(t, errRead)
-			assert.Len(t, tt.wantNumSeg, len(entries))
+			assert.Len(t, entries, tt.wantNumSeg)
 
 			err = vlog.close()
 			assert.NoError(t, err)

@@ -36,6 +36,7 @@ func BenchmarkPut(b *testing.B) {
 
 	for i := 0; i < b.N; i++ {
 		err := db.Put(util.GetTestKey(i), util.RandomValue(1024))
+		//nolint:testifylint // benchmark
 		assert.Nil(b, err)
 	}
 }
@@ -45,6 +46,7 @@ func BenchmarkGet(b *testing.B) {
 	defer destroy()
 	for i := 0; i < 1000000; i++ {
 		err := db.Put(util.GetTestKey(i), util.RandomValue(128))
+		//nolint:testifylint // benchmark
 		assert.Nil(b, err)
 	}
 	b.ReportAllocs()

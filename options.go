@@ -114,17 +114,22 @@ const (
 )
 
 var DefaultOptions = Options{
-	DirPath:             tempDBDir(),
-	MemtableSize:        64 * MB,
-	MemtableNums:        15,
-	BlockCache:          0,
-	Sync:                false,
-	BytesPerSync:        0,
-	PartitionNum:        3,
-	KeyHashFunction:     xxhash.Sum64,
-	ValueLogFileSize:    1 * GB,
-	IndexType:           BTree,
-	CompactBatchCount:   10000,
+	DirPath: tempDBDir(),
+	//nolint:gomnd // default
+	MemtableSize: 64 * MB,
+	//nolint:gomnd // default
+	MemtableNums: 15,
+	BlockCache:   0,
+	Sync:         false,
+	BytesPerSync: 0,
+	//nolint:gomnd // default
+	PartitionNum:     3,
+	KeyHashFunction:  xxhash.Sum64,
+	ValueLogFileSize: 1 * GB,
+	IndexType:        BTree,
+	//nolint:gomnd // default
+	CompactBatchCount: 10000,
+	//nolint:gomnd // default
 	WaitMemSpaceTimeout: 100 * time.Millisecond,
 }
 
