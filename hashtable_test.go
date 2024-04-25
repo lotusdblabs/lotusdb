@@ -10,10 +10,11 @@ import (
 	"github.com/rosedblabs/diskhash"
 	"github.com/rosedblabs/wal"
 	"github.com/stretchr/testify/assert"
+	"github.com/stretchr/testify/require"
 )
 
 func testMatchFunc(exist bool) diskhash.MatchKeyFunc {
-	return func(slot diskhash.Slot) (bool, error) {
+	return func(_ diskhash.Slot) (bool, error) {
 		return exist, nil
 	}
 }
@@ -68,8 +69,11 @@ func TestOpenHashTable(t *testing.T) {
 				_ = os.RemoveAll(tt.options.DirPath)
 			}()
 			db, err := Open(tt.options)
-			assert.Nil(t, err)
-			got := db.index.(*HashTable)
+			require.NoError(t, err)
+			got, ok := db.index.(*HashTable)
+			if !ok {
+				t.Errorf("indexType wrong")
+			}
 			if (err != nil) != tt.wantErr {
 				t.Errorf("openHashTable() error = %v, wantErr %v", err, tt.wantErr)
 				return
@@ -79,7 +83,6 @@ func TestOpenHashTable(t *testing.T) {
 			assert.Equal(t, tt.want.options.partitionNum, got.options.partitionNum)
 			assert.Equal(t, len(tt.want.tables), len(got.tables))
 		})
-
 	}
 }
 
@@ -96,13 +99,13 @@ func testHashTablePutBatch(t *testing.T, partitionNum int) {
 		keyHashFunction: xxhash.Sum64,
 	}
 	err := os.MkdirAll(options.dirPath, os.ModePerm)
-	assert.Nil(t, err)
+	require.NoError(t, err)
 	defer func() {
 		_ = os.RemoveAll(options.dirPath)
 	}()
 
 	ht, err := openHashIndex(options)
-	assert.Nil(t, err)
+	require.NoError(t, err)
 
 	var keyPositions []*KeyPosition
 	keyPositions = append(keyPositions, &KeyPosition{
@@ -136,7 +139,7 @@ func testHashTablePutBatch(t *testing.T, partitionNum int) {
 	}
 	for _, tt := range tests {
 		t.Run(tt.name, func(t *testing.T) {
-			if err := ht.PutBatch(tt.positions, tt.matchKeyFunc...); (err != nil) != tt.wantErr {
+			if err = ht.PutBatch(tt.positions, tt.matchKeyFunc...); (err != nil) != tt.wantErr {
 				t.Errorf("HashTable.PutBatch() error = %v, wantErr %v", err, tt.wantErr)
 			}
 		})
@@ -156,12 +159,12 @@ func testHashTableGet(t *testing.T, partitionNum int) {
 		keyHashFunction: xxhash.Sum64,
 	}
 	err := os.MkdirAll(options.dirPath, os.ModePerm)
-	assert.Nil(t, err)
+	require.NoError(t, err)
 	defer func() {
 		_ = os.RemoveAll(options.dirPath)
 	}()
 	ht, err := openHashIndex(options)
-	assert.Nil(t, err)
+	require.NoError(t, err)
 	var keyPositions []*KeyPosition
 	keyPositions = append(keyPositions, &KeyPosition{
 		key:       []byte("exist"),
@@ -172,7 +175,7 @@ func testHashTableGet(t *testing.T, partitionNum int) {
 		testMatchFunc(true), testMatchFunc(false),
 	}
 	err = ht.PutBatch(keyPositions, matchKeyFuncs[:1]...)
-	assert.Nil(t, err)
+	require.NoError(t, err)
 
 	tests := []struct {
 		name         string
@@ -188,7 +191,7 @@ func testHashTableGet(t *testing.T, partitionNum int) {
 	}
 	for _, tt := range tests {
 		t.Run(tt.name, func(t *testing.T) {
-			_, err := ht.Get(tt.key, tt.matchKeyFunc...)
+			_, err = ht.Get(tt.key, tt.matchKeyFunc...)
 			if (err != nil) != tt.wantErr {
 				t.Errorf("HashTable.Get() error = %v, wantErr %v", err, tt.wantErr)
 				return
@@ -210,12 +213,12 @@ func testHashTableDeleteBatch(t *testing.T, partitionNum int) {
 		keyHashFunction: xxhash.Sum64,
 	}
 	err := os.MkdirAll(options.dirPath, os.ModePerm)
-	assert.Nil(t, err)
+	require.NoError(t, err)
 	defer func() {
 		_ = os.RemoveAll(options.dirPath)
 	}()
 	ht, err := openHashIndex(options)
-	assert.Nil(t, err)
+	require.NoError(t, err)
 
 	var keys [][]byte
 	keys = append(keys, nil, []byte("not-exist"), []byte("exist"), []byte(""))
@@ -227,7 +230,7 @@ func testHashTableDeleteBatch(t *testing.T, partitionNum int) {
 		position:  &wal.ChunkPosition{},
 	})
 	err = ht.PutBatch(keyPositions, []diskhash.MatchKeyFunc{testMatchFunc(true)}...)
-	assert.Nil(t, err)
+	require.NoError(t, err)
 
 	matchKeyFuncs := []diskhash.MatchKeyFunc{
 		testMatchFunc(false), testMatchFunc(true),
@@ -245,7 +248,7 @@ func testHashTableDeleteBatch(t *testing.T, partitionNum int) {
 	}
 	for _, tt := range tests {
 		t.Run(tt.name, func(t *testing.T) {
-			if err := ht.DeleteBatch(tt.keys, tt.matchKeyFunc...); (err != nil) != tt.wantErr {
+			if err = ht.DeleteBatch(tt.keys, tt.matchKeyFunc...); (err != nil) != tt.wantErr {
 				t.Errorf("HashTable.DeleteBatch() error = %v, wantErr %v", err, tt.wantErr)
 			}
 		})
@@ -265,16 +268,16 @@ func testHashTableClose(t *testing.T, partitionNum int) {
 		keyHashFunction: xxhash.Sum64,
 	}
 	err := os.MkdirAll(options.dirPath, os.ModePerm)
-	assert.Nil(t, err)
+	require.NoError(t, err)
 	defer func() {
 		_ = os.RemoveAll(options.dirPath)
 	}()
 
 	ht, err := openHashIndex(options)
-	assert.Nil(t, err)
+	require.NoError(t, err)
 
 	err = ht.Close()
-	assert.Nil(t, err)
+	assert.NoError(t, err)
 }
 
 func TestHashTable_Sync(t *testing.T) {
@@ -290,14 +293,14 @@ func testHashTableSync(t *testing.T, partitionNum int) {
 		keyHashFunction: xxhash.Sum64,
 	}
 	err := os.MkdirAll(options.dirPath, os.ModePerm)
-	assert.Nil(t, err)
+	require.NoError(t, err)
 	defer func() {
 		_ = os.RemoveAll(options.dirPath)
 	}()
 
 	ht, err := openHashIndex(options)
-	assert.Nil(t, err)
+	require.NoError(t, err)
 
 	err = ht.Sync()
-	assert.Nil(t, err)
+	assert.NoError(t, err)
 }

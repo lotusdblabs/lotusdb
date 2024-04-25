@@ -8,7 +8,7 @@ import (
 	"github.com/rosedblabs/wal"
 )
 
-// baseIterator
+// baseIterator.
 type baseIterator interface {
 	// Rewind seek the first key in the iterator.
 	Rewind()
@@ -27,7 +27,7 @@ type baseIterator interface {
 	Close() error
 }
 
-// Iterator holds a heap and a set of iterators that implement the baseIterator interface
+// Iterator holds a heap and a set of iterators that implement the baseIterator interface.
 type Iterator struct {
 	h       iterHeap
 	itrs    []*singleIter       // used for rebuilding heap
@@ -125,7 +125,8 @@ func (mi *Iterator) Value() []byte {
 		}
 	}()
 	topIter := mi.h[0]
-	if topIter.iType == BptreeItr {
+	switch topIter.iType {
+	case BptreeItr:
 		keyPos := new(KeyPosition)
 		keyPos.key = topIter.iter.Key()
 		keyPos.partition = uint32(mi.db.vlog.getKeyPartition(topIter.iter.Key()))
@@ -135,9 +136,9 @@ func (mi *Iterator) Value() []byte {
 			panic(err)
 		}
 		return record.value
-	} else if topIter.iType == MemItr {
+	case MemItr:
 		return topIter.iter.Value().(y.ValueStruct).Value
-	} else {
+	default:
 		panic("iType not support")
 	}
 }
@@ -193,7 +194,10 @@ func (db *DB) NewIterator(options IteratorOptions) (*Iterator, error) {
 	itrs := make([]*singleIter, 0, db.options.PartitionNum+len(db.immuMems)+1)
 	itrsM := make(map[int]*singleIter)
 	rank := 0
-	index := db.index.(*BPTree)
+	index, ok := db.index.(*BPTree)
+	if !ok {
+		panic("index type not support")
+	}
 
 	for i := 0; i < db.options.PartitionNum; i++ {
 		tx, err := index.trees[i].Begin(false)
@@ -220,8 +224,8 @@ func (db *DB) NewIterator(options IteratorOptions) (*Iterator, error) {
 		itrsM[rank] = itrs[len(itrs)-1]
 		rank++
 	}
-
-	memtableList := append(db.immuMems, db.activeMem)
+	memtableList := make([]*memtable, len(db.immuMems)+1)
+	copy(memtableList, append(db.immuMems, db.activeMem))
 	for i := 0; i < len(memtableList); i++ {
 		itr := newMemtableIterator(options, memtableList[i])
 		itr.Rewind()

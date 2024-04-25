@@ -1,6 +1,7 @@
 package benchmark
 
 import (
+	"errors"
 	"os"
 	"testing"
 
@@ -35,6 +36,7 @@ func BenchmarkPut(b *testing.B) {
 
 	for i := 0; i < b.N; i++ {
 		err := db.Put(util.GetTestKey(i), util.RandomValue(1024))
+		//nolint:testifylint // benchmark
 		assert.Nil(b, err)
 	}
 }
@@ -44,6 +46,7 @@ func BenchmarkGet(b *testing.B) {
 	defer destroy()
 	for i := 0; i < 1000000; i++ {
 		err := db.Put(util.GetTestKey(i), util.RandomValue(128))
+		//nolint:testifylint // benchmark
 		assert.Nil(b, err)
 	}
 	b.ReportAllocs()
@@ -53,7 +56,7 @@ func BenchmarkGet(b *testing.B) {
 		val, err := db.Get(util.GetTestKey(i))
 		if err == nil {
 			assert.NotNil(b, val)
-		} else if err != lotusdb.ErrKeyNotFound {
+		} else if errors.Is(err, lotusdb.ErrKeyNotFound) {
 			b.Error(err)
 		}
 	}

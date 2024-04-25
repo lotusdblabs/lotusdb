@@ -8,7 +8,8 @@ import (
 )
 
 var (
-	lock    = sync.Mutex{}
+	lock = sync.Mutex{}
+	//nolint:gosec //used in test
 	randStr = rand.New(rand.NewSource(time.Now().Unix()))
 	letters = []byte("abcdefghijklmnopqrstuvwxyzABCDEFGHIJKLMNOPQRSTUVWXYZ0123456789")
 )

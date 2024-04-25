@@ -10,6 +10,7 @@ import (
 	"github.com/cespare/xxhash/v2"
 	"github.com/rosedblabs/wal"
 	"github.com/stretchr/testify/assert"
+	"github.com/stretchr/testify/require"
 	"go.etcd.io/bbolt"
 )
 
@@ -60,7 +61,7 @@ func Test_openIndexBoltDB(t *testing.T) {
 	for _, tt := range tests {
 		t.Run(tt.name, func(t *testing.T) {
 			err := os.MkdirAll(tt.options.dirPath, os.ModePerm)
-			assert.Nil(t, err)
+			require.NoError(t, err)
 			defer func() {
 				_ = os.RemoveAll(tt.options.dirPath)
 			}()
@@ -74,7 +75,6 @@ func Test_openIndexBoltDB(t *testing.T) {
 			assert.Equal(t, tt.want.options.partitionNum, got.options.partitionNum)
 			assert.Equal(t, len(tt.want.trees), len(got.trees))
 		})
-
 	}
 }
 
@@ -95,13 +95,13 @@ func testbptreeGet(t *testing.T, partitionNum int) {
 	}
 
 	err := os.MkdirAll(options.dirPath, os.ModePerm)
-	assert.Nil(t, err)
+	require.NoError(t, err)
 	defer func() {
 		_ = os.RemoveAll(options.dirPath)
 	}()
 
 	bt, err := openBTreeIndex(options)
-	assert.Nil(t, err)
+	require.NoError(t, err)
 	var keyPositions []*KeyPosition
 	keyPositions = append(keyPositions, &KeyPosition{
 		key:       []byte("exist"),
@@ -109,7 +109,7 @@ func testbptreeGet(t *testing.T, partitionNum int) {
 		position:  &wal.ChunkPosition{},
 	})
 	err = bt.PutBatch(keyPositions)
-	assert.Nil(t, err)
+	require.NoError(t, err)
 
 	tests := []struct {
 		name    string
@@ -122,9 +122,10 @@ func testbptreeGet(t *testing.T, partitionNum int) {
 		{"exist", []byte("exist"), true, false},
 		{"len(key)=0", []byte(""), false, true},
 	}
+	var got *KeyPosition
 	for _, tt := range tests {
 		t.Run(tt.name, func(t *testing.T) {
-			got, err := bt.Get(tt.key)
+			got, err = bt.Get(tt.key)
 			if (err != nil) != tt.wantErr {
 				t.Errorf("BPTree.Get() error = %v, wantErr %v", err, tt.wantErr)
 				return
@@ -151,13 +152,13 @@ func testbptreePutbatch(t *testing.T, partitionNum int) {
 	}
 
 	err := os.MkdirAll(options.dirPath, os.ModePerm)
-	assert.Nil(t, err)
+	require.NoError(t, err)
 	defer func() {
 		_ = os.RemoveAll(options.dirPath)
 	}()
 
 	bt, err := openBTreeIndex(options)
-	assert.Nil(t, err)
+	require.NoError(t, err)
 
 	var keyPositions []*KeyPosition
 	keyPositions = append(keyPositions, &KeyPosition{
@@ -187,7 +188,7 @@ func testbptreePutbatch(t *testing.T, partitionNum int) {
 	}
 	for _, tt := range tests {
 		t.Run(tt.name, func(t *testing.T) {
-			if err := bt.PutBatch(tt.positions); (err != nil) != tt.wantErr {
+			if err = bt.PutBatch(tt.positions); (err != nil) != tt.wantErr {
 				t.Errorf("BPTree.PutBatch() error = %v, wantErr %v", err, tt.wantErr)
 			}
 		})
@@ -211,13 +212,13 @@ func testbptreeDeletebatch(t *testing.T, partitionNum int) {
 	}
 
 	err := os.MkdirAll(options.dirPath, os.ModePerm)
-	assert.Nil(t, err)
+	require.NoError(t, err)
 	defer func() {
 		_ = os.RemoveAll(options.dirPath)
 	}()
 
 	bt, err := openBTreeIndex(options)
-	assert.Nil(t, err)
+	require.NoError(t, err)
 	var keys [][]byte
 	keys = append(keys, nil, []byte("not-exist"), []byte("exist"), []byte(""))
 	var keyPositions []*KeyPosition
@@ -228,7 +229,7 @@ func testbptreeDeletebatch(t *testing.T, partitionNum int) {
 	})
 
 	err = bt.PutBatch(keyPositions)
-	assert.Nil(t, err)
+	require.NoError(t, err)
 
 	tests := []struct {
 		name    string
@@ -242,7 +243,7 @@ func testbptreeDeletebatch(t *testing.T, partitionNum int) {
 	}
 	for _, tt := range tests {
 		t.Run(tt.name, func(t *testing.T) {
-			if err := bt.DeleteBatch(tt.keys); (err != nil) != tt.wantErr {
+			if err = bt.DeleteBatch(tt.keys); (err != nil) != tt.wantErr {
 				t.Errorf("BPTree.DeleteBatch() error = %v, wantErr %v", err, tt.wantErr)
 			}
 		})
@@ -266,16 +267,16 @@ func testbptreeClose(t *testing.T, partitionNum int) {
 	}
 
 	err := os.MkdirAll(options.dirPath, os.ModePerm)
-	assert.Nil(t, err)
+	require.NoError(t, err)
 	defer func() {
 		_ = os.RemoveAll(options.dirPath)
 	}()
 
 	bt, err := openBTreeIndex(options)
-	assert.Nil(t, err)
+	require.NoError(t, err)
 
 	err = bt.Close()
-	assert.Nil(t, err)
+	assert.NoError(t, err)
 }
 
 func TestBPTree_Sync_1(t *testing.T) {
@@ -295,14 +296,15 @@ func testbptreeSync(t *testing.T, partitionNum int) {
 	}
 
 	err := os.MkdirAll(options.dirPath, os.ModePerm)
-	assert.Nil(t, err)
+	require.NoError(t, err)
 	defer func() {
 		_ = os.RemoveAll(options.dirPath)
 	}()
 	bt, err := openBTreeIndex(options)
-	assert.Nil(t, err)
+	require.NoError(t, err)
+	assert.NotNil(t, bt)
 	err = bt.Sync()
-	assert.Nil(t, err)
+	assert.NoError(t, err)
 }
 
 func Test_bptreeIterator(t *testing.T) {
@@ -314,12 +316,12 @@ func Test_bptreeIterator(t *testing.T) {
 	}
 
 	err := os.MkdirAll(options.dirPath, os.ModePerm)
-	assert.Nil(t, err)
+	require.NoError(t, err)
 	defer func() {
 		_ = os.RemoveAll(options.dirPath)
 	}()
 	bt, err := openBTreeIndex(options)
-	assert.Nil(t, err)
+	require.NoError(t, err)
 	m := map[string]*wal.ChunkPosition{
 		"key 0": {SegmentId: 0, BlockNumber: 0, ChunkOffset: 0, ChunkSize: 0},
 		"key 1": {SegmentId: 1, BlockNumber: 1, ChunkOffset: 1, ChunkSize: 1},
@@ -345,7 +347,19 @@ func Test_bptreeIterator(t *testing.T) {
 	},
 	)
 
-	keyPositions2 = append(keyPositions, &KeyPosition{
+	keyPositions2 = append(keyPositions2, &KeyPosition{
+		key:       []byte("key 0"),
+		partition: 0,
+		position:  &wal.ChunkPosition{SegmentId: 0, BlockNumber: 0, ChunkOffset: 0, ChunkSize: 0},
+	}, &KeyPosition{
+		key:       []byte("key 1"),
+		partition: 0,
+		position:  &wal.ChunkPosition{SegmentId: 1, BlockNumber: 1, ChunkOffset: 1, ChunkSize: 1},
+	}, &KeyPosition{
+		key:       []byte("key 2"),
+		partition: 0,
+		position:  &wal.ChunkPosition{SegmentId: 2, BlockNumber: 2, ChunkOffset: 2, ChunkSize: 2},
+	}, &KeyPosition{
 		key:       []byte("abc 0"),
 		partition: 0,
 		position:  &wal.ChunkPosition{SegmentId: 3, BlockNumber: 3, ChunkOffset: 3, ChunkSize: 3},
@@ -360,17 +374,17 @@ func Test_bptreeIterator(t *testing.T) {
 	})
 
 	err = bt.PutBatch(keyPositions)
-	assert.Nil(t, err)
+	require.NoError(t, err)
 
 	tree := bt.trees[0]
 	tx, err := tree.Begin(true)
-	assert.Nil(t, err)
+	require.NoError(t, err)
 	iteratorOptions := IteratorOptions{
 		Reverse: false,
 	}
 
 	itr := newBptreeIterator(tx, iteratorOptions)
-	assert.Nil(t, err)
+	require.NoError(t, err)
 	var prev []byte
 	itr.Rewind()
 	for itr.Valid() {
@@ -381,17 +395,17 @@ func Test_bptreeIterator(t *testing.T) {
 		itr.Next()
 	}
 	err = itr.Close()
-	assert.Nil(t, err)
+	require.NoError(t, err)
 
 	tx, err = tree.Begin(true)
-	assert.Nil(t, err)
+	require.NoError(t, err)
 	iteratorOptions = IteratorOptions{
 		Reverse: true,
 	}
 	prev = nil
 
 	itr = newBptreeIterator(tx, iteratorOptions)
-	assert.Nil(t, err)
+	require.NoError(t, err)
 	itr.Rewind()
 	for itr.Valid() {
 		currKey := itr.Key()
@@ -409,17 +423,17 @@ func Test_bptreeIterator(t *testing.T) {
 	itr.Seek([]byte("aye 2"))
 	assert.False(t, itr.Valid())
 	err = itr.Close()
-	assert.Nil(t, err)
+	require.NoError(t, err)
 
 	tx, err = tree.Begin(true)
-	assert.Nil(t, err)
+	require.NoError(t, err)
 	iteratorOptions = IteratorOptions{
 		Reverse: false,
 	}
 	prev = nil
 
 	itr = newBptreeIterator(tx, iteratorOptions)
-	assert.Nil(t, err)
+	require.NoError(t, err)
 	itr.Rewind()
 	for itr.Valid() {
 		currKey := itr.Key()
@@ -437,35 +451,35 @@ func Test_bptreeIterator(t *testing.T) {
 	itr.Seek([]byte("aye 2"))
 	assert.Equal(t, []byte("key 0"), itr.Key())
 	err = itr.Close()
-	assert.Nil(t, err)
+	require.NoError(t, err)
 
 	// prefix
 	err = bt.PutBatch(keyPositions2)
-	assert.Nil(t, err)
+	require.NoError(t, err)
 
 	tx, err = tree.Begin(true)
-	assert.Nil(t, err)
+	require.NoError(t, err)
 	iteratorOptions = IteratorOptions{
 		Reverse: false,
 		Prefix:  []byte("not valid"),
 	}
 
 	itr = newBptreeIterator(tx, iteratorOptions)
-	assert.Nil(t, err)
+	require.NoError(t, err)
 	itr.Rewind()
 	assert.False(t, itr.Valid())
 	err = itr.Close()
-	assert.Nil(t, err)
+	require.NoError(t, err)
 
 	tx, err = tree.Begin(true)
-	assert.Nil(t, err)
+	require.NoError(t, err)
 	iteratorOptions = IteratorOptions{
 		Reverse: false,
 		Prefix:  []byte("abc"),
 	}
 
 	itr = newBptreeIterator(tx, iteratorOptions)
-	assert.Nil(t, err)
+	require.NoError(t, err)
 	itr.Rewind()
 	assert.True(t, itr.Valid())
 
@@ -475,6 +489,5 @@ func Test_bptreeIterator(t *testing.T) {
 		itr.Next()
 	}
 	err = itr.Close()
-	assert.Nil(t, err)
-
+	assert.NoError(t, err)
 }
