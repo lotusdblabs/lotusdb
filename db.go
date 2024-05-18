@@ -202,7 +202,7 @@ func (db *DB) Put(key []byte, value []byte) error {
 	return db.PutWithOptions(key, value, DefaultWriteOptions)
 }
 
-// Put a key-value pair into the database.
+// PutWithOptions a key-value pair into the database.
 // Actually, it will open a new batch and commit it.
 // You can think the batch has only one Put operation.
 func (db *DB) PutWithOptions(key []byte, value []byte, options WriteOptions) error {
@@ -248,7 +248,7 @@ func (db *DB) Delete(key []byte) error {
 	return db.DeleteWithOptions(key, DefaultWriteOptions)
 }
 
-// Delete the specified key from the database.
+// DeleteWithOptions the specified key from the database.
 // Actually, it will open a new batch and commit it.
 // You can think the batch has only one Delete operation.
 func (db *DB) DeleteWithOptions(key []byte, options WriteOptions) error {
