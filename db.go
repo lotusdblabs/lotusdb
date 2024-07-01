@@ -141,10 +141,10 @@ func Open(options Options) (*DB, error) {
 // Set the closed flag to true.
 // The DB instance cannot be used after closing.
 func (db *DB) Close() error {
-	db.mu.Lock()
-	defer db.mu.Unlock()
 	close(db.flushChan)
 	<-db.closeChan
+	db.mu.Lock()
+	defer db.mu.Unlock()
 	// close all memtables
 	for _, table := range db.immuMems {
 		if err := table.close(); err != nil {
