@@ -17,6 +17,7 @@ const (
 // https://www.usenix.org/system/files/conference/fast16/fast16-papers-lu.pdf
 type valueLog struct {
 	walFiles []*wal.WAL
+	dpTables []*deprecatedtable
 	options  valueLogOptions
 }
 
@@ -40,13 +41,17 @@ type valueLogOptions struct {
 
 	// writing validEntries to disk after reading the specified number of entries.
 	compactBatchCount int
+
+	// deprecatedtable capacity, for every wal.
+	deprecatedtableCapacity uint32
 }
 
 // open wal files for value log, it will open several wal files for concurrent writing and reading
 // the number of wal files is specified by the partitionNum.
+// init deprecatedtable for every wal, TODO: we should build dpTable aftering compacting vlog.
 func openValueLog(options valueLogOptions) (*valueLog, error) {
 	var walFiles []*wal.WAL
-
+	var dpTables []*deprecatedtable
 	for i := 0; i < int(options.partitionNum); i++ {
 		vLogWal, err := wal.Open(wal.Options{
 			DirPath:        options.dirPath,
@@ -60,9 +65,14 @@ func openValueLog(options valueLogOptions) (*valueLog, error) {
 			return nil, err
 		}
 		walFiles = append(walFiles, vLogWal)
+		// TODO: add dpTable
+		dpTableOption := deprecatedtableOptions{options.deprecatedtableCapacity}
+		dpTable := newDeprecatedTable(dpTableOption)
+		dpTables = append(dpTables, dpTable)
+		
 	}
 
-	return &valueLog{walFiles: walFiles, options: options}, nil
+	return &valueLog{walFiles: walFiles, dpTables: dpTables, options: options}, nil
 }
 
 // read the value log record from the specified position.
@@ -121,6 +131,8 @@ func (vlog *valueLog) writeBatch(records []*ValueLogRecord) ([]*KeyPosition, err
 				keyPositions = append(keyPositions, &KeyPosition{
 					key:       partitionRecords[part][writeIdx+i].key,
 					partition: uint32(part),
+					// TODO: add uid support
+					uid:	   partitionRecords[part][writeIdx+i].uid,
 					position:  pos,
 				})
 			}

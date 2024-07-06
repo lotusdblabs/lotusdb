@@ -46,14 +46,14 @@ func (dt *deprecatedtable) isFull() bool {
 }
 
 // Add a uuid to the specified key.
-func (dt *deprecatedtable) addEntry(key string, uuid uuid.UUID) error {
+func (dt *deprecatedtable) addEntry(key string, id uuid.UUID) error {
 	dt.mu.Lock()
 	defer dt.mu.Unlock()
 	if dt.isFull() {
         return ErrDtFull
     }
 	dt.size++
-    dt.table[key] = append(dt.table[key], uuid)
+    dt.table[key] = append(dt.table[key], id)
 	return nil
 }
 
