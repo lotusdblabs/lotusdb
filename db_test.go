@@ -375,6 +375,16 @@ func TestDBFlushMemTables(t *testing.T) {
 			DisableWal: false,
 		})
 	}
+
+	delLogs := []*testLog{
+		{key: []byte("key 3"), value: []byte("value 3")},
+	}
+	for _, log := range delLogs {
+		_ = db.PutWithOptions(log.key, log.value, WriteOptions{
+			Sync:       true,
+			DisableWal: false,
+		})
+	}
 	for i := 0; i < numLogs; i++ {
 		// the size of a logRecord is about 1MB (a little bigger than 1MB due to encode)
 		log := &testLog{key: util.RandomValue(2 << 18), value: util.RandomValue(2 << 18)}
@@ -392,6 +402,25 @@ func TestDBFlushMemTables(t *testing.T) {
 			require.NoError(t, err)
 			assert.Equal(t, log.value, value)
 		}
+
+		for _, log := range delLogs {
+			partition := db.vlog.getKeyPartition(log.key)
+			record,_ := getRecordFromVlog(db, log.key)
+			_ = db.DeleteWithOptions(log.key,  WriteOptions{
+				Sync:       true,
+				DisableWal: false,
+			})
+			for i := 0; i < numLogs; i++ {
+				// the size of a logRecord is about 1MB (a little bigger than 1MB due to encode)
+				log := &testLog{key: util.RandomValue(2 << 18), value: util.RandomValue(2 << 18)}
+				_ = db.PutWithOptions(log.key, log.value, WriteOptions{
+					Sync:       true,
+					DisableWal: false,
+				})
+			}
+			time.Sleep(5*time.Second)
+			assert.Equal(t, true, db.vlog.dpTables[partition].existEntry(string(log.key),record.uid))
+		}		
 	})
 }
 
@@ -442,6 +471,7 @@ func TestDBCompact(t *testing.T) {
 			DisableWal: false,
 		})
 	}
+
 	t.Run("test compaction", func(t *testing.T) {
 		var size, sizeCompact int64
 		time.Sleep(time.Millisecond * 500)
@@ -487,6 +517,26 @@ func getValueFromVlog(db *DB, key []byte) ([]byte, error) {
 		return nil, err
 	}
 	return record.value, nil
+}
+
+func getRecordFromVlog(db *DB, key []byte) (*ValueLogRecord, error) {
+	var value []byte
+	var matchKey func(diskhash.Slot) (bool, error)
+	if db.options.IndexType == Hash {
+		matchKey = MatchKeyFunc(db, key, nil, &value)
+	}
+	position, err := db.index.Get(key, matchKey)
+	if err != nil {
+		return nil, err
+	}
+	if position == nil {
+		return nil, ErrKeyNotFound
+	}
+	record, err := db.vlog.read(position)
+	if err != nil {
+		return nil, err
+	}
+	return record, nil
 }
 
 func TestDBMultiClients(t *testing.T) {

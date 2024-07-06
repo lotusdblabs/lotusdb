@@ -81,7 +81,9 @@ func (bt *BPTree) Get(key []byte, _ ...diskhash.MatchKeyFunc) (*KeyPosition, err
 		if len(value) != 0 {
 			keyPos = new(KeyPosition)
 			keyPos.key, keyPos.partition = key, uint32(p)
-			keyPos.position = wal.DecodeChunkPosition(value)
+			// TODO: add uuid support
+			keyPos.uid.UnmarshalBinary(value[:len(keyPos.uid)])
+			keyPos.position = wal.DecodeChunkPosition(value[len(keyPos.uid):])
 		}
 		return nil
 	}); err != nil {
@@ -121,8 +123,11 @@ func (bt *BPTree) PutBatch(positions []*KeyPosition, _ ...diskhash.MatchKeyFunc)
 					case <-ctx.Done():
 						return ctx.Err()
 					default:
+						// TODO: encode uid
+						uidBytes,_ := record.uid.MarshalBinary()
 						encPos := record.position.Encode()
-						if err := bucket.Put(record.key, encPos); err != nil {
+						valueBytes := append(uidBytes, encPos...)
+						if err := bucket.Put(record.key, valueBytes); err != nil {
 							if errors.Is(err, bbolt.ErrKeyRequired) {
 								return ErrKeyIsEmpty
 							}

@@ -16,6 +16,7 @@ import (
 
 	"github.com/dgraph-io/badger/v4/y"
 	"github.com/gofrs/flock"
+	"github.com/google/uuid"
 	"github.com/rosedblabs/diskhash"
 	"github.com/rosedblabs/wal"
 	"golang.org/x/sync/errgroup"
@@ -106,6 +107,7 @@ func Open(options Options) (*DB, error) {
 		partitionNum:      uint32(options.PartitionNum),
 		hashKeyFunction:   options.KeyHashFunction,
 		compactBatchCount: options.CompactBatchCount,
+		deprecatedtableCapacity: options.deprecatedtableCapacity,
 	})
 	if err != nil {
 		return nil, err
@@ -129,6 +131,9 @@ func Open(options Options) (*DB, error) {
 			db.flushMemtable(table)
 		}
 	}
+
+	// for supporting totally clear deprecatedtable, compact deprecated key in vlog
+	db.Compact()
 
 	// start flush memtables goroutine asynchronously,
 	// memtables with new coming writes will be flushed to disk if the active memtable is full.
@@ -360,8 +365,8 @@ func (db *DB) waitMemtableSpace() error {
 // Following steps will be done:
 // 1. Iterate all records in memtable, divide them into deleted keys and log records.
 // 2. Write the log records to value log, get the positions of keys.
-// 3. Write all keys and positions to index.
-// 4. Delete the deleted keys from index.
+// 3. Add old key uuid into deprecatedtable, write all keys and positions to index.
+// 4. Add deleted key uuid into deprecatedtable, and delete the deleted keys from index.
 // 5. Delete the wal.
 func (db *DB) flushMemtable(table *memtable) {
 	db.flushLock.Lock()
@@ -371,12 +376,13 @@ func (db *DB) flushMemtable(table *memtable) {
 	var logRecords []*ValueLogRecord
 
 	// iterate all records in memtable, divide them into deleted keys and log records
+	// TODO: for every log record, we generate uuid.
 	for sklIter.SeekToFirst(); sklIter.Valid(); sklIter.Next() {
 		key, valueStruct := y.ParseKey(sklIter.Key()), sklIter.Value()
 		if valueStruct.Meta == LogRecordDeleted {
 			deletedKeys = append(deletedKeys, key)
 		} else {
-			logRecord := ValueLogRecord{key: key, value: valueStruct.Value}
+			logRecord := ValueLogRecord{key: key, value: valueStruct.Value, uid: uuid.New()}
 			logRecords = append(logRecords, &logRecord)
 		}
 	}
@@ -395,7 +401,7 @@ func (db *DB) flushMemtable(table *memtable) {
 		return
 	}
 
-	// write all keys and positions to index
+	// Add old key uuid into deprecatedtable, write all keys and positions to index.
 	var putMatchKeys []diskhash.MatchKeyFunc
 	if db.options.IndexType == Hash && len(keyPos) > 0 {
 		putMatchKeys = make([]diskhash.MatchKeyFunc, len(keyPos))
@@ -403,11 +409,24 @@ func (db *DB) flushMemtable(table *memtable) {
 			putMatchKeys[i] = MatchKeyFunc(db, keyPos[i].key, nil, nil)
 		}
 	}
+	// TODO: Add old key uuid into deprecatedtable
+	for _, record := range logRecords {
+		putKeyPos, err := db.index.Get(record.key, putMatchKeys...)
+		if err != nil {
+			log.Println("get put-key old pos fail:", err)
+		}
+		if putKeyPos != nil {
+			db.vlog.dpTables[putKeyPos.partition].addEntry(string(putKeyPos.key),putKeyPos.uid)
+		}
+	}
+
+	// Write all keys and positions to index.
 	if err = db.index.PutBatch(keyPos, putMatchKeys...); err != nil {
 		log.Println("index PutBatch failed:", err)
 		return
 	}
-	// delete the deleted keys from index
+
+	// Add deleted key uuid into deprecatedtable, and delete the deleted keys from index.
 	var deleteMatchKeys []diskhash.MatchKeyFunc
 	if db.options.IndexType == Hash && len(deletedKeys) > 0 {
 		deleteMatchKeys = make([]diskhash.MatchKeyFunc, len(deletedKeys))
@@ -415,6 +434,18 @@ func (db *DB) flushMemtable(table *memtable) {
 			deleteMatchKeys[i] = MatchKeyFunc(db, deletedKeys[i], nil, nil)
 		}
 	}
+	// TODO: get deleted key uuid, add uuid into deprecatedtable
+	for _, key := range deletedKeys {
+		delKeyPos, err := db.index.Get(key, deleteMatchKeys...)
+		if err != nil {
+			log.Println("get delete key pos fail:", err)
+		}
+		//TODO: add delKeyRecord.uid into deprecatedtable
+		if delKeyPos != nil {
+			db.vlog.dpTables[delKeyPos.partition].addEntry(string(key),delKeyPos.uid)
+		}
+	}
+	// delete the deleted keys from index
 	if err = db.index.DeleteBatch(deletedKeys, deleteMatchKeys...); err != nil {
 		log.Println("index DeleteBatch failed:", err)
 		return

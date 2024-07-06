@@ -57,6 +57,9 @@ type Options struct {
 	// writing entries to disk after reading the specified number of entries.
 	CompactBatchCount int
 
+	// deprecatedtable capacity, for every wal.
+	deprecatedtableCapacity uint32
+
 	// WaitMemSpaceTimeout specifies the timeout for waiting for space in the memtable.
 	// When all memtables are full, it will be flushed to disk by the background goroutine.
 	// But if the flush speed is slower than the write speed, there may be no space in the memtable.
@@ -129,6 +132,7 @@ var DefaultOptions = Options{
 	IndexType:        BTree,
 	//nolint:gomnd // default
 	CompactBatchCount: 10000,
+	deprecatedtableCapacity: 256,
 	//nolint:gomnd // default
 	WaitMemSpaceTimeout: 100 * time.Millisecond,
 }
