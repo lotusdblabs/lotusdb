@@ -108,6 +108,8 @@ func Open(options Options) (*DB, error) {
 		hashKeyFunction:   options.KeyHashFunction,
 		compactBatchCount: options.CompactBatchCount,
 		deprecatedtableCapacity: options.deprecatedtableCapacity,
+		deprecatedtableLowerThreshold: options.deprecatedtableLowerThreshold,
+		deprecatedtableUpperThreshold: options.deprecatedtableUpperThreshold,
 	})
 	if err != nil {
 		return nil, err

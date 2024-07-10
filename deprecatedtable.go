@@ -18,7 +18,6 @@ type (
 	// for every write/update generated an uuid, we store uuid in the table.
 	// It is useful in compaction, allowing us to know whether the kv 
 	// in the value log is up-to-date without accessing the index.
-	//
 	// we always build deprecatedtable immediately after compaction,
 	deprecatedtable struct {
 		table   map[string][]uuid.UUID // we store deprecated uuid of keys,in memory
@@ -26,9 +25,15 @@ type (
 		mu		sync.Mutex
 		options deprecatedtableOptions
 	}
-
+	// The deprecatedtableOptions used to init dptable, 
+	// and we have set some default in DefaultOptions.
+	// Here satisfy: lowerThreshold < upperThreshold <= capacity
+	// When dptable size >= lowerThreshold,it notifies autoCompact try to compact,
+	// and force compact when size arrive upperThreshold.
 	deprecatedtableOptions struct {
 		capacity uint32
+		lowerThreshold uint32
+		upperThreshold uint32
 	}
 )
 

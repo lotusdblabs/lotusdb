@@ -423,7 +423,7 @@ func TestDBFlushMemTables(t *testing.T) {
 					DisableWal: false,
 				})
 			}
-			time.Sleep(5*time.Second)
+			time.Sleep(1*time.Second)
 			assert.Equal(t, true, db.vlog.dpTables[partition].existEntry(string(log.key),record.uid))
 		}		
 	})

@@ -44,6 +44,12 @@ type valueLogOptions struct {
 
 	// deprecatedtable capacity, for every wal.
 	deprecatedtableCapacity uint32
+
+	// deprecatedtable recommend compaction size
+	deprecatedtableLowerThreshold uint32
+
+	// deprecatedtable force compaction size
+	deprecatedtableUpperThreshold uint32
 }
 
 // open wal files for value log, it will open several wal files for concurrent writing and reading
@@ -66,7 +72,12 @@ func openValueLog(options valueLogOptions) (*valueLog, error) {
 		}
 		walFiles = append(walFiles, vLogWal)
 		// TODO: add dpTable
-		dpTableOption := deprecatedtableOptions{options.deprecatedtableCapacity}
+		dpTableOption := deprecatedtableOptions{
+			options.deprecatedtableCapacity, 
+			options.deprecatedtableLowerThreshold, 
+			options.deprecatedtableUpperThreshold,
+		}
+
 		dpTable := newDeprecatedTable(dpTableOption)
 		dpTables = append(dpTables, dpTable)
 		
