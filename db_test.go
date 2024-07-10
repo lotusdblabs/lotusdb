@@ -13,6 +13,11 @@ import (
 	"github.com/stretchr/testify/require"
 )
 
+type testLog struct {
+	key   []byte
+	value []byte
+}
+
 func destroyDB(db *DB) {
 	if !db.closed {
 		err := db.Close()
@@ -406,11 +411,6 @@ func TestDBCompact(t *testing.T) {
 	require.NoError(t, err)
 	defer destroyDB(db)
 
-	type testLog struct {
-		key   []byte
-		value []byte
-	}
-
 	testlogs := []*testLog{
 		{key: []byte("key 0"), value: []byte("value 0")},
 		{key: []byte("key 1"), value: []byte("value 1")},
@@ -422,29 +422,21 @@ func TestDBCompact(t *testing.T) {
 			DisableWal: false,
 		})
 	}
-
-	numLogs := 64
-	var logs []*testLog
-	for i := 0; i < numLogs; i++ {
-		// the size of a logRecord is about 1MB (a little bigger than 1MB due to encode)
-		log := &testLog{key: util.RandomValue(2 << 18), value: util.RandomValue(2 << 18)}
-		logs = append(logs, log)
-	}
-	for _, log := range logs {
-		_ = db.PutWithOptions(log.key, log.value, WriteOptions{
-			Sync:       true,
-			DisableWal: false,
-		})
-	}
+	// write logs and flush
+	logs := produceAndWriteLogs(500, db)
+	// delete logs
 	for _, log := range logs {
 		_ = db.DeleteWithOptions(log.key, WriteOptions{
 			Sync:       true,
 			DisableWal: false,
 		})
 	}
+	// make sure deleted logs will be flush
+	produceAndWriteLogs(100, db)
+
 	t.Run("test compaction", func(t *testing.T) {
 		var size, sizeCompact int64
-		time.Sleep(time.Millisecond * 500)
+		time.Sleep(time.Millisecond * 5000)
 		size, err = util.DirSize(db.options.DirPath)
 		require.NoError(t, err)
 
@@ -487,6 +479,22 @@ func getValueFromVlog(db *DB, key []byte) ([]byte, error) {
 		return nil, err
 	}
 	return record.value, nil
+}
+
+func produceAndWriteLogs(numLogs int, db *DB) []*testLog {
+	var logs []*testLog
+	for i := 0; i < numLogs; i++ {
+		// the size of a logRecord is about 1MB (a little bigger than 1MB due to encode)
+		log := &testLog{key: util.RandomValue(1 << 5), value: util.RandomValue(1 << 20)}
+		logs = append(logs, log)
+	}
+	for _, log := range logs {
+		_ = db.PutWithOptions(log.key, log.value, WriteOptions{
+			Sync:       true,
+			DisableWal: false,
+		})
+	}
+	return logs
 }
 
 func TestDBMultiClients(t *testing.T) {
