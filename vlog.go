@@ -78,7 +78,7 @@ func openValueLog(options valueLogOptions) (*valueLog, error) {
 			options.deprecatedtableUpperThreshold,
 		}
 
-		dpTable := newDeprecatedTable(dpTableOption)
+		dpTable := newDeprecatedTable(i, dpTableOption)
 		dpTables = append(dpTables, dpTable)
 		
 	}

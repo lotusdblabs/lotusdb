@@ -44,6 +44,7 @@ type DB struct {
 	fileLock  *flock.Flock   // fileLock to prevent multiple processes from using the same database directory.
 	flushChan chan *memtable // flushChan is used to notify the flush goroutine to flush memtable to disk.
 	flushLock sync.Mutex     // flushLock is to prevent flush running while compaction doesn't occur
+	compactChan chan deprecatedtableState // compactChan is used to notify the shard need to compact
 	mu        sync.RWMutex
 	closed    bool
 	closeChan chan struct{}
@@ -373,6 +374,7 @@ func (db *DB) waitMemtableSpace() error {
 func (db *DB) flushMemtable(table *memtable) {
 	db.flushLock.Lock()
 	defer db.flushLock.Unlock()
+	fmt.Printf("flushMemtable\n")
 	sklIter := table.skl.NewIterator()
 	var deletedKeys [][]byte
 	var logRecords []*ValueLogRecord
@@ -382,8 +384,10 @@ func (db *DB) flushMemtable(table *memtable) {
 	for sklIter.SeekToFirst(); sklIter.Valid(); sklIter.Next() {
 		key, valueStruct := y.ParseKey(sklIter.Key()), sklIter.Value()
 		if valueStruct.Meta == LogRecordDeleted {
+			fmt.Printf("in skl flush detele:%d\n", key)
 			deletedKeys = append(deletedKeys, key)
 		} else {
+			fmt.Printf("in skl flush find:%d\n", key)
 			logRecord := ValueLogRecord{key: key, value: valueStruct.Value, uid: uuid.New()}
 			logRecords = append(logRecords, &logRecord)
 		}
@@ -418,7 +422,7 @@ func (db *DB) flushMemtable(table *memtable) {
 			log.Println("get put-key old pos fail:", err)
 		}
 		if putKeyPos != nil {
-			db.vlog.dpTables[putKeyPos.partition].addEntry(string(putKeyPos.key),putKeyPos.uid)
+			db.vlog.dpTables[putKeyPos.partition].addEntry(string(putKeyPos.key), putKeyPos.uid)
 		}
 	}
 
@@ -438,13 +442,14 @@ func (db *DB) flushMemtable(table *memtable) {
 	}
 	// TODO: get deleted key uuid, add uuid into deprecatedtable
 	for _, key := range deletedKeys {
+		println("flush find detele:")
 		delKeyPos, err := db.index.Get(key, deleteMatchKeys...)
 		if err != nil {
 			log.Println("get delete key pos fail:", err)
 		}
 		//TODO: add delKeyRecord.uid into deprecatedtable
 		if delKeyPos != nil {
-			db.vlog.dpTables[delKeyPos.partition].addEntry(string(key),delKeyPos.uid)
+			db.vlog.dpTables[delKeyPos.partition].addEntry(string(key), delKeyPos.uid)
 		}
 	}
 	// delete the deleted keys from index
@@ -496,6 +501,32 @@ func (db *DB) listenMemtableFlush() {
 				db.flushMemtable(table)
 			} else {
 				db.closeChan <- struct{}{}
+				return
+			}
+		case <-sig:
+			return
+		}
+	}
+}
+
+func (db *DB) listenAutoCompact() {
+	sig := make(chan os.Signal, 1)
+	signal.Notify(sig, os.Interrupt, syscall.SIGHUP, syscall.SIGINT, syscall.SIGTERM, syscall.SIGQUIT)
+	for {
+		select {
+		case state, ok := <-db.compactChan:
+			if ok {
+				if state.thresholdState == ThresholdState(ArriveUpperThreshold) {
+					// go compact now
+					continue
+				} else if state.thresholdState == ThresholdState(ArriveLowerThreshold) {
+					// check IO
+					continue
+				} else {
+					//err
+				}
+				// db.flushMemtable(table)
+			} else {
 				return
 			}
 		case <-sig:
@@ -556,6 +587,7 @@ func (db *DB) Compact() error {
 					matchKey = MatchKeyFunc(db, record.key, &hashTableKeyPos, nil)
 				}
 				keyPos, err := db.index.Get(record.key, matchKey)
+				
 				if err != nil {
 					_ = newVlogFile.Delete()
 					return err
@@ -568,7 +600,9 @@ func (db *DB) Compact() error {
 				if keyPos == nil {
 					continue
 				}
+				println("all records:", record.key,keyPos.partition == uint32(part),reflect.DeepEqual(keyPos.position, pos))
 				if keyPos.partition == uint32(part) && reflect.DeepEqual(keyPos.position, pos) {
+					println("valid records:", record.key)
 					validRecords = append(validRecords, record)
 				}
 
@@ -603,6 +637,122 @@ func (db *DB) Compact() error {
 	}
 
 	return g.Wait()
+}
+
+func (db *DB) CompactWithDeprecatedable() error {
+	db.flushLock.Lock()
+	defer db.flushLock.Unlock()
+
+	openVlogFile := func(part int, ext string) *wal.WAL {
+		walFile, err := wal.Open(wal.Options{
+			DirPath:        db.vlog.options.dirPath,
+			SegmentSize:    db.vlog.options.segmentSize,
+			SegmentFileExt: fmt.Sprintf(ext, part),
+			BlockCache:     db.vlog.options.blockCache,
+			Sync:           false, // we will sync manually
+			BytesPerSync:   0,     // the same as Sync
+		})
+		if err != nil {
+			_ = walFile.Delete()
+			panic(err)
+		}
+		return walFile
+	}
+
+	g, _ := errgroup.WithContext(context.Background())
+	for i := 0; i < int(db.vlog.options.partitionNum); i++ {
+		part := i
+		g.Go(func() error {
+			newVlogFile := openVlogFile(part, tempValueLogFileExt)
+
+			validRecords := make([]*ValueLogRecord, 0, db.vlog.options.compactBatchCount)
+			reader := db.vlog.walFiles[part].NewReader()
+			count := 0
+			// iterate all records in wal, find the valid records
+			for {
+				count++
+				chunk, pos, err := reader.Next()
+				if err != nil {
+					if errors.Is(err, io.EOF) {
+						break
+					}
+					_ = newVlogFile.Delete()
+					return err
+				}
+
+				record := decodeValueLogRecord(chunk)
+				if db.vlog.dpTables[part].existEntry(string(record.key), record.uid) {
+					// find old uuid in dptable, we skip this one.
+					continue
+				} else {
+					println("valid records:", record.key)
+					validRecords = append(validRecords, record)
+				}
+				if db.options.IndexType == Hash {
+					var hashTableKeyPos *KeyPosition
+					// var matchKey func(diskhash.Slot) (bool, error)
+					matchKey := MatchKeyFunc(db, record.key, &hashTableKeyPos, nil)
+					keyPos, err := db.index.Get(record.key, matchKey)
+					if err != nil {
+						_ = newVlogFile.Delete()
+						return err
+					}
+
+					if db.options.IndexType == Hash {
+						keyPos = hashTableKeyPos
+					}
+
+					if keyPos == nil {
+						continue
+					}
+					if keyPos.partition == uint32(part) && reflect.DeepEqual(keyPos.position, pos) {
+						validRecords = append(validRecords, record)
+					}
+				}
+
+				if count%db.vlog.options.compactBatchCount == 0 {
+					err = db.rewriteValidRecords(newVlogFile, validRecords, part)
+					if err != nil {
+						_ = newVlogFile.Delete()
+						return err
+					}
+					validRecords = validRecords[:0]
+				}
+			}
+
+			if len(validRecords) > 0 {
+				err := db.rewriteValidRecords(newVlogFile, validRecords, part)
+				if err != nil {
+					_ = newVlogFile.Delete()
+					return err
+				}
+			}
+
+			// replace the wal with the new one.
+			_ = db.vlog.walFiles[part].Delete()
+			_ = newVlogFile.Close()
+			if err := newVlogFile.RenameFileExt(fmt.Sprintf(valueLogFileExt, part)); err != nil {
+				return err
+			}
+			db.vlog.walFiles[part] = openVlogFile(part, valueLogFileExt)
+			db.vlog.dpTables[part].clean()
+			return nil
+		})
+	}
+
+	return g.Wait()
+}
+
+// AutoComapct is an automated, more fine-grained approach that does not block Bptree.
+// It dynamically detects the redundancy of each shard and decides
+// whether to compact shard based on the current IO load.
+func (db *DB) AutoCompact() error {
+	// db.flushLock.Lock()
+	// defer db.flushLock.Unlock()
+	for {
+
+	}
+	return nil
 }
 
 func (db *DB) rewriteValidRecords(walFile *wal.WAL, validRecords []*ValueLogRecord, part int) error {

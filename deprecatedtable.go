@@ -7,43 +7,55 @@ import (
 	"github.com/google/uuid"
 )
 
-const ()
+type ThresholdState int
+const (
+	ArriveLowerThreshold int = iota
+	ArriveUpperThreshold
+)
 
 var (
 	ErrDtFull = errors.New("deprecatedtable full")
 )
 
 type (
-	// Deprecatedtable is used to store old information about deleted/updated keys. 
+	// Deprecatedtable is used to store old information about deleted/updated keys.
 	// for every write/update generated an uuid, we store uuid in the table.
-	// It is useful in compaction, allowing us to know whether the kv 
+	// It is useful in compaction, allowing us to know whether the kv
 	// in the value log is up-to-date without accessing the index.
 	// we always build deprecatedtable immediately after compaction,
 	deprecatedtable struct {
-		table   map[string][]uuid.UUID // we store deprecated uuid of keys,in memory
-		size	uint32
-		mu		sync.Mutex
-		options deprecatedtableOptions
+		partition int
+		table     map[string][]uuid.UUID // we store deprecated uuid of keys,in memory
+		size      uint32
+		mu        sync.Mutex
+		options   deprecatedtableOptions
 	}
-	// The deprecatedtableOptions used to init dptable, 
+	// The deprecatedtableOptions used to init dptable,
 	// and we have set some default in DefaultOptions.
 	// Here satisfy: lowerThreshold < upperThreshold <= capacity
 	// When dptable size >= lowerThreshold,it notifies autoCompact try to compact,
 	// and force compact when size arrive upperThreshold.
 	deprecatedtableOptions struct {
-		capacity uint32
+		capacity       uint32
 		lowerThreshold uint32
 		upperThreshold uint32
+	}
+
+	// used to send message to autoCompact
+	deprecatedtableState struct {
+		partition int
+		thresholdState ThresholdState
 	}
 )
 
 // Create a new deprecatedtable.
-func newDeprecatedTable(options deprecatedtableOptions) *deprecatedtable {
-    return &deprecatedtable{
-        table:   make(map[string][]uuid.UUID),
-		size: 0,
-        options: options,
-    }
+func newDeprecatedTable(partition int, options deprecatedtableOptions) *deprecatedtable {
+	return &deprecatedtable{
+		partition: partition,
+		table:   make(map[string][]uuid.UUID),
+		size:    0,
+		options: options,
+	}
 }
 
 func (dt *deprecatedtable) isFull() bool {
@@ -55,10 +67,10 @@ func (dt *deprecatedtable) addEntry(key string, id uuid.UUID) error {
 	dt.mu.Lock()
 	defer dt.mu.Unlock()
 	if dt.isFull() {
-        return ErrDtFull
-    }
+		return ErrDtFull
+	}
 	dt.size++
-    dt.table[key] = append(dt.table[key], id)
+	dt.table[key] = append(dt.table[key], id)
 	return nil
 }
 
@@ -66,30 +78,37 @@ func (dt *deprecatedtable) addEntry(key string, id uuid.UUID) error {
 func (dt *deprecatedtable) removeEntry(key string, id uuid.UUID) {
 	dt.mu.Lock()
 	defer dt.mu.Unlock()
-    if _, exists := dt.table[key]; !exists {
-        return
-    }
-    // find and delete uuid
-    for i, v := range dt.table[key] {
-        if v == id {
+	if _, exists := dt.table[key]; !exists {
+		return
+	}
+	// find and delete uuid
+	for i, v := range dt.table[key] {
+		if v == id {
 			dt.size--
-            dt.table[key] = append(dt.table[key][:i], dt.table[key][i+1:]...)
-            return
-        }
-    }
+			dt.table[key] = append(dt.table[key][:i], dt.table[key][i+1:]...)
+			return
+		}
+	}
 }
 
 // Find if an uuid exists based on key and uuid.
 func (dt *deprecatedtable) existEntry(key string, id uuid.UUID) bool {
 	dt.mu.Lock()
 	defer dt.mu.Unlock()
-    if _, exists := dt.table[key]; !exists {
-        return false
-    }
-    for _, v := range dt.table[key] {
-        if v == id {
-            return true
-        }
-    }
-    return false
+	if _, exists := dt.table[key]; !exists {
+		return false
+	}
+	for _, v := range dt.table[key] {
+		if v == id {
+			return true
+		}
+	}
+	return false
+}
+
+func (dt *deprecatedtable) clean() {
+	dt.mu.Lock()
+    defer dt.mu.Unlock()
+    dt.table = make(map[string][]uuid.UUID)
+    dt.size = 0
 }

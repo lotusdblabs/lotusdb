@@ -10,7 +10,7 @@ func TestAddEntry(t *testing.T) {
 	options := deprecatedtableOptions{
 		capacity: 32,
 	}
-	dt := newDeprecatedTable(options)
+	dt := newDeprecatedTable(0, options)
 	uidNumber := 3
 	count := ((int)(options.capacity) - 4) / uidNumber
 	
@@ -29,7 +29,7 @@ func TestIsFull(t *testing.T) {
 	options := deprecatedtableOptions{
 		capacity: 32,
 	}
-	dt := newDeprecatedTable(options)
+	dt := newDeprecatedTable(0, options)
 	count := 31
 	for i := 0; i < count; i++ {
         uid := uuid.New()
@@ -49,7 +49,7 @@ func TestUuidExist(t *testing.T) {
 	options := deprecatedtableOptions{
 		capacity: 32,
 	}
-	dt := newDeprecatedTable(options)
+	dt := newDeprecatedTable(0, options)
 	uidNumber := 3
 	count := ((int)(options.capacity) - 4) / uidNumber
 	
@@ -71,7 +71,7 @@ func TestRemoveEntry(t *testing.T) {
 	options := deprecatedtableOptions{
 		capacity: 32,
 	}
-	dt := newDeprecatedTable(options)
+	dt := newDeprecatedTable(0, options)
 	count := 31
 	var ids []uuid.UUID
 	for i := 0; i < count; i++ {
