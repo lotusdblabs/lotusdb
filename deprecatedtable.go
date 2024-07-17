@@ -2,15 +2,22 @@ package lotusdb
 
 import (
 	"errors"
+	"hash"
+	"hash/fnv"
 	"sync"
 
 	"github.com/google/uuid"
 )
 
 type ThresholdState int
+
 const (
 	ArriveLowerThreshold int = iota
 	ArriveUpperThreshold
+)
+
+const (
+	KeyHash = 11027
 )
 
 var (
@@ -25,10 +32,12 @@ type (
 	// we always build deprecatedtable immediately after compaction,
 	deprecatedtable struct {
 		partition int
-		table     map[string][]uuid.UUID // we store deprecated uuid of keys,in memory
-		size      uint32
-		mu        sync.Mutex
-		options   deprecatedtableOptions
+		// table   map[uint32]map[uuid.UUID]bool // we store deprecated uuid of keys,in memory
+		table   map[uuid.UUID]bool
+		size    uint32
+		mu      sync.RWMutex
+		options deprecatedtableOptions
+		hasher	hash.Hash32
 	}
 	// The deprecatedtableOptions used to init dptable,
 	// and we have set some default in DefaultOptions.
@@ -43,18 +52,21 @@ type (
 
 	// used to send message to autoCompact
 	deprecatedtableState struct {
-		partition int
+		partition      int
 		thresholdState ThresholdState
 	}
 )
+
 
 // Create a new deprecatedtable.
 func newDeprecatedTable(partition int, options deprecatedtableOptions) *deprecatedtable {
 	return &deprecatedtable{
 		partition: partition,
-		table:   make(map[string][]uuid.UUID),
-		size:    0,
-		options: options,
+		// table:     make(map[uint32]map[uuid.UUID]bool),  
+		table:     make(map[uuid.UUID]bool),
+		size:      0,
+		options:   options,
+		hasher:	   fnv.New32a(),
 	}
 }
 
@@ -62,53 +74,55 @@ func (dt *deprecatedtable) isFull() bool {
 	return dt.size >= dt.options.capacity
 }
 
+func (dt *deprecatedtable) hashString(s string) uint32 {
+	dt.hasher.Reset()
+	dt.hasher.Write([]byte(s))
+	return dt.hasher.Sum32() % KeyHash
+}
+
 // Add a uuid to the specified key.
 func (dt *deprecatedtable) addEntry(key string, id uuid.UUID) error {
-	dt.mu.Lock()
-	defer dt.mu.Unlock()
+	// dt.mu.Lock()
+	// defer dt.mu.Unlock()	
 	if dt.isFull() {
 		return ErrDtFull
 	}
+    // length := len(key)
+    // if length > KeyHash {
+    //     key = key[:KeyHash]
+    // }
+	// hash:= dt.hashString(key)
+	// if dt.table[hash] == nil {
+	// 	dt.table[hash] = make(map[uuid.UUID]bool)
+	// }
+
+	// dt.table[hash][id] = true
+	dt.table[id] = true
 	dt.size++
-	dt.table[key] = append(dt.table[key], id)
 	return nil
 }
 
-// Delete an entry by key and uuid.
-func (dt *deprecatedtable) removeEntry(key string, id uuid.UUID) {
-	dt.mu.Lock()
-	defer dt.mu.Unlock()
-	if _, exists := dt.table[key]; !exists {
-		return
-	}
-	// find and delete uuid
-	for i, v := range dt.table[key] {
-		if v == id {
-			dt.size--
-			dt.table[key] = append(dt.table[key][:i], dt.table[key][i+1:]...)
-			return
-		}
-	}
+
+func (dt *deprecatedtable) existEntry(key string, id uuid.UUID) bool {
+	// dt.mu.RLock()
+	// defer dt.mu.RUnlock()
+    // length := len(key)
+    // if length > KeyHash {
+    //     key = key[:KeyHash]
+    // }
+	return dt.table[id]
+	// hash:= dt.hashString(key)
+	// if _, exists := dt.table[hash]; exists {
+	// 	return dt.table[hash][id]
+	// }
+	// return false
 }
 
-// Find if an uuid exists based on key and uuid.
-func (dt *deprecatedtable) existEntry(key string, id uuid.UUID) bool {
-	dt.mu.Lock()
-	defer dt.mu.Unlock()
-	if _, exists := dt.table[key]; !exists {
-		return false
-	}
-	for _, v := range dt.table[key] {
-		if v == id {
-			return true
-		}
-	}
-	return false
-}
 
 func (dt *deprecatedtable) clean() {
-	dt.mu.Lock()
-    defer dt.mu.Unlock()
-    dt.table = make(map[string][]uuid.UUID)
-    dt.size = 0
+	// dt.mu.Lock()
+	// defer dt.mu.Unlock()
+	// dt.table = make(map[uint32]map[uuid.UUID]bool)
+	dt.table = make(map[uuid.UUID]bool)
+	dt.size = 0
 }

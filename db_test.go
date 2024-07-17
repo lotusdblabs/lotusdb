@@ -424,12 +424,12 @@ func TestDBFlushMemTables(t *testing.T) {
 				})
 			}
 			time.Sleep(1*time.Second)
-			assert.Equal(t, true, db.vlog.dpTables[partition].existEntry(string(log.key),record.uid))
+			assert.Equal(t, true, db.vlog.dpTables[partition].existEntry(string(record.key),record.uid))
 		}		
 	})
 }
 
-func TestDBCompact(t *testing.T) {
+func TestDBCompact(t *testing.T) {	
 	options := DefaultOptions
 	path, err := os.MkdirTemp("", "db-test-compact")
 	require.NoError(t, err)
@@ -452,7 +452,7 @@ func TestDBCompact(t *testing.T) {
 		})
 	}
 	// write logs and flush
-	logs := produceAndWriteLogs(500, db)
+	logs := produceAndWriteLogs(500000, db)
 	// delete logs
 	for _, log := range logs {
 		_ = db.DeleteWithOptions(log.key, WriteOptions{
@@ -460,14 +460,72 @@ func TestDBCompact(t *testing.T) {
 			DisableWal: false,
 		})
 	}
-
+	// make sure deleted logs will be flush
+	produceAndWriteLogs(10000, db)
+	time.Sleep(time.Millisecond * 5000)
 	t.Run("test compaction", func(t *testing.T) {
 		var size, sizeCompact int64
-		time.Sleep(time.Millisecond * 5000)
+		
 		size, err = util.DirSize(db.options.DirPath)
 		require.NoError(t, err)
 
 		err = db.Compact()
+		require.NoError(t, err)
+
+		sizeCompact, err = util.DirSize(db.options.DirPath)
+		require.NoError(t, err)
+		require.Greater(t, size, sizeCompact)
+		var value []byte
+		for _, log := range testlogs {
+			value, err = getValueFromVlog(db, log.key)
+			require.NoError(t, err)
+			assert.Equal(t, log.value, value)
+		}
+	})
+}
+
+func TestDBCompactWitchDeprecateable(t *testing.T) {
+	options := DefaultOptions
+	options.deprecatedtableCapacity = 500000*2
+	path, err := os.MkdirTemp("", "db-test-compact")
+	require.NoError(t, err)
+	options.DirPath = path
+	options.CompactBatchCount = 2 << 5
+
+	db, err := Open(options)
+	require.NoError(t, err)
+	defer destroyDB(db)
+
+	testlogs := []*testLog{
+		{key: []byte("key 0"), value: []byte("value 0")},
+		{key: []byte("key 1"), value: []byte("value 1")},
+		{key: []byte("key 2"), value: []byte("value 2")},
+	}
+	for _, log := range testlogs {
+		_ = db.PutWithOptions(log.key, log.value, WriteOptions{
+			Sync:       true,
+			DisableWal: false,
+		})
+	}
+	// write logs and flush
+	logs := produceAndWriteLogs(500000, db)
+	// delete logs
+	for _, log := range logs {
+		_ = db.DeleteWithOptions(log.key, WriteOptions{
+			Sync:       true,
+			DisableWal: false,
+		})
+	}
+	// make sure deleted logs will be flush
+	produceAndWriteLogs(10000, db)
+	time.Sleep(time.Millisecond * 5000)
+	t.Run("test compaction", func(t *testing.T) {
+		var size, sizeCompact int64
+		
+		size, err = util.DirSize(db.options.DirPath)
+		require.NoError(t, err)
+
+		err = db.CompactWithDeprecatedable()
 		require.NoError(t, err)
 
 		sizeCompact, err = util.DirSize(db.options.DirPath)
@@ -506,6 +564,22 @@ func getValueFromVlog(db *DB, key []byte) ([]byte, error) {
 		return nil, err
 	}
 	return record.value, nil
+}
+
+func produceAndWriteLogs(numLogs int, db *DB) []*testLog {
+	var logs []*testLog
+	for i := 0; i < numLogs; i++ {
+		// the size of a logRecord is about 1KB (a little bigger than 1KB due to encode)
+		log := &testLog{key: []byte(string(rune(i))), value: util.RandomValue(1 << 10)}
+		logs = append(logs, log)
+	}
+	for _, log := range logs {
+		_ = db.PutWithOptions(log.key, log.value, WriteOptions{
+			Sync:       true,
+			DisableWal: false,
+		})
+	}
+	return logs
 }
 
 func getRecordFromVlog(db *DB, key []byte) (*ValueLogRecord, error) {

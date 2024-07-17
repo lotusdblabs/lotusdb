@@ -374,7 +374,7 @@ func (db *DB) waitMemtableSpace() error {
 func (db *DB) flushMemtable(table *memtable) {
 	db.flushLock.Lock()
 	defer db.flushLock.Unlock()
-	fmt.Printf("flushMemtable\n")
+	// fmt.Printf("flushMemtable\n")
 	sklIter := table.skl.NewIterator()
 	var deletedKeys [][]byte
 	var logRecords []*ValueLogRecord
@@ -384,10 +384,8 @@ func (db *DB) flushMemtable(table *memtable) {
 	for sklIter.SeekToFirst(); sklIter.Valid(); sklIter.Next() {
 		key, valueStruct := y.ParseKey(sklIter.Key()), sklIter.Value()
 		if valueStruct.Meta == LogRecordDeleted {
-			fmt.Printf("in skl flush detele:%d\n", key)
 			deletedKeys = append(deletedKeys, key)
 		} else {
-			fmt.Printf("in skl flush find:%d\n", key)
 			logRecord := ValueLogRecord{key: key, value: valueStruct.Value, uid: uuid.New()}
 			logRecords = append(logRecords, &logRecord)
 		}
@@ -422,7 +420,7 @@ func (db *DB) flushMemtable(table *memtable) {
 			log.Println("get put-key old pos fail:", err)
 		}
 		if putKeyPos != nil {
-			db.vlog.dpTables[putKeyPos.partition].addEntry(string(putKeyPos.key), putKeyPos.uid)
+			db.vlog.dpTables[putKeyPos.partition].addEntry(string(record.key), putKeyPos.uid)
 		}
 	}
 
@@ -442,14 +440,14 @@ func (db *DB) flushMemtable(table *memtable) {
 	}
 	// TODO: get deleted key uuid, add uuid into deprecatedtable
 	for _, key := range deletedKeys {
-		println("flush find detele:")
+		// println("flush find detele:")
 		delKeyPos, err := db.index.Get(key, deleteMatchKeys...)
 		if err != nil {
 			log.Println("get delete key pos fail:", err)
 		}
 		//TODO: add delKeyRecord.uid into deprecatedtable
 		if delKeyPos != nil {
-			db.vlog.dpTables[delKeyPos.partition].addEntry(string(key), delKeyPos.uid)
+			db.vlog.dpTables[delKeyPos.partition].addEntry(string(key),delKeyPos.uid)
 		}
 	}
 	// delete the deleted keys from index
@@ -563,15 +561,23 @@ func (db *DB) Compact() error {
 	for i := 0; i < int(db.vlog.options.partitionNum); i++ {
 		part := i
 		g.Go(func() error {
+			var bptreeTime time.Duration
+			var readerTime time.Duration
+			var rewriteTime time.Duration
+			var allTime time.Duration
 			newVlogFile := openVlogFile(part, tempValueLogFileExt)
 
 			validRecords := make([]*ValueLogRecord, 0, db.vlog.options.compactBatchCount)
 			reader := db.vlog.walFiles[part].NewReader()
 			count := 0
+			allsTime := time.Now()
 			// iterate all records in wal, find the valid records
 			for {
 				count++
+				clsTime := time.Now()
 				chunk, pos, err := reader.Next()
+				cleTime := time.Now()
+				readerTime += cleTime.Sub(clsTime)
 				if err != nil {
 					if errors.Is(err, io.EOF) {
 						break
@@ -579,15 +585,17 @@ func (db *DB) Compact() error {
 					_ = newVlogFile.Delete()
 					return err
 				}
-
+				
 				record := decodeValueLogRecord(chunk)
 				var hashTableKeyPos *KeyPosition
 				var matchKey func(diskhash.Slot) (bool, error)
 				if db.options.IndexType == Hash {
 					matchKey = MatchKeyFunc(db, record.key, &hashTableKeyPos, nil)
 				}
+				bptreesTime := time.Now()
 				keyPos, err := db.index.Get(record.key, matchKey)
-				
+				bptreeeTime := time.Now()
+				bptreeTime += bptreeeTime.Sub(bptreesTime)
 				if err != nil {
 					_ = newVlogFile.Delete()
 					return err
@@ -600,12 +608,10 @@ func (db *DB) Compact() error {
 				if keyPos == nil {
 					continue
 				}
-				println("all records:", record.key,keyPos.partition == uint32(part),reflect.DeepEqual(keyPos.position, pos))
 				if keyPos.partition == uint32(part) && reflect.DeepEqual(keyPos.position, pos) {
-					println("valid records:", record.key)
 					validRecords = append(validRecords, record)
 				}
-
+				rewsTime := time.Now()
 				if count%db.vlog.options.compactBatchCount == 0 {
 					err = db.rewriteValidRecords(newVlogFile, validRecords, part)
 					if err != nil {
@@ -614,10 +620,15 @@ func (db *DB) Compact() error {
 					}
 					validRecords = validRecords[:0]
 				}
+				reweTime := time.Now()
+				rewriteTime += reweTime.Sub(rewsTime)
 			}
 
 			if len(validRecords) > 0 {
+				rewsTime := time.Now()
 				err := db.rewriteValidRecords(newVlogFile, validRecords, part)
+				reweTime := time.Now()
+				rewriteTime += reweTime.Sub(rewsTime)
 				if err != nil {
 					_ = newVlogFile.Delete()
 					return err
@@ -631,7 +642,14 @@ func (db *DB) Compact() error {
 				return err
 			}
 			db.vlog.walFiles[part] = openVlogFile(part, valueLogFileExt)
+			alleTime := time.Now()
+			// clean dpTable after compact
+			
+			db.vlog.dpTables[part].clean()
 
+			allTime = alleTime.Sub(allsTime)
+			fmt.Printf("shard:%d Function took existTime:%v,reader:%v,rewriteTime:%v,all:%v\n",
+			part, bptreeTime,readerTime,rewriteTime,allTime)
 			return nil
 		})
 	}
@@ -663,15 +681,23 @@ func (db *DB) CompactWithDeprecatedable() error {
 	for i := 0; i < int(db.vlog.options.partitionNum); i++ {
 		part := i
 		g.Go(func() error {
+			var dptableTime time.Duration
+			var readerTime time.Duration
+			var rewriteTime time.Duration
+			var allTime time.Duration
 			newVlogFile := openVlogFile(part, tempValueLogFileExt)
 
 			validRecords := make([]*ValueLogRecord, 0, db.vlog.options.compactBatchCount)
 			reader := db.vlog.walFiles[part].NewReader()
 			count := 0
+			allsTime := time.Now()
 			// iterate all records in wal, find the valid records
 			for {
 				count++
+				clsTime := time.Now()
 				chunk, pos, err := reader.Next()
+				cleTime := time.Now()
+				readerTime += cleTime.Sub(clsTime)
 				if err != nil {
 					if errors.Is(err, io.EOF) {
 						break
@@ -681,13 +707,13 @@ func (db *DB) CompactWithDeprecatedable() error {
 				}
 
 				record := decodeValueLogRecord(chunk)
-				if db.vlog.dpTables[part].existEntry(string(record.key), record.uid) {
-					// find old uuid in dptable, we skip this one.
-					continue
-				} else {
-					println("valid records:", record.key)
+				startTime := time.Now()
+				if !db.vlog.dpTables[part].existEntry(string(record.key), record.uid) {
+					// not find old uuid in dptable, we add it to validRecords.
 					validRecords = append(validRecords, record)
 				}
+				endTime := time.Now()
+				dptableTime += endTime.Sub(startTime)
 				if db.options.IndexType == Hash {
 					var hashTableKeyPos *KeyPosition
 					// var matchKey func(diskhash.Slot) (bool, error)
@@ -709,15 +735,21 @@ func (db *DB) CompactWithDeprecatedable() error {
 						validRecords = append(validRecords, record)
 					}
 				}
-
+				
 				if count%db.vlog.options.compactBatchCount == 0 {
+					
+					rewsTime := time.Now()
 					err = db.rewriteValidRecords(newVlogFile, validRecords, part)
+					reweTime := time.Now()
+					rewriteTime += reweTime.Sub(rewsTime)
+
 					if err != nil {
 						_ = newVlogFile.Delete()
 						return err
 					}
 					validRecords = validRecords[:0]
 				}
+
 			}
 
 			if len(validRecords) > 0 {
@@ -735,7 +767,13 @@ func (db *DB) CompactWithDeprecatedable() error {
 				return err
 			}
 			db.vlog.walFiles[part] = openVlogFile(part, valueLogFileExt)
+			alleTime := time.Now()
+			// clean dpTable after compact
+
 			db.vlog.dpTables[part].clean()
+			allTime = alleTime.Sub(allsTime)
+			fmt.Printf("shard:%d Function took existTime:%v,reader:%v,rewriteTime:%v,all:%v\n",
+			part, dptableTime,readerTime,rewriteTime,allTime)
 			return nil
 		})
 	}
