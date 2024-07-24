@@ -116,6 +116,11 @@ func Open(options Options) (*DB, error) {
 		return nil, err
 	}
 
+	iostate, err := newioState(options.autoCompact, int32(options.readBusyThreshold), int32(options.writeBusyThreshold))
+	if err != nil {
+		return nil, err
+	}
+
 	db := &DB{
 		activeMem:   memtables[len(memtables)-1],
 		immuMems:    memtables[:len(memtables)-1],
@@ -127,6 +132,7 @@ func Open(options Options) (*DB, error) {
 		compactChan: make(chan deprecatedState),
 		options:     options,
 		batchPool:   sync.Pool{New: makeBatch},
+		iostate:     iostate,
 	}
 
 	// if there are some immutable memtables when opening the database, flush them to disk
@@ -386,7 +392,7 @@ func (db *DB) flushMemtable(table *memtable) {
 	var logRecords []*ValueLogRecord
 
 	// iterate all records in memtable, divide them into deleted keys and log records
-	// TODO: for every log record, we generate uuid.
+	// for every log record, we generate uuid.
 	for sklIter.SeekToFirst(); sklIter.Valid(); sklIter.Next() {
 		key, valueStruct := y.ParseKey(sklIter.Key()), sklIter.Value()
 		if valueStruct.Meta == LogRecordDeleted {
@@ -419,7 +425,7 @@ func (db *DB) flushMemtable(table *memtable) {
 			putMatchKeys[i] = MatchKeyFunc(db, keyPos[i].key, nil, nil)
 		}
 	}
-	// TODO: Add old key uuid into deprecatedtable
+	// Add old key uuid into deprecatedtable
 	for _, record := range logRecords {
 		putKeyPos, err := db.index.Get(record.key, putMatchKeys...)
 		if err != nil {
@@ -445,14 +451,14 @@ func (db *DB) flushMemtable(table *memtable) {
 			deleteMatchKeys[i] = MatchKeyFunc(db, deletedKeys[i], nil, nil)
 		}
 	}
-	// TODO: get deleted key uuid, add uuid into deprecatedtable
+	// get deleted key uuid, add uuid into deprecatedtable
 	for _, key := range deletedKeys {
 		// println("flush find detele:")
 		delKeyPos, err := db.index.Get(key, deleteMatchKeys...)
 		if err != nil {
 			log.Println("get delete key pos fail:", err)
 		}
-		//TODO: add delKeyRecord.uid into deprecatedtable
+		// add delKeyRecord.uid into deprecatedtable
 		if delKeyPos != nil {
 			// db.vlog.dpTables[delKeyPos.partition].addEntry(delKeyPos.uid)
 			db.vlog.setDeprecated(delKeyPos.partition, delKeyPos.uid)
@@ -498,7 +504,9 @@ func (db *DB) flushMemtable(table *memtable) {
 
 	if db.options.autoCompact {
 		// check deprecatedtable size
-		println("Deprecated table:", db.vlog.deprecatedNumber, db.options.deprecatedtableUpperThreshold, db.options.deprecatedtableLowerThreshold)
+		println("[data in flush]", "deprecatedNumber:", db.vlog.deprecatedNumber, 
+			"LowerThreshold:", db.options.deprecatedtableLowerThreshold, 
+			"UpperThreshold:", db.options.deprecatedtableUpperThreshold)
 		if db.vlog.deprecatedNumber >= db.options.deprecatedtableUpperThreshold {
 			db.compactChan <- deprecatedState{
 				thresholdState: ThresholdState(ArriveUpperThreshold),
@@ -542,9 +550,12 @@ func (db *DB) listenAutoCompact() {
 			if ok {
 				if state.thresholdState == ThresholdState(ArriveUpperThreshold) {
 					// compact right now
+					println("ArriveUpperThreshold")
 					db.CompactWithDeprecatedable()
 				} else if state.thresholdState == ThresholdState(ArriveLowerThreshold) {
-					if !db.iostate.checkFree() {
+					println("ArriveLowerThreshold")
+					if db.iostate.checkFree() {
+						println("checkFree")
 						db.CompactWithDeprecatedable()
 					}
 				}
@@ -568,7 +579,7 @@ func (db *DB) listenAutoCompact() {
 func (db *DB) Compact() error {
 	db.flushLock.Lock()
 	defer db.flushLock.Unlock()
-
+	println("[Compact data]")
 	openVlogFile := func(part int, ext string) *wal.WAL {
 		walFile, err := wal.Open(wal.Options{
 			DirPath:        db.vlog.options.dirPath,
@@ -676,7 +687,7 @@ func (db *DB) Compact() error {
 			db.vlog.dpTables[part].clean()
 
 			allTime = alleTime.Sub(allsTime)
-			fmt.Printf("shard:%d Function took existTime:%v,reader:%v,rewriteTime:%v,all:%v\n",
+			fmt.Printf("(shard:%d) bptreeTime:%4v\treaderTIme:%4v\trewriteTime:%4v\tall:%4v\n",
 				part, bptreeTime, readerTime, rewriteTime, allTime)
 			return nil
 		})
@@ -688,7 +699,7 @@ func (db *DB) Compact() error {
 func (db *DB) CompactWithDeprecatedable() error {
 	db.flushLock.Lock()
 	defer db.flushLock.Unlock()
-	println("CompactWithDeprecatedable!")
+	println("[CompactWithDeprecatedable data]")
 	openVlogFile := func(part int, ext string) *wal.WAL {
 		walFile, err := wal.Open(wal.Options{
 			DirPath:        db.vlog.options.dirPath,
@@ -797,7 +808,7 @@ func (db *DB) CompactWithDeprecatedable() error {
 			db.vlog.walFiles[part] = openVlogFile(part, valueLogFileExt)
 			alleTime := time.Now()
 			allTime = alleTime.Sub(allsTime)
-			fmt.Printf("shard:%d Function took existTime:%v,reader:%v,rewriteTime:%v,all:%v\n",
+			fmt.Printf("(shard:%d) dptableTime:%4v\treader:%4v\trewriteTime:%4v\tall:%4v\n",
 				part, dptableTime, readerTime, rewriteTime, allTime)
 			return nil
 		})

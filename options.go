@@ -148,7 +148,7 @@ var DefaultOptions = Options{
 	deprecatedtableUpperThreshold: 409600, //400K
 	readBusyThreshold: 2,
 	writeBusyThreshold: 2,
-	autoCompact: false,
+	autoCompact: true,
 	//nolint:gomnd // default
 	WaitMemSpaceTimeout: 100 * time.Millisecond,
 }

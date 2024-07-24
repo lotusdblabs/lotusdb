@@ -8,6 +8,7 @@ import (
 	"os"
 	"path/filepath"
 
+	"github.com/google/uuid"
 	"github.com/rosedblabs/diskhash"
 	"github.com/rosedblabs/wal"
 	"go.etcd.io/bbolt"
@@ -81,7 +82,6 @@ func (bt *BPTree) Get(key []byte, _ ...diskhash.MatchKeyFunc) (*KeyPosition, err
 		if len(value) != 0 {
 			keyPos = new(KeyPosition)
 			keyPos.key, keyPos.partition = key, uint32(p)
-			// TODO: add uuid support
 			keyPos.uid.UnmarshalBinary(value[:len(keyPos.uid)])
 			keyPos.position = wal.DecodeChunkPosition(value[len(keyPos.uid):])
 		}
@@ -123,7 +123,6 @@ func (bt *BPTree) PutBatch(positions []*KeyPosition, _ ...diskhash.MatchKeyFunc)
 					case <-ctx.Done():
 						return ctx.Err()
 					default:
-						// TODO: encode uid
 						uidBytes,_ := record.uid.MarshalBinary()
 						encPos := record.position.Encode()
 						valueBytes := append(uidBytes, encPos...)
@@ -296,7 +295,8 @@ func (bi *bptreeIterator) Key() []byte {
 
 // Value get the current value.
 func (bi *bptreeIterator) Value() any {
-	return bi.value
+	var uid uuid.UUID
+	return bi.value[len(uid):]
 }
 
 // Valid returns whether the iterator is exhausted.

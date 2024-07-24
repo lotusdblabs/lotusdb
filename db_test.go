@@ -568,15 +568,26 @@ func TestDBAutoCompact(t *testing.T) {
 		{key: []byte("key 2"), value: []byte("value 2")},
 	}
 
-	t.Run("test compaction", func(t *testing.T) {
+	testrmlogs := []*testLog{
+		{key: []byte("key 0 rm"), value: []byte("value 0")},
+		{key: []byte("key 1 rm"), value: []byte("value 1")},
+		{key: []byte("key 2 rm"), value: []byte("value 2")},
+	}
 
+	t.Run("test compaction", func(t *testing.T) {
+		for _, log := range testlogs {
+			_ = db.PutWithOptions(log.key, log.value, WriteOptions{
+				Sync:       true,
+				DisableWal: false,
+			})
+		}
+		for _, log := range testrmlogs {
+			_ = db.DeleteWithOptions(log.key, WriteOptions{
+				Sync:       true,
+				DisableWal: false,
+			})
+		}
 		for i := 0; i <= 10; i++ {
-			for _, log := range testlogs {
-				_ = db.PutWithOptions(log.key, log.value, WriteOptions{
-					Sync:       true,
-					DisableWal: false,
-				})
-			}
 			// write logs and flush
 			logs := produceAndWriteLogs(50000, db)
 			// delete logs
@@ -607,8 +618,14 @@ func TestDBAutoCompact(t *testing.T) {
 			require.NoError(t, err)
 			assert.Equal(t, log.value, value)
 		}
+		for _, log := range testrmlogs {
+			value, err = db.Get(log.key)
+			require.Error(t, err)
+			assert.Equal(t, []byte(nil), value)
+		}
 	})
 }
+
 
 func getValueFromVlog(db *DB, key []byte) ([]byte, error) {
 	var value []byte

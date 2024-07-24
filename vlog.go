@@ -57,7 +57,7 @@ type valueLogOptions struct {
 
 // open wal files for value log, it will open several wal files for concurrent writing and reading
 // the number of wal files is specified by the partitionNum.
-// init deprecatedtable for every wal, TODO: we should build dpTable aftering compacting vlog.
+// init deprecatedtable for every wal, we should build dpTable aftering compacting vlog.
 func openValueLog(options valueLogOptions) (*valueLog, error) {
 	var walFiles []*wal.WAL
 	var dpTables []*deprecatedtable
@@ -74,7 +74,7 @@ func openValueLog(options valueLogOptions) (*valueLog, error) {
 			return nil, err
 		}
 		walFiles = append(walFiles, vLogWal)
-		// TODO: add dpTable
+		// init dpTable
 		dpTableOption := deprecatedtableOptions{
 			options.deprecatedtableCapacity,
 			options.deprecatedtableLowerThreshold,
@@ -145,7 +145,6 @@ func (vlog *valueLog) writeBatch(records []*ValueLogRecord) ([]*KeyPosition, err
 				keyPositions = append(keyPositions, &KeyPosition{
 					key:       partitionRecords[part][writeIdx+i].key,
 					partition: uint32(part),
-					// TODO: add uid support
 					uid:      partitionRecords[part][writeIdx+i].uid,
 					position: pos,
 				})
@@ -194,7 +193,7 @@ func (vlog *valueLog) getKeyPartition(key []byte) int {
 	return int(vlog.options.hashKeyFunction(key) % uint64(vlog.options.partitionNum))
 }
 
-//TODO: we add middle layer of DeprecatedTable for interacting with autoCompact func.
+// we add middle layer of DeprecatedTable for interacting with autoCompact func.
 func (vlog *valueLog) setDeprecated(partition uint32, id uuid.UUID) {
 	vlog.dpTables[partition].addEntry(id)
 	vlog.deprecatedNumber++
