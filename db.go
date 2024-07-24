@@ -37,19 +37,20 @@ const (
 // It combines the advantages of LSM tree and B+ tree, read and write are both very fast.
 // It is also very memory efficient, and can store billions of key-value pairs in a single machine.
 type DB struct {
-	activeMem *memtable      // Active memtable for writing.
-	immuMems  []*memtable    // Immutable memtables, waiting to be flushed to disk.
-	index     Index          // index is multi-partition indexes to store key and chunk position.
-	vlog      *valueLog      // vlog is the value log.
-	fileLock  *flock.Flock   // fileLock to prevent multiple processes from using the same database directory.
-	flushChan chan *memtable // flushChan is used to notify the flush goroutine to flush memtable to disk.
-	flushLock sync.Mutex     // flushLock is to prevent flush running while compaction doesn't occur
-	compactChan chan deprecatedtableState // compactChan is used to notify the shard need to compact
-	mu        sync.RWMutex
-	closed    bool
-	closeChan chan struct{}
-	options   Options
-	batchPool sync.Pool // batchPool is a pool of batch, to reduce the cost of memory allocation.
+	activeMem   *memtable            // Active memtable for writing.
+	immuMems    []*memtable          // Immutable memtables, waiting to be flushed to disk.
+	index       Index                // index is multi-partition indexes to store key and chunk position.
+	vlog        *valueLog            // vlog is the value log.
+	fileLock    *flock.Flock         // fileLock to prevent multiple processes from using the same database directory.
+	flushChan   chan *memtable       // flushChan is used to notify the flush goroutine to flush memtable to disk.
+	flushLock   sync.Mutex           // flushLock is to prevent flush running while compaction doesn't occur
+	compactChan chan deprecatedState // compactChan is used to notify the shard need to compact
+	iostate     ioState              // record the current system IO status
+	mu          sync.RWMutex
+	closed      bool
+	closeChan   chan struct{}
+	options     Options
+	batchPool   sync.Pool // batchPool is a pool of batch, to reduce the cost of memory allocation.
 }
 
 // Open a database with the specified options.
@@ -102,13 +103,12 @@ func Open(options Options) (*DB, error) {
 
 	// open value log
 	vlog, err := openValueLog(valueLogOptions{
-		dirPath:           options.DirPath,
-		segmentSize:       options.ValueLogFileSize,
-		blockCache:        options.BlockCache,
-		partitionNum:      uint32(options.PartitionNum),
-		hashKeyFunction:   options.KeyHashFunction,
-		compactBatchCount: options.CompactBatchCount,
-		deprecatedtableCapacity: options.deprecatedtableCapacity,
+		dirPath:                       options.DirPath,
+		segmentSize:                   options.ValueLogFileSize,
+		blockCache:                    options.BlockCache,
+		partitionNum:                  uint32(options.PartitionNum),
+		hashKeyFunction:               options.KeyHashFunction,
+		compactBatchCount:             options.CompactBatchCount,
 		deprecatedtableLowerThreshold: options.deprecatedtableLowerThreshold,
 		deprecatedtableUpperThreshold: options.deprecatedtableUpperThreshold,
 	})
@@ -117,15 +117,16 @@ func Open(options Options) (*DB, error) {
 	}
 
 	db := &DB{
-		activeMem: memtables[len(memtables)-1],
-		immuMems:  memtables[:len(memtables)-1],
-		index:     index,
-		vlog:      vlog,
-		fileLock:  fileLock,
-		flushChan: make(chan *memtable, options.MemtableNums-1),
-		closeChan: make(chan struct{}),
-		options:   options,
-		batchPool: sync.Pool{New: makeBatch},
+		activeMem:   memtables[len(memtables)-1],
+		immuMems:    memtables[:len(memtables)-1],
+		index:       index,
+		vlog:        vlog,
+		fileLock:    fileLock,
+		flushChan:   make(chan *memtable, options.MemtableNums-1),
+		closeChan:   make(chan struct{}),
+		compactChan: make(chan deprecatedState),
+		options:     options,
+		batchPool:   sync.Pool{New: makeBatch},
 	}
 
 	// if there are some immutable memtables when opening the database, flush them to disk
@@ -141,6 +142,11 @@ func Open(options Options) (*DB, error) {
 	// start flush memtables goroutine asynchronously,
 	// memtables with new coming writes will be flushed to disk if the active memtable is full.
 	go db.listenMemtableFlush()
+
+	// listen deprecatedtable state, and compact automatically.
+	if options.autoCompact {
+		go db.listenAutoCompact()
+	}
 
 	return db, nil
 }
@@ -420,7 +426,8 @@ func (db *DB) flushMemtable(table *memtable) {
 			log.Println("get put-key old pos fail:", err)
 		}
 		if putKeyPos != nil {
-			db.vlog.dpTables[putKeyPos.partition].addEntry(string(record.key), putKeyPos.uid)
+			db.vlog.setDeprecated(putKeyPos.partition, putKeyPos.uid)
+			// db.vlog.dpTables[putKeyPos.partition].addEntry(putKeyPos.uid)
 		}
 	}
 
@@ -447,7 +454,8 @@ func (db *DB) flushMemtable(table *memtable) {
 		}
 		//TODO: add delKeyRecord.uid into deprecatedtable
 		if delKeyPos != nil {
-			db.vlog.dpTables[delKeyPos.partition].addEntry(string(key),delKeyPos.uid)
+			// db.vlog.dpTables[delKeyPos.partition].addEntry(delKeyPos.uid)
+			db.vlog.setDeprecated(delKeyPos.partition, delKeyPos.uid)
 		}
 	}
 	// delete the deleted keys from index
@@ -487,6 +495,21 @@ func (db *DB) flushMemtable(table *memtable) {
 	}
 
 	db.mu.Unlock()
+
+	if db.options.autoCompact {
+		// check deprecatedtable size
+		println("Deprecated table:", db.vlog.deprecatedNumber, db.options.deprecatedtableUpperThreshold, db.options.deprecatedtableLowerThreshold)
+		if db.vlog.deprecatedNumber >= db.options.deprecatedtableUpperThreshold {
+			db.compactChan <- deprecatedState{
+				thresholdState: ThresholdState(ArriveUpperThreshold),
+			}
+		} else if db.vlog.deprecatedNumber > db.options.deprecatedtableLowerThreshold {
+			db.compactChan <- deprecatedState{
+				thresholdState: ThresholdState(ArriveLowerThreshold),
+			}
+		}
+	}
+
 }
 
 func (db *DB) listenMemtableFlush() {
@@ -507,6 +530,9 @@ func (db *DB) listenMemtableFlush() {
 	}
 }
 
+// listenAutoComapct is an automated, more fine-grained approach that does not block Bptree.
+// It dynamically detects the redundancy of each shard and decides
+// whether to compact shard based on the current IO load.
 func (db *DB) listenAutoCompact() {
 	sig := make(chan os.Signal, 1)
 	signal.Notify(sig, os.Interrupt, syscall.SIGHUP, syscall.SIGINT, syscall.SIGTERM, syscall.SIGQUIT)
@@ -515,15 +541,17 @@ func (db *DB) listenAutoCompact() {
 		case state, ok := <-db.compactChan:
 			if ok {
 				if state.thresholdState == ThresholdState(ArriveUpperThreshold) {
-					// go compact now
-					continue
+					// compact right now
+					db.CompactWithDeprecatedable()
 				} else if state.thresholdState == ThresholdState(ArriveLowerThreshold) {
-					// check IO
-					continue
-				} else {
-					//err
+					if !db.iostate.checkFree() {
+						db.CompactWithDeprecatedable()
+					}
 				}
-				// db.flushMemtable(table)
+				for len(db.compactChan) > 0 {
+					// discard squeezed messages
+					<-db.compactChan
+				}
 			} else {
 				return
 			}
@@ -585,7 +613,7 @@ func (db *DB) Compact() error {
 					_ = newVlogFile.Delete()
 					return err
 				}
-				
+
 				record := decodeValueLogRecord(chunk)
 				var hashTableKeyPos *KeyPosition
 				var matchKey func(diskhash.Slot) (bool, error)
@@ -644,12 +672,12 @@ func (db *DB) Compact() error {
 			db.vlog.walFiles[part] = openVlogFile(part, valueLogFileExt)
 			alleTime := time.Now()
 			// clean dpTable after compact
-			
+
 			db.vlog.dpTables[part].clean()
 
 			allTime = alleTime.Sub(allsTime)
 			fmt.Printf("shard:%d Function took existTime:%v,reader:%v,rewriteTime:%v,all:%v\n",
-			part, bptreeTime,readerTime,rewriteTime,allTime)
+				part, bptreeTime, readerTime, rewriteTime, allTime)
 			return nil
 		})
 	}
@@ -660,7 +688,7 @@ func (db *DB) Compact() error {
 func (db *DB) CompactWithDeprecatedable() error {
 	db.flushLock.Lock()
 	defer db.flushLock.Unlock()
-
+	println("CompactWithDeprecatedable!")
 	openVlogFile := func(part int, ext string) *wal.WAL {
 		walFile, err := wal.Open(wal.Options{
 			DirPath:        db.vlog.options.dirPath,
@@ -708,7 +736,7 @@ func (db *DB) CompactWithDeprecatedable() error {
 
 				record := decodeValueLogRecord(chunk)
 				startTime := time.Now()
-				if !db.vlog.dpTables[part].existEntry(string(record.key), record.uid) {
+				if !db.vlog.isDeprecated(part, record.uid) {
 					// not find old uuid in dptable, we add it to validRecords.
 					validRecords = append(validRecords, record)
 				}
@@ -735,9 +763,9 @@ func (db *DB) CompactWithDeprecatedable() error {
 						validRecords = append(validRecords, record)
 					}
 				}
-				
+
 				if count%db.vlog.options.compactBatchCount == 0 {
-					
+
 					rewsTime := time.Now()
 					err = db.rewriteValidRecords(newVlogFile, validRecords, part)
 					reweTime := time.Now()
@@ -768,30 +796,24 @@ func (db *DB) CompactWithDeprecatedable() error {
 			}
 			db.vlog.walFiles[part] = openVlogFile(part, valueLogFileExt)
 			alleTime := time.Now()
-			// clean dpTable after compact
-
-			db.vlog.dpTables[part].clean()
 			allTime = alleTime.Sub(allsTime)
 			fmt.Printf("shard:%d Function took existTime:%v,reader:%v,rewriteTime:%v,all:%v\n",
-			part, dptableTime,readerTime,rewriteTime,allTime)
+				part, dptableTime, readerTime, rewriteTime, allTime)
 			return nil
 		})
 	}
 
-	return g.Wait()
+	err := g.Wait()
+	db.vlog.cleanDeprecatedTable()
+	return err
 }
 
-// AutoComapct is an automated, more fine-grained approach that does not block Bptree.
-// It dynamically detects the redundancy of each shard and decides
-// whether to compact shard based on the current IO load.
-func (db *DB) AutoCompact() error {
-	// db.flushLock.Lock()
-	// defer db.flushLock.Unlock()
-	for {
+// func (db *DB) AutoCompact() error {
+// 	for {
 
-	}
-	return nil
-}
+// 	}
+// 	return nil
+// }
 
 func (db *DB) rewriteValidRecords(walFile *wal.WAL, validRecords []*ValueLogRecord, part int) error {
 	for _, record := range validRecords {

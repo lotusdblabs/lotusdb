@@ -57,14 +57,20 @@ type Options struct {
 	// writing entries to disk after reading the specified number of entries.
 	CompactBatchCount int
 
-	// deprecatedtable capacity, for every wal.
-	deprecatedtableCapacity uint32
-
 	// deprecatedtable recommend compaction size
 	deprecatedtableLowerThreshold uint32
 
 	// deprecatedtable force compaction size
 	deprecatedtableUpperThreshold uint32
+
+	// read IO threshold, exceeding it indicates current IO busy
+	readBusyThreshold uint32
+
+	// write IO threshold, exceeding it indicates current IO busy
+	writeBusyThreshold uint32
+
+	// autoCompact support
+	autoCompact bool
 
 	// WaitMemSpaceTimeout specifies the timeout for waiting for space in the memtable.
 	// When all memtables are full, it will be flushed to disk by the background goroutine.
@@ -138,9 +144,11 @@ var DefaultOptions = Options{
 	IndexType:        BTree,
 	//nolint:gomnd // default
 	CompactBatchCount: 10000,
-	deprecatedtableCapacity: 4096,
-	deprecatedtableLowerThreshold: 2048,
-	deprecatedtableUpperThreshold: 4096,
+	deprecatedtableLowerThreshold: 204800, //200K
+	deprecatedtableUpperThreshold: 409600, //400K
+	readBusyThreshold: 2,
+	writeBusyThreshold: 2,
+	autoCompact: false,
 	//nolint:gomnd // default
 	WaitMemSpaceTimeout: 100 * time.Millisecond,
 }

@@ -424,7 +424,7 @@ func TestDBFlushMemTables(t *testing.T) {
 				})
 			}
 			time.Sleep(1*time.Second)
-			assert.Equal(t, true, db.vlog.dpTables[partition].existEntry(string(record.key),record.uid))
+			assert.Equal(t, true, db.vlog.dpTables[partition].existEntry(record.uid))
 		}		
 	})
 }
@@ -451,18 +451,26 @@ func TestDBCompact(t *testing.T) {
 			DisableWal: false,
 		})
 	}
-	// write logs and flush
-	logs := produceAndWriteLogs(500000, db)
-	// delete logs
-	for _, log := range logs {
-		_ = db.DeleteWithOptions(log.key, WriteOptions{
-			Sync:       true,
-			DisableWal: false,
-		})
+
+	for i := 0; i <= 10; i++ {
+		for _, log := range testlogs {
+			_ = db.PutWithOptions(log.key, log.value, WriteOptions{
+				Sync:       true,
+				DisableWal: false,
+			})
+		}
+		// write logs and flush
+		logs := produceAndWriteLogs(50000, db)
+		// delete logs
+		for idx, log := range logs {
+			if idx%5==0 {
+				_ = db.DeleteWithOptions(log.key, WriteOptions{
+					Sync:       true,
+					DisableWal: false,
+				})
+			}
+		}
 	}
-	// make sure deleted logs will be flush
-	produceAndWriteLogs(10000, db)
-	time.Sleep(time.Millisecond * 5000)
 	t.Run("test compaction", func(t *testing.T) {
 		var size, sizeCompact int64
 		
@@ -486,7 +494,6 @@ func TestDBCompact(t *testing.T) {
 
 func TestDBCompactWitchDeprecateable(t *testing.T) {
 	options := DefaultOptions
-	options.deprecatedtableCapacity = 500000*2
 	path, err := os.MkdirTemp("", "db-test-compact")
 	require.NoError(t, err)
 	options.DirPath = path
@@ -501,25 +508,88 @@ func TestDBCompactWitchDeprecateable(t *testing.T) {
 		{key: []byte("key 1"), value: []byte("value 1")},
 		{key: []byte("key 2"), value: []byte("value 2")},
 	}
-	for _, log := range testlogs {
-		_ = db.PutWithOptions(log.key, log.value, WriteOptions{
-			Sync:       true,
-			DisableWal: false,
-		})
+	for i := 0; i <= 10; i++ {
+		for _, log := range testlogs {
+			_ = db.PutWithOptions(log.key, log.value, WriteOptions{
+				Sync:       true,
+				DisableWal: false,
+			})
+		}
+		// write logs and flush
+		logs := produceAndWriteLogs(50000, db)
+		// delete logs
+		for idx, log := range logs {
+			if idx%5==0 {
+				_ = db.DeleteWithOptions(log.key, WriteOptions{
+					Sync:       true,
+					DisableWal: false,
+				})
+			}
+		}
 	}
-	// write logs and flush
-	logs := produceAndWriteLogs(500000, db)
-	// delete logs
-	for _, log := range logs {
-		_ = db.DeleteWithOptions(log.key, WriteOptions{
-			Sync:       true,
-			DisableWal: false,
-		})
-	}
-	// make sure deleted logs will be flush
-	produceAndWriteLogs(10000, db)
-	time.Sleep(time.Millisecond * 5000)
+
+	// time.Sleep(time.Millisecond * 5000)
 	t.Run("test compaction", func(t *testing.T) {
+		var size, sizeCompact int64
+		
+		size, err = util.DirSize(db.options.DirPath)
+		require.NoError(t, err)
+
+		err = db.CompactWithDeprecatedable()
+		require.NoError(t, err)
+
+		sizeCompact, err = util.DirSize(db.options.DirPath)
+		require.NoError(t, err)
+		require.Greater(t, size, sizeCompact)
+		var value []byte
+		for _, log := range testlogs {
+			value, err = getValueFromVlog(db, log.key)
+			require.NoError(t, err)
+			assert.Equal(t, log.value, value)
+		}
+	})
+}
+
+func TestDBAutoCompact(t *testing.T) {
+	options := DefaultOptions
+	options.autoCompact = true
+	path, err := os.MkdirTemp("", "db-test-compact")
+	require.NoError(t, err)
+	options.DirPath = path
+	options.CompactBatchCount = 2 << 5
+
+	db, err := Open(options)
+	require.NoError(t, err)
+	defer destroyDB(db)
+
+	testlogs := []*testLog{
+		{key: []byte("key 0"), value: []byte("value 0")},
+		{key: []byte("key 1"), value: []byte("value 1")},
+		{key: []byte("key 2"), value: []byte("value 2")},
+	}
+
+	t.Run("test compaction", func(t *testing.T) {
+
+		for i := 0; i <= 10; i++ {
+			for _, log := range testlogs {
+				_ = db.PutWithOptions(log.key, log.value, WriteOptions{
+					Sync:       true,
+					DisableWal: false,
+				})
+			}
+			// write logs and flush
+			logs := produceAndWriteLogs(50000, db)
+			// delete logs
+			for idx, log := range logs {
+				if idx%5==0 {
+					_ = db.DeleteWithOptions(log.key, WriteOptions{
+						Sync:       true,
+						DisableWal: false,
+					})
+				}
+			}
+		}
+
 		var size, sizeCompact int64
 		
 		size, err = util.DirSize(db.options.DirPath)

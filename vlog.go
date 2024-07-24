@@ -4,6 +4,7 @@ import (
 	"context"
 	"fmt"
 
+	"github.com/google/uuid"
 	"github.com/rosedblabs/wal"
 	"golang.org/x/sync/errgroup"
 )
@@ -16,9 +17,11 @@ const (
 // valueLog value log is named after the concept in Wisckey paper
 // https://www.usenix.org/system/files/conference/fast16/fast16-papers-lu.pdf
 type valueLog struct {
-	walFiles []*wal.WAL
-	dpTables []*deprecatedtable
-	options  valueLogOptions
+	walFiles         []*wal.WAL
+	dpTables         []*deprecatedtable
+	deprecatedNumber uint32
+	compactChan chan deprecatedState
+	options          valueLogOptions
 }
 
 type valueLogOptions struct {
@@ -73,14 +76,14 @@ func openValueLog(options valueLogOptions) (*valueLog, error) {
 		walFiles = append(walFiles, vLogWal)
 		// TODO: add dpTable
 		dpTableOption := deprecatedtableOptions{
-			options.deprecatedtableCapacity, 
-			options.deprecatedtableLowerThreshold, 
+			options.deprecatedtableCapacity,
+			options.deprecatedtableLowerThreshold,
 			options.deprecatedtableUpperThreshold,
 		}
 
 		dpTable := newDeprecatedTable(i, dpTableOption)
 		dpTables = append(dpTables, dpTable)
-		
+
 	}
 
 	return &valueLog{walFiles: walFiles, dpTables: dpTables, options: options}, nil
@@ -143,8 +146,8 @@ func (vlog *valueLog) writeBatch(records []*ValueLogRecord) ([]*KeyPosition, err
 					key:       partitionRecords[part][writeIdx+i].key,
 					partition: uint32(part),
 					// TODO: add uid support
-					uid:	   partitionRecords[part][writeIdx+i].uid,
-					position:  pos,
+					uid:      partitionRecords[part][writeIdx+i].uid,
+					position: pos,
 				})
 			}
 			posChan <- keyPositions
@@ -190,3 +193,21 @@ func (vlog *valueLog) close() error {
 func (vlog *valueLog) getKeyPartition(key []byte) int {
 	return int(vlog.options.hashKeyFunction(key) % uint64(vlog.options.partitionNum))
 }
+
+//TODO: we add middle layer of DeprecatedTable for interacting with autoCompact func.
+func (vlog *valueLog) setDeprecated(partition uint32, id uuid.UUID) {
+	vlog.dpTables[partition].addEntry(id)
+	vlog.deprecatedNumber++
+}
+
+func (vlog *valueLog) isDeprecated(partition int, id uuid.UUID) bool {
+	return vlog.dpTables[partition].existEntry(id)
+}
+
+func (vlog *valueLog) cleanDeprecatedTable() {
+	for i := 0; i < int(vlog.options.partitionNum); i++ {
+		vlog.dpTables[i].clean()
+	}
+	vlog.deprecatedNumber = 0
+}
+

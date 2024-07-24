@@ -119,6 +119,9 @@ func (b *Batch) Put(key []byte, value []byte) error {
 
 // Get retrieves the value associated with a given key from the batch.
 func (b *Batch) Get(key []byte) ([]byte, error) {
+	b.db.iostate.LogRead(1)
+	defer b.db.iostate.DelogRead(1)
+	
 	if len(key) == 0 {
 		return nil, ErrKeyIsEmpty
 	}
@@ -263,6 +266,9 @@ func (b *Batch) Commit() error {
 	if b.options.ReadOnly || len(b.pendingWrites) == 0 {
 		return nil
 	}
+
+	b.db.iostate.LogWrite(len(b.pendingWrites))
+	defer b.db.iostate.DelogWrite(len(b.pendingWrites))
 
 	b.mu.Lock()
 	defer b.mu.Unlock()
