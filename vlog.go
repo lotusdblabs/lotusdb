@@ -143,8 +143,8 @@ func (vlog *valueLog) writeBatch(records []*ValueLogRecord) ([]*KeyPosition, err
 				keyPositions = append(keyPositions, &KeyPosition{
 					key:       partitionRecords[part][writeIdx+i].key,
 					partition: uint32(part),
-					uid:      partitionRecords[part][writeIdx+i].uid,
-					position: pos,
+					uid:       partitionRecords[part][writeIdx+i].uid,
+					position:  pos,
 				})
 			}
 			posChan <- keyPositions
@@ -207,4 +207,3 @@ func (vlog *valueLog) cleanDeprecatedTable() {
 	}
 	vlog.deprecatedNumber = 0
 }
-

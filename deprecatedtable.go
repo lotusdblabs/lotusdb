@@ -41,7 +41,6 @@ type (
 	}
 )
 
-
 // Create a new deprecatedtable.
 func newDeprecatedTable(partition int, options deprecatedtableOptions) *deprecatedtable {
 	return &deprecatedtable{
@@ -58,11 +57,9 @@ func (dt *deprecatedtable) addEntry(id uuid.UUID) {
 	dt.size++
 }
 
-
 func (dt *deprecatedtable) existEntry(id uuid.UUID) bool {
 	return dt.table[id]
 }
-
 
 func (dt *deprecatedtable) clean() {
 	dt.table = make(map[uuid.UUID]bool)

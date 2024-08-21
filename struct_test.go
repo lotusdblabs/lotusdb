@@ -16,7 +16,7 @@ func TestEncodeDecodeValueLogRecord(t *testing.T) {
 	record := &ValueLogRecord{
 		key:   key,
 		value: value,
-		uid:  uuidVal,
+		uid:   uuidVal,
 	}
 
 	// Encode the record

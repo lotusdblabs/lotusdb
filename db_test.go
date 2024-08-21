@@ -410,8 +410,8 @@ func TestDBFlushMemTables(t *testing.T) {
 
 		for _, log := range delLogs {
 			partition := db.vlog.getKeyPartition(log.key)
-			record,_ := getRecordFromVlog(db, log.key)
-			_ = db.DeleteWithOptions(log.key,  WriteOptions{
+			record, _ := getRecordFromVlog(db, log.key)
+			_ = db.DeleteWithOptions(log.key, WriteOptions{
 				Sync:       true,
 				DisableWal: false,
 			})
@@ -423,13 +423,13 @@ func TestDBFlushMemTables(t *testing.T) {
 					DisableWal: false,
 				})
 			}
-			time.Sleep(1*time.Second)
+			time.Sleep(1 * time.Second)
 			assert.True(t, true, db.vlog.dpTables[partition].existEntry(record.uid))
-		}		
+		}
 	})
 }
 
-func TestDBCompact(t *testing.T) {	
+func TestDBCompact(t *testing.T) {
 	options := DefaultOptions
 	options.autoCompact = false
 	path, err := os.MkdirTemp("", "db-test-compact")
@@ -464,7 +464,7 @@ func TestDBCompact(t *testing.T) {
 		logs := produceAndWriteLogs(50000, db)
 		// delete logs
 		for idx, log := range logs {
-			if idx%5==0 {
+			if idx%5 == 0 {
 				_ = db.DeleteWithOptions(log.key, WriteOptions{
 					Sync:       true,
 					DisableWal: false,
@@ -474,7 +474,7 @@ func TestDBCompact(t *testing.T) {
 	}
 	t.Run("test compaction", func(t *testing.T) {
 		var size, sizeCompact int64
-		
+
 		size, err = util.DirSize(db.options.DirPath)
 		require.NoError(t, err)
 
@@ -521,7 +521,7 @@ func TestDBCompactWitchDeprecatetable(t *testing.T) {
 		logs := produceAndWriteLogs(50000, db)
 		// delete logs
 		for idx, log := range logs {
-			if idx%5==0 {
+			if idx%5 == 0 {
 				_ = db.DeleteWithOptions(log.key, WriteOptions{
 					Sync:       true,
 					DisableWal: false,
@@ -532,7 +532,7 @@ func TestDBCompactWitchDeprecatetable(t *testing.T) {
 
 	t.Run("test compaction", func(t *testing.T) {
 		var size, sizeCompact int64
-		
+
 		size, err = util.DirSize(db.options.DirPath)
 		require.NoError(t, err)
 
@@ -593,7 +593,7 @@ func TestDBAutoCompact(t *testing.T) {
 			logs := produceAndWriteLogs(50000, db)
 			// delete logs
 			for idx, log := range logs {
-				if idx%5==0 {
+				if idx%5 == 0 {
 					_ = db.DeleteWithOptions(log.key, WriteOptions{
 						Sync:       true,
 						DisableWal: false,

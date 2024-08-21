@@ -115,7 +115,6 @@ func Open(options Options) (*DB, error) {
 		return nil, err
 	}
 
-
 	db := &DB{
 		activeMem:   memtables[len(memtables)-1],
 		immuMems:    memtables[:len(memtables)-1],
@@ -136,7 +135,7 @@ func Open(options Options) (*DB, error) {
 		}
 	}
 
-	// memory based deprecatedtable does not require persistence, 
+	// memory based deprecatedtable does not require persistence,
 	// but we need to ensure data consistency of deprecatedtable every time db starts
 	// for supporting totally clear deprecatedtable, we do compact based on bptree first
 	err = db.Compact()
@@ -507,8 +506,8 @@ func (db *DB) flushMemtable(table *memtable) {
 
 	if db.options.autoCompact {
 		// check deprecatedtable size
-		log.Println("[data in flush]", "deprecatedNumber:", db.vlog.deprecatedNumber, 
-			"LowerThreshold:", db.options.deprecatedtableLowerThreshold, 
+		log.Println("[data in flush]", "deprecatedNumber:", db.vlog.deprecatedNumber,
+			"LowerThreshold:", db.options.deprecatedtableLowerThreshold,
 			"UpperThreshold:", db.options.deprecatedtableUpperThreshold)
 		if db.vlog.deprecatedNumber >= db.options.deprecatedtableUpperThreshold {
 			db.compactChan <- deprecatedState{

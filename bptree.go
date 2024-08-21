@@ -126,7 +126,7 @@ func (bt *BPTree) PutBatch(positions []*KeyPosition, _ ...diskhash.MatchKeyFunc)
 					case <-ctx.Done():
 						return ctx.Err()
 					default:
-						uidBytes,_ := record.uid.MarshalBinary()
+						uidBytes, _ := record.uid.MarshalBinary()
 						encPos := record.position.Encode()
 						//nolint:gocritic // Need to combine uidbytes with encPos and place them in bptree
 						valueBytes := append(uidBytes, encPos...)

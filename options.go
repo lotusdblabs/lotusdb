@@ -137,10 +137,10 @@ var DefaultOptions = Options{
 	ValueLogFileSize: 1 * GB,
 	IndexType:        BTree,
 	//nolint:gomnd // default
-	CompactBatchCount: 10000,
+	CompactBatchCount:             10000,
 	deprecatedtableLowerThreshold: 2 * 100 * KB, // 200K
 	deprecatedtableUpperThreshold: 4 * 100 * KB, // 400K
-	autoCompact: true,
+	autoCompact:                   true,
 	//nolint:gomnd // default
 	WaitMemSpaceTimeout: 100 * time.Millisecond,
 }

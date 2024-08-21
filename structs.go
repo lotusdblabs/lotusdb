@@ -99,13 +99,13 @@ func decodeLogRecord(buf []byte) *LogRecord {
 type KeyPosition struct {
 	key       []byte
 	partition uint32
-	uid		  uuid.UUID
+	uid       uuid.UUID
 	position  *wal.ChunkPosition
 }
 
 // ValueLogRecord is the record of the key/value pair in the value log.
 type ValueLogRecord struct {
-	uid  uuid.UUID
+	uid   uuid.UUID
 	key   []byte
 	value []byte
 }
@@ -140,7 +140,7 @@ func decodeValueLogRecord(buf []byte) *ValueLogRecord {
 	}
 	index += len(uid)
 
-	keyLen := (int)(binary.LittleEndian.Uint32(buf[index:index+keySize]))
+	keyLen := (int)(binary.LittleEndian.Uint32(buf[index : index+keySize]))
 	index += keySize
 
 	key := make([]byte, keyLen)

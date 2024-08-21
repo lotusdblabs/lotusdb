@@ -118,7 +118,7 @@ func (b *Batch) Put(key []byte, value []byte) error {
 }
 
 // Get retrieves the value associated with a given key from the batch.
-func (b *Batch) Get(key []byte) ([]byte, error) {	
+func (b *Batch) Get(key []byte) ([]byte, error) {
 	if len(key) == 0 {
 		return nil, ErrKeyIsEmpty
 	}
