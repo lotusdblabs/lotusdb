@@ -536,7 +536,7 @@ func TestDBCompactWitchDeprecateable(t *testing.T) {
 		size, err = util.DirSize(db.options.DirPath)
 		require.NoError(t, err)
 
-		err = db.CompactWithDeprecatedable()
+		err = db.CompactWithDeprecatedtable()
 		require.NoError(t, err)
 
 		sizeCompact, err = util.DirSize(db.options.DirPath)

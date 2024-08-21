@@ -548,13 +548,13 @@ func (db *DB) listenAutoCompact() {
 				if state.thresholdState == ThresholdState(ArriveUpperThreshold) {
 					// compact right now
 					println("ArriveUpperThreshold")
-					db.CompactWithDeprecatedable()
+					db.CompactWithDeprecatedtable()
 				} else if state.thresholdState == ThresholdState(ArriveLowerThreshold) {
 					// determine whether to do compact based on the current IO state
 					// TODO: since the IO state module has not been implemented yet, we just compare it here
 					println("ArriveLowerThreshold")
 					if true {
-						db.CompactWithDeprecatedable()
+						db.CompactWithDeprecatedtable()
 					}
 				}
 				for len(db.compactChan) > 0 {
@@ -694,10 +694,10 @@ func (db *DB) Compact() error {
 	return g.Wait()
 }
 
-func (db *DB) CompactWithDeprecatedable() error {
+func (db *DB) CompactWithDeprecatedtable() error {
 	db.flushLock.Lock()
 	defer db.flushLock.Unlock()
-	println("[CompactWithDeprecatedable data]")
+	println("[CompactWithDeprecatedtable data]")
 	openVlogFile := func(part int, ext string) *wal.WAL {
 		walFile, err := wal.Open(wal.Options{
 			DirPath:        db.vlog.options.dirPath,
