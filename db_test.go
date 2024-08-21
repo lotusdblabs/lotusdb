@@ -493,7 +493,7 @@ func TestDBCompact(t *testing.T) {
 	})
 }
 
-func TestDBCompactWitchDeprecateable(t *testing.T) {
+func TestDBCompactWitchDeprecatetable(t *testing.T) {
 	options := DefaultOptions
 	options.autoCompact = false
 	path, err := os.MkdirTemp("", "db-test-compact")
