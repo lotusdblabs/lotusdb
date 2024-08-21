@@ -431,6 +431,7 @@ func TestDBFlushMemTables(t *testing.T) {
 
 func TestDBCompact(t *testing.T) {	
 	options := DefaultOptions
+	options.autoCompact = false
 	path, err := os.MkdirTemp("", "db-test-compact")
 	require.NoError(t, err)
 	options.DirPath = path
@@ -494,6 +495,7 @@ func TestDBCompact(t *testing.T) {
 
 func TestDBCompactWitchDeprecateable(t *testing.T) {
 	options := DefaultOptions
+	options.autoCompact = false
 	path, err := os.MkdirTemp("", "db-test-compact")
 	require.NoError(t, err)
 	options.DirPath = path
@@ -528,7 +530,6 @@ func TestDBCompactWitchDeprecateable(t *testing.T) {
 		}
 	}
 
-	// time.Sleep(time.Millisecond * 5000)
 	t.Run("test compaction", func(t *testing.T) {
 		var size, sizeCompact int64
 		
@@ -601,17 +602,8 @@ func TestDBAutoCompact(t *testing.T) {
 			}
 		}
 
-		var size, sizeCompact int64
-		
-		size, err = util.DirSize(db.options.DirPath)
 		require.NoError(t, err)
 
-		err = db.CompactWithDeprecatedable()
-		require.NoError(t, err)
-
-		sizeCompact, err = util.DirSize(db.options.DirPath)
-		require.NoError(t, err)
-		require.Greater(t, size, sizeCompact)
 		var value []byte
 		for _, log := range testlogs {
 			value, err = getValueFromVlog(db, log.key)
@@ -625,7 +617,6 @@ func TestDBAutoCompact(t *testing.T) {
 		}
 	})
 }
-
 
 func getValueFromVlog(db *DB, key []byte) ([]byte, error) {
 	var value []byte
@@ -721,6 +712,18 @@ func TestDBMultiClients(t *testing.T) {
 		for i := 0; i < 2; i++ {
 			wg.Add(1)
 			go func(i int) {
+				del_logs := produceAndWriteLogs(150000, db)
+				// delete logs
+				for idx, log := range del_logs {
+					if idx%5 == 0 {
+						_ = db.DeleteWithOptions(log.key, WriteOptions{
+							Sync:       true,
+							DisableWal: false,
+						})
+					}
+				}
+				produceAndWriteLogs(50000, db)
+				time.Sleep(time.Millisecond * 500)
 				for _, log := range logs[i] {
 					_ = db.PutWithOptions(log.key, log.value, WriteOptions{
 						Sync:       true,

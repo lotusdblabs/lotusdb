@@ -63,12 +63,6 @@ type Options struct {
 	// deprecatedtable force compaction size
 	deprecatedtableUpperThreshold uint32
 
-	// read IO threshold, exceeding it indicates current IO busy
-	readBusyThreshold uint32
-
-	// write IO threshold, exceeding it indicates current IO busy
-	writeBusyThreshold uint32
-
 	// autoCompact support
 	autoCompact bool
 
@@ -146,8 +140,6 @@ var DefaultOptions = Options{
 	CompactBatchCount: 10000,
 	deprecatedtableLowerThreshold: 204800, //200K
 	deprecatedtableUpperThreshold: 409600, //400K
-	readBusyThreshold: 2,
-	writeBusyThreshold: 2,
 	autoCompact: true,
 	//nolint:gomnd // default
 	WaitMemSpaceTimeout: 100 * time.Millisecond,

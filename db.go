@@ -45,7 +45,6 @@ type DB struct {
 	flushChan   chan *memtable       // flushChan is used to notify the flush goroutine to flush memtable to disk.
 	flushLock   sync.Mutex           // flushLock is to prevent flush running while compaction doesn't occur
 	compactChan chan deprecatedState // compactChan is used to notify the shard need to compact
-	iostate     ioState              // record the current system IO status
 	mu          sync.RWMutex
 	closed      bool
 	closeChan   chan struct{}
@@ -116,10 +115,6 @@ func Open(options Options) (*DB, error) {
 		return nil, err
 	}
 
-	iostate, err := newioState(options.autoCompact, int32(options.readBusyThreshold), int32(options.writeBusyThreshold))
-	if err != nil {
-		return nil, err
-	}
 
 	db := &DB{
 		activeMem:   memtables[len(memtables)-1],
@@ -132,7 +127,6 @@ func Open(options Options) (*DB, error) {
 		compactChan: make(chan deprecatedState),
 		options:     options,
 		batchPool:   sync.Pool{New: makeBatch},
-		iostate:     iostate,
 	}
 
 	// if there are some immutable memtables when opening the database, flush them to disk
@@ -142,13 +136,16 @@ func Open(options Options) (*DB, error) {
 		}
 	}
 
-	// for supporting totally clear deprecatedtable, compact deprecated key in vlog
+	// memory based deprecatedtable does not require persistence, 
+	// but we need to ensure data consistency of deprecatedtable every time db starts
+	// for supporting totally clear deprecatedtable, we do compact based on bptree first
 	db.Compact()
 
 	// start flush memtables goroutine asynchronously,
 	// memtables with new coming writes will be flushed to disk if the active memtable is full.
 	go db.listenMemtableFlush()
 
+	// start autoCompact goroutine asynchronously,
 	// listen deprecatedtable state, and compact automatically.
 	if options.autoCompact {
 		go db.listenAutoCompact()
@@ -539,8 +536,8 @@ func (db *DB) listenMemtableFlush() {
 }
 
 // listenAutoComapct is an automated, more fine-grained approach that does not block Bptree.
-// It dynamically detects the redundancy of each shard and decides
-// whether to compact shard based on the current IO load.
+// it dynamically detects the redundancy of each shard and decides
+// determine whether to do compact based on the current IO state
 func (db *DB) listenAutoCompact() {
 	sig := make(chan os.Signal, 1)
 	signal.Notify(sig, os.Interrupt, syscall.SIGHUP, syscall.SIGINT, syscall.SIGTERM, syscall.SIGQUIT)
@@ -553,9 +550,10 @@ func (db *DB) listenAutoCompact() {
 					println("ArriveUpperThreshold")
 					db.CompactWithDeprecatedable()
 				} else if state.thresholdState == ThresholdState(ArriveLowerThreshold) {
+					// determine whether to do compact based on the current IO state
+					// TODO: since the IO state module has not been implemented yet, we just compare it here
 					println("ArriveLowerThreshold")
-					if db.iostate.checkFree() {
-						println("checkFree")
+					if true {
 						db.CompactWithDeprecatedable()
 					}
 				}
@@ -818,13 +816,6 @@ func (db *DB) CompactWithDeprecatedable() error {
 	db.vlog.cleanDeprecatedTable()
 	return err
 }
-
-// func (db *DB) AutoCompact() error {
-// 	for {
-
-// 	}
-// 	return nil
-// }
 
 func (db *DB) rewriteValidRecords(walFile *wal.WAL, validRecords []*ValueLogRecord, part int) error {
 	for _, record := range validRecords {

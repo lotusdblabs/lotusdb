@@ -20,7 +20,6 @@ type valueLog struct {
 	walFiles         []*wal.WAL
 	dpTables         []*deprecatedtable
 	deprecatedNumber uint32
-	compactChan chan deprecatedState
 	options          valueLogOptions
 }
 
