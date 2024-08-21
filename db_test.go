@@ -680,6 +680,7 @@ func getRecordFromVlog(db *DB, key []byte) (*ValueLogRecord, error) {
 	return record, nil
 }
 
+//nolint:gocognit
 func TestDBMultiClients(t *testing.T) {
 	type testLog struct {
 		key   []byte

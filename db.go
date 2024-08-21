@@ -384,7 +384,7 @@ func (db *DB) waitMemtableSpace() error {
 // 4. Add deleted uuid, and delete the deleted keys from index.
 // 5. Delete the wal.
 //
-//nolint:gocognit
+//nolint:gocognit,funlen
 func (db *DB) flushMemtable(table *memtable) {
 	db.flushLock.Lock()
 	defer db.flushLock.Unlock()
@@ -549,24 +549,21 @@ func (db *DB) listenAutoCompact() {
 	for {
 		select {
 		case state, ok := <-db.compactChan:
+			var err error
+			err = nil
 			if ok {
 				if state.thresholdState == ThresholdState(ArriveUpperThreshold) {
 					// compact right now
 					log.Println("ArriveUpperThreshold")
-					err := db.CompactWithDeprecatedtable()
-					if err != nil {
-						panic(err)
-					}
+					err = db.CompactWithDeprecatedtable()
 				} else if state.thresholdState == ThresholdState(ArriveLowerThreshold) {
 					// determine whether to do compact based on the current IO state
-					// TODO: since the IO state module has not been implemented yet, we just compare it here
 					log.Println("ArriveLowerThreshold")
-					if true {
-						err := db.CompactWithDeprecatedtable()
-						if err != nil {
-							panic(err)
-						}
-					}
+					// TODO: since the IO state module has not been implemented yet, we just compare it here
+					err = db.CompactWithDeprecatedtable()
+				}
+				if err != nil {
+					panic(err)
 				}
 				for len(db.compactChan) > 0 {
 					// discard squeezed messages
@@ -584,7 +581,7 @@ func (db *DB) listenAutoCompact() {
 // Compact will iterate all values in vlog, and write the valid values to a new vlog file.
 // Then replace the old vlog file with the new one, and delete the old one.
 //
-//nolint:gocognit
+//nolint:gocognit,funlen
 func (db *DB) Compact() error {
 	db.flushLock.Lock()
 	defer db.flushLock.Unlock()
@@ -709,7 +706,7 @@ func (db *DB) Compact() error {
 // and write the valid values to a new vlog file.
 // Then replace the old vlog file with the new one, and delete the old one.
 //
-//nolint:gocognit
+//nolint:gocognit,funlen
 func (db *DB) CompactWithDeprecatedtable() error {
 	db.flushLock.Lock()
 	defer db.flushLock.Unlock()
