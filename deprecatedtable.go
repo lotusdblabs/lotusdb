@@ -16,7 +16,7 @@ type (
 	// for every write/update generated an uuid, we store uuid in the table.
 	// It is useful in compaction, allowing us to know whether the kv
 	// in the value log is up-to-date without accessing the index.
-	// we always build deprecatedtable immediately after compaction,
+	// we always build deprecatedtable immediately after compaction.
 	deprecatedtable struct {
 		partition int
 		// table   map[uint32]map[uuid.UUID]bool // we store deprecated uuid of keys,in memory
@@ -35,7 +35,7 @@ type (
 		upperThreshold uint32
 	}
 
-	// used to send message to autoCompact
+	// used to send message to autoCompact.
 	deprecatedState struct {
 		thresholdState ThresholdState
 	}
@@ -53,10 +53,9 @@ func newDeprecatedTable(partition int, options deprecatedtableOptions) *deprecat
 }
 
 // Add a uuid to the specified key.
-func (dt *deprecatedtable) addEntry(id uuid.UUID) error {
+func (dt *deprecatedtable) addEntry(id uuid.UUID) {
 	dt.table[id] = true
 	dt.size++
-	return nil
 }
 
 

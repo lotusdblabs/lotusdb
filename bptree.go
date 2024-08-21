@@ -82,7 +82,10 @@ func (bt *BPTree) Get(key []byte, _ ...diskhash.MatchKeyFunc) (*KeyPosition, err
 		if len(value) != 0 {
 			keyPos = new(KeyPosition)
 			keyPos.key, keyPos.partition = key, uint32(p)
-			keyPos.uid.UnmarshalBinary(value[:len(keyPos.uid)])
+			err := keyPos.uid.UnmarshalBinary(value[:len(keyPos.uid)])
+			if err != nil {
+				return err
+			}
 			keyPos.position = wal.DecodeChunkPosition(value[len(keyPos.uid):])
 		}
 		return nil

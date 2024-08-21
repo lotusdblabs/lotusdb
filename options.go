@@ -138,8 +138,8 @@ var DefaultOptions = Options{
 	IndexType:        BTree,
 	//nolint:gomnd // default
 	CompactBatchCount: 10000,
-	deprecatedtableLowerThreshold: 204800, //200K
-	deprecatedtableUpperThreshold: 409600, //400K
+	deprecatedtableLowerThreshold: 204800, // 200K
+	deprecatedtableUpperThreshold: 409600, // 400K
 	autoCompact: true,
 	//nolint:gomnd // default
 	WaitMemSpaceTimeout: 100 * time.Millisecond,

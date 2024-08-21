@@ -82,7 +82,6 @@ func openValueLog(options valueLogOptions) (*valueLog, error) {
 
 		dpTable := newDeprecatedTable(i, dpTableOption)
 		dpTables = append(dpTables, dpTable)
-
 	}
 
 	return &valueLog{walFiles: walFiles, dpTables: dpTables, options: options}, nil

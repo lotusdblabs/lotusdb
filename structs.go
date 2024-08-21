@@ -134,17 +134,20 @@ func decodeValueLogRecord(buf []byte) *ValueLogRecord {
 	index := 0
 	var uid uuid.UUID
 	uidBytes := buf[:len(uid)]
-	uid.UnmarshalBinary(uidBytes)
+	err := uid.UnmarshalBinary(uidBytes)
+	if err != nil {
+		return nil
+	}
 	index += len(uid)
 
 	keyLen := (int)(binary.LittleEndian.Uint32(buf[index:index+keySize]))
-	index += int(keySize)
+	index += keySize
 
 	key := make([]byte, keyLen)
 	copy(key, buf[index:index+keyLen])
-	index += int(keyLen)
+	index += keyLen
 
-	value := make([]byte, int(len(buf)-len(uid))-keyLen-keySize)
+	value := make([]byte, len(buf)-len(uid)-keyLen-keySize)
 	copy(value, buf[index:])
 
 	return &ValueLogRecord{uid: uid, key: key, value: value}

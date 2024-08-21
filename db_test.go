@@ -417,14 +417,14 @@ func TestDBFlushMemTables(t *testing.T) {
 			})
 			for i := 0; i < numLogs; i++ {
 				// the size of a logRecord is about 1MB (a little bigger than 1MB due to encode)
-				log := &testLog{key: util.RandomValue(2 << 18), value: util.RandomValue(2 << 18)}
-				_ = db.PutWithOptions(log.key, log.value, WriteOptions{
+				tlog := &testLog{key: util.RandomValue(2 << 18), value: util.RandomValue(2 << 18)}
+				_ = db.PutWithOptions(tlog.key, tlog.value, WriteOptions{
 					Sync:       true,
 					DisableWal: false,
 				})
 			}
 			time.Sleep(1*time.Second)
-			assert.Equal(t, true, db.vlog.dpTables[partition].existEntry(record.uid))
+			assert.True(t, true, db.vlog.dpTables[partition].existEntry(record.uid))
 		}		
 	})
 }
@@ -712,9 +712,9 @@ func TestDBMultiClients(t *testing.T) {
 		for i := 0; i < 2; i++ {
 			wg.Add(1)
 			go func(i int) {
-				del_logs := produceAndWriteLogs(150000, db)
+				delLogs := produceAndWriteLogs(150000, db)
 				// delete logs
-				for idx, log := range del_logs {
+				for idx, log := range delLogs {
 					if idx%5 == 0 {
 						_ = db.DeleteWithOptions(log.key, WriteOptions{
 							Sync:       true,
