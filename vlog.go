@@ -44,8 +44,8 @@ type valueLogOptions struct {
 	// writing validEntries to disk after reading the specified number of entries.
 	compactBatchCount int
 
-	// deprecatedtable capacity, for every wal.
-	deprecatedtableCapacity uint32
+	// deprecated Number
+	deprecatedtableNumber uint32
 
 	// deprecatedtable recommend compaction size
 	deprecatedtableLowerThreshold uint32
@@ -73,18 +73,18 @@ func openValueLog(options valueLogOptions) (*valueLog, error) {
 			return nil, err
 		}
 		walFiles = append(walFiles, vLogWal)
-		// init dpTable
-		dpTableOption := deprecatedtableOptions{
-			options.deprecatedtableCapacity,
-			options.deprecatedtableLowerThreshold,
-			options.deprecatedtableUpperThreshold,
-		}
-
-		dpTable := newDeprecatedTable(i, dpTableOption)
-		dpTables = append(dpTables, dpTable)
+	// init dpTable
+	dpTableOption := deprecatedtableOptions{
+		0,
+		options.deprecatedtableLowerThreshold,
+		options.deprecatedtableUpperThreshold,
 	}
 
-	return &valueLog{walFiles: walFiles, dpTables: dpTables, options: options}, nil
+		dpTable := newDeprecatedTable(i, dpTableOption)
+	dpTables = append(dpTables, dpTable)
+	}
+
+	return &valueLog{walFiles: walFiles, dpTables: dpTables,deprecatedNumber: options.deprecatedtableNumber, options: options}, nil
 }
 
 // read the value log record from the specified position.

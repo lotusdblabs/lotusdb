@@ -2,6 +2,7 @@ package lotusdb
 
 import (
 	"context"
+	"encoding/binary"
 	"errors"
 	"fmt"
 	"io"
@@ -23,7 +24,8 @@ import (
 )
 
 const (
-	fileLockName = "FLOCK"
+	fileLockName       = "FLOCK"
+	deprecatedMetaName = "DEPMETA"
 )
 
 // DB is the main structure of the LotusDB database.
@@ -83,6 +85,31 @@ func Open(options Options) (*DB, error) {
 		return nil, ErrDatabaseIsUsing
 	}
 
+	// create deprecatedMeta file if not exist, read deprecatedNumber
+	deprecatedMetaPath := filepath.Join(options.DirPath, deprecatedMetaName)
+	var deprecatedNumber uint32
+	if _, err := os.Stat(deprecatedMetaPath); os.IsNotExist(err) {
+		file, err := os.Create(deprecatedMetaPath)
+		if err != nil {
+			return nil, err
+		}
+		deprecatedNumber = 0
+		defer file.Close()
+	} else if err != nil {
+		return nil, err
+	} else {
+		file, err := os.Open(deprecatedMetaPath)
+		if err != nil {
+			return nil, err
+		}
+		err = binary.Read(file, binary.LittleEndian, &deprecatedNumber)
+		if err != nil {
+			return nil, err
+		}
+		log.Println("load deprecatedNumber:", deprecatedNumber)
+		defer file.Close()
+	}
+
 	// open all memtables
 	memtables, err := openAllMemtables(options)
 	if err != nil {
@@ -108,6 +135,7 @@ func Open(options Options) (*DB, error) {
 		partitionNum:                  uint32(options.PartitionNum),
 		hashKeyFunction:               options.KeyHashFunction,
 		compactBatchCount:             options.CompactBatchCount,
+		deprecatedtableNumber:         deprecatedNumber,
 		deprecatedtableLowerThreshold: options.deprecatedtableLowerThreshold,
 		deprecatedtableUpperThreshold: options.deprecatedtableUpperThreshold,
 	})
@@ -133,14 +161,6 @@ func Open(options Options) (*DB, error) {
 		for _, table := range db.immuMems {
 			db.flushMemtable(table)
 		}
-	}
-
-	// memory based deprecatedtable does not require persistence,
-	// but we need to ensure data consistency of deprecatedtable every time db starts
-	// for supporting totally clear deprecatedtable, we do compact based on bptree first
-	err = db.Compact()
-	if err != nil {
-		return nil, err
 	}
 
 	// start flush memtables goroutine asynchronously,
@@ -177,6 +197,21 @@ func (db *DB) Close() error {
 	if err := db.index.Close(); err != nil {
 		return err
 	}
+
+	// persist deprecated number
+	deprecatedMetaPath := filepath.Join(db.options.DirPath, deprecatedMetaName)
+	file, err := os.OpenFile(deprecatedMetaPath, os.O_RDWR|os.O_TRUNC, 0666)
+	if err != nil {
+		return err
+	}
+	deprecatedNumber := db.vlog.deprecatedNumber
+	err = binary.Write(file, binary.LittleEndian, &deprecatedNumber)
+	if err != nil {
+		return err
+	}
+	log.Println("store deprecatedNumber:", deprecatedNumber)
+	defer file.Close()
+
 	// close value log
 	if err := db.vlog.close(); err != nil {
 		return err
@@ -440,7 +475,7 @@ func (db *DB) flushMemtable(table *memtable) {
 	}
 
 	// Write all keys and positions to index.
-	if err = db.index.PutBatch(keyPos, putMatchKeys...); err != nil {
+	if _, err = db.index.PutBatch(keyPos, putMatchKeys...); err != nil {
 		log.Println("index PutBatch failed:", err)
 		return
 	}
@@ -545,6 +580,7 @@ func (db *DB) listenMemtableFlush() {
 func (db *DB) listenAutoCompact() {
 	sig := make(chan os.Signal, 1)
 	signal.Notify(sig, os.Interrupt, syscall.SIGHUP, syscall.SIGINT, syscall.SIGTERM, syscall.SIGQUIT)
+	firstCompact := true
 	for {
 		select {
 		case state, ok := <-db.compactChan:
@@ -554,12 +590,23 @@ func (db *DB) listenAutoCompact() {
 				if state.thresholdState == ThresholdState(ArriveUpperThreshold) {
 					// compact right now
 					log.Println("ArriveUpperThreshold")
-					err = db.CompactWithDeprecatedtable()
+					if firstCompact {
+						firstCompact = false
+						err = db.Compact()
+					} else {
+						err = db.CompactWithDeprecatedtable()
+					}
 				} else if state.thresholdState == ThresholdState(ArriveLowerThreshold) {
 					// determine whether to do compact based on the current IO state
 					log.Println("ArriveLowerThreshold")
 					// TODO: since the IO state module has not been implemented yet, we just compare it here
-					err = db.CompactWithDeprecatedtable()
+					if firstCompact {
+						firstCompact = false
+						err = db.Compact()
+					} else {
+						err = db.CompactWithDeprecatedtable()
+					}
+					
 				}
 				if err != nil {
 					panic(err)
@@ -851,5 +898,6 @@ func (db *DB) rewriteValidRecords(walFile *wal.WAL, validRecords []*ValueLogReco
 			matchKeys[i] = MatchKeyFunc(db, positions[i].key, nil, nil)
 		}
 	}
-	return db.index.PutBatch(positions, matchKeys...)
+	_, err = db.index.PutBatch(positions, matchKeys...)
+	return err
 }

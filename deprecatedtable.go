@@ -26,8 +26,7 @@ type (
 	}
 	// The deprecatedtableOptions used to init dptable,
 	// and we have set some default in DefaultOptions.
-	// Here satisfy: lowerThreshold < upperThreshold <= capacity
-	// When dptable size >= lowerThreshold,it notifies autoCompact try to compact all vlog,
+	// When sum of dptables number >= lowerThreshold,it notifies autoCompact try to compact all vlog,
 	// and force compact all vlog when size arrive upperThreshold.
 	deprecatedtableOptions struct {
 		capacity       uint32

@@ -97,9 +97,9 @@ func (bt *BPTree) Get(key []byte, _ ...diskhash.MatchKeyFunc) (*KeyPosition, err
 }
 
 // PutBatch puts the specified key positions into the index.
-func (bt *BPTree) PutBatch(positions []*KeyPosition, _ ...diskhash.MatchKeyFunc) error {
+func (bt *BPTree) PutBatch(positions []*KeyPosition, _ ...diskhash.MatchKeyFunc) ([]uuid.UUID, error) {
 	if len(positions) == 0 {
-		return nil
+		return nil, nil
 	}
 
 	// group positions by partition
@@ -109,7 +109,10 @@ func (bt *BPTree) PutBatch(positions []*KeyPosition, _ ...diskhash.MatchKeyFunc)
 		partitionRecords[p] = append(partitionRecords[p], pos)
 	}
 
+	// create chan to collect deprecated uuid
+	uuidChan := make(chan []uuid.UUID, len(partitionRecords))
 	g, ctx := errgroup.WithContext(context.Background())
+
 	for i := range partitionRecords {
 		partition := i
 		if len(partitionRecords[partition]) == 0 {
@@ -118,7 +121,8 @@ func (bt *BPTree) PutBatch(positions []*KeyPosition, _ ...diskhash.MatchKeyFunc)
 		g.Go(func() error {
 			// get the bolt db instance for this partition
 			tree := bt.trees[partition]
-			return tree.Update(func(tx *bbolt.Tx) error {
+			partitionDeprecateduuids := make([]uuid.UUID, 0)
+			err := tree.Update(func(tx *bbolt.Tx) error {
 				bucket := tx.Bucket(indexBucketName)
 				// put each record into the bucket
 				for _, record := range partitionRecords[partition] {
@@ -130,19 +134,49 @@ func (bt *BPTree) PutBatch(positions []*KeyPosition, _ ...diskhash.MatchKeyFunc)
 						encPos := record.position.Encode()
 						//nolint:gocritic // Need to combine uidbytes with encPos and place them in bptree
 						valueBytes := append(uidBytes, encPos...)
-						if err := bucket.Put(record.key, valueBytes); err != nil {
+						if err, oldValue := bucket.Put(record.key, valueBytes); err != nil {
 							if errors.Is(err, bbolt.ErrKeyRequired) {
 								return ErrKeyIsEmpty
 							}
 							return err
+						} else {
+							if oldValue != nil {
+								var uid uuid.UUID
+								err := uid.UnmarshalBinary(oldValue[:len(uid)])
+								partitionDeprecateduuids = append(partitionDeprecateduuids, uid)
+								if err != nil {
+									return err
+								}
+							}
 						}
 					}
 				}
 				return nil
 			})
+			// send deprecateduuid uuid slice to chan
+			// log.Println("send deprecateduuid uuid slice to chan")
+			uuidChan <- partitionDeprecateduuids
+			return err
 		})
 	}
-	return g.Wait()
+	// Close the channel after all goroutines are done
+	go func() {
+		g.Wait()
+		close(uuidChan)
+	}()
+
+	var deprecateduuids []uuid.UUID
+	for partitionDeprecateduuids := range uuidChan {
+		// log.Println("recv deprecateduuid uuid slice")
+		deprecateduuids = append(deprecateduuids, partitionDeprecateduuids...)
+	}
+	
+	// Wait for all goroutines to finish
+	if err := g.Wait(); err != nil {
+		return nil, err
+	}
+
+	return deprecateduuids, nil
 }
 
 // DeleteBatch deletes the specified keys from the index.
@@ -179,7 +213,7 @@ func (bt *BPTree) DeleteBatch(keys [][]byte, _ ...diskhash.MatchKeyFunc) error {
 						if len(key) == 0 {
 							return ErrKeyIsEmpty
 						}
-						if err := bucket.Delete(key); err != nil {
+						if err, _ := bucket.Delete(key); err != nil {
 							return err
 						}
 					}

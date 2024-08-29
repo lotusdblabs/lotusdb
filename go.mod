@@ -33,3 +33,5 @@ require (
 	golang.org/x/sys v0.15.0 // indirect
 	gopkg.in/yaml.v3 v3.0.1 // indirect
 )
+
+replace go.etcd.io/bbolt => github.com/yanxiaoqi932/bbolt v1.3.9-0.20240828093707-ae274b5c5dae

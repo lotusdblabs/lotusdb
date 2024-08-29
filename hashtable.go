@@ -7,6 +7,7 @@ import (
 	"fmt"
 	"path/filepath"
 
+	"github.com/google/uuid"
 	"github.com/rosedblabs/diskhash"
 	"github.com/rosedblabs/wal"
 	"golang.org/x/sync/errgroup"
@@ -47,9 +48,9 @@ func openHashIndex(options indexOptions) (*HashTable, error) {
 }
 
 // PutBatch put batch records to index.
-func (ht *HashTable) PutBatch(positions []*KeyPosition, matchKeyFunc ...diskhash.MatchKeyFunc) error {
+func (ht *HashTable) PutBatch(positions []*KeyPosition, matchKeyFunc ...diskhash.MatchKeyFunc) ([]uuid.UUID, error) {
 	if len(positions) == 0 {
-		return nil
+		return nil, nil
 	}
 	partitionRecords := make([][]*KeyPosition, ht.options.partitionNum)
 	matchKeys := make([][]diskhash.MatchKeyFunc, ht.options.partitionNum)
@@ -86,7 +87,7 @@ func (ht *HashTable) PutBatch(positions []*KeyPosition, matchKeyFunc ...diskhash
 			return nil
 		})
 	}
-	return g.Wait()
+	return nil, g.Wait()
 }
 
 // Get chunk position by key.

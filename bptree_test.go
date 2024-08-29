@@ -2,12 +2,14 @@ package lotusdb
 
 import (
 	"bytes"
+	"log"
 	"os"
 	"path/filepath"
 	"strconv"
 	"testing"
 
 	"github.com/cespare/xxhash/v2"
+	"github.com/google/uuid"
 	"github.com/rosedblabs/wal"
 	"github.com/stretchr/testify/assert"
 	"github.com/stretchr/testify/require"
@@ -108,7 +110,7 @@ func testbptreeGet(t *testing.T, partitionNum int) {
 		partition: uint32(bt.options.getKeyPartition([]byte("exist"))),
 		position:  &wal.ChunkPosition{},
 	})
-	err = bt.PutBatch(keyPositions)
+	_, err = bt.PutBatch(keyPositions)
 	require.NoError(t, err)
 
 	tests := []struct {
@@ -164,14 +166,17 @@ func testbptreePutbatch(t *testing.T, partitionNum int) {
 	keyPositions = append(keyPositions, &KeyPosition{
 		key:       nil,
 		partition: 0,
+		uid:       uuid.New(),
 		position:  &wal.ChunkPosition{},
 	}, &KeyPosition{
 		key:       []byte("normal"),
 		partition: uint32(bt.options.getKeyPartition([]byte("normal"))),
+		uid:       uuid.New(),
 		position:  &wal.ChunkPosition{},
 	}, &KeyPosition{
 		key:       []byte(""),
 		partition: uint32(bt.options.getKeyPartition([]byte(""))),
+		uid:       uuid.New(),
 		position:  &wal.ChunkPosition{},
 	},
 	)
@@ -186,13 +191,106 @@ func testbptreePutbatch(t *testing.T, partitionNum int) {
 		{"normal", keyPositions[1:2], false},
 		{"len(key)=0", keyPositions[2:3], true},
 	}
+
 	for _, tt := range tests {
 		t.Run(tt.name, func(t *testing.T) {
-			if err = bt.PutBatch(tt.positions); (err != nil) != tt.wantErr {
+			if _, err = bt.PutBatch(tt.positions); (err != nil) != tt.wantErr {
 				t.Errorf("BPTree.PutBatch() error = %v, wantErr %v", err, tt.wantErr)
 			}
 		})
 	}
+
+}
+
+func TestBPtreePutbatchOldUUID(t *testing.T) {
+	partitionNum := 3
+	options := indexOptions{
+		indexType:       BTree,
+		dirPath:         filepath.Join(os.TempDir(), "bptree-putBatch-"+strconv.Itoa(partitionNum)),
+		partitionNum:    partitionNum,
+		keyHashFunction: xxhash.Sum64,
+	}
+
+	err := os.MkdirAll(options.dirPath, os.ModePerm)
+	require.NoError(t, err)
+	defer func() {
+		_ = os.RemoveAll(options.dirPath)
+	}()
+
+	bt, err := openBTreeIndex(options)
+	require.NoError(t, err)
+
+	var keyPositions []*KeyPosition
+	keyPositions = append(keyPositions, &KeyPosition{
+		key:       []byte("123"),
+		partition: uint32(bt.options.getKeyPartition([]byte("123"))),
+		uid:       uuid.New(),
+		position:  &wal.ChunkPosition{},
+	}, &KeyPosition{
+		key:       []byte("456"),
+		partition: uint32(bt.options.getKeyPartition([]byte("456"))),
+		uid:       uuid.New(),
+		position:  &wal.ChunkPosition{},
+	}, &KeyPosition{
+		key:       []byte("789"),
+		partition: uint32(bt.options.getKeyPartition([]byte("789"))),
+		uid:       uuid.New(),
+		position:  &wal.ChunkPosition{},
+	},
+	)
+
+	var coverKeyPositions []*KeyPosition
+	coverKeyPositions = append(coverKeyPositions, &KeyPosition{
+		key:       []byte("123"),
+		partition: uint32(bt.options.getKeyPartition([]byte("123"))),
+		uid:       uuid.New(),
+		position:  &wal.ChunkPosition{},
+	}, &KeyPosition{
+		key:       []byte("456"),
+		partition: uint32(bt.options.getKeyPartition([]byte("456"))),
+		uid:       uuid.New(),
+		position:  &wal.ChunkPosition{},
+	}, &KeyPosition{
+		key:       []byte("789"),
+		partition: uint32(bt.options.getKeyPartition([]byte("789"))),
+		uid:       uuid.New(),
+		position:  &wal.ChunkPosition{},
+	},
+	)
+
+	t.Run("check old uuid", func(t *testing.T) {
+		_, err = bt.PutBatch(keyPositions)
+		if err != nil {
+			t.Errorf("put error = %v", err)
+		}
+		var uids []uuid.UUID
+		uids, err = bt.PutBatch(coverKeyPositions)
+		if err != nil {
+			t.Errorf("put error = %v", err)
+		}
+		log.Println("collect uids", uids)
+		uidMap := make(map[uuid.UUID]struct{})
+		for _, id := range uids {
+			uidMap[id] = struct{}{}
+		}
+		for _, position := range keyPositions {
+			log.Println("keyPositions", position.uid)
+		}
+		for _, position := range coverKeyPositions {
+			log.Println("coverkeyPositions", position.uid)
+		}
+
+		for _, position := range keyPositions {
+			if _, exists := uidMap[position.uid]; !exists {
+				log.Println("now:", position.uid)
+				t.Errorf("uuid not exist!")
+			}
+		}
+	})
+}
+
+func TestBPTree_PutBatch_collect_uuid(t *testing.T) {
+	testbptreePutbatch(t, 3)
 }
 
 func TestBPTree_DeleteBatch_1(t *testing.T) {
@@ -228,7 +326,7 @@ func testbptreeDeletebatch(t *testing.T, partitionNum int) {
 		position:  &wal.ChunkPosition{},
 	})
 
-	err = bt.PutBatch(keyPositions)
+	_, err = bt.PutBatch(keyPositions)
 	require.NoError(t, err)
 
 	tests := []struct {
@@ -373,7 +471,7 @@ func Test_bptreeIterator(t *testing.T) {
 		position:  &wal.ChunkPosition{SegmentId: 4, BlockNumber: 4, ChunkOffset: 4, ChunkSize: 4},
 	})
 
-	err = bt.PutBatch(keyPositions)
+	_, err = bt.PutBatch(keyPositions)
 	require.NoError(t, err)
 
 	tree := bt.trees[0]
@@ -454,7 +552,7 @@ func Test_bptreeIterator(t *testing.T) {
 	require.NoError(t, err)
 
 	// prefix
-	err = bt.PutBatch(keyPositions2)
+	_, err = bt.PutBatch(keyPositions2)
 	require.NoError(t, err)
 
 	tx, err = tree.Begin(true)

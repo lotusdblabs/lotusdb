@@ -1000,3 +1000,38 @@ func TestDBIterator(t *testing.T) {
 	assert.Equal(t, ErrDBIteratorUnsupportedTypeHASH, err)
 	assert.Nil(t, itr)
 }
+
+func TestDeprecatetableMetaPersist(t *testing.T) {
+	options := DefaultOptions
+	options.autoCompact = true
+	path, err := os.MkdirTemp("", "db-test-compact")
+	require.NoError(t, err)
+	options.DirPath = path
+	options.CompactBatchCount = 2 << 5
+
+	db, err := Open(options)
+	require.NoError(t, err)
+
+	t.Run("test same deprecated number", func(t *testing.T) {
+
+		for i := 0; i <= 10; i++ {
+			// write logs and flush
+			logs := produceAndWriteLogs(20000, db)
+			// delete logs
+			for idx, log := range logs {
+				if idx%5 == 0 {
+					_ = db.DeleteWithOptions(log.key, WriteOptions{
+						Sync:       true,
+						DisableWal: false,
+					})
+				}
+			}
+		}
+		DeprecatedNumberFirst := db.vlog.deprecatedNumber
+		db.Close()
+		db, err := Open(options)
+		DeprecatedNumberSecond := db.vlog.deprecatedNumber
+		require.NoError(t, err)
+		assert.Equal(t, DeprecatedNumberFirst, DeprecatedNumberSecond)
+	})
+}
