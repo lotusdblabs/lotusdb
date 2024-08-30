@@ -205,7 +205,7 @@ func TestBPtreePutbatchOldUUID(t *testing.T) {
 	partitionNum := 3
 	options := indexOptions{
 		indexType:       BTree,
-		dirPath:         filepath.Join(os.TempDir(), "bptree-putBatch-"+strconv.Itoa(partitionNum)),
+		dirPath:         filepath.Join(os.TempDir(), "bptree-putBatch-olduuid"+strconv.Itoa(partitionNum)),
 		partitionNum:    partitionNum,
 		keyHashFunction: xxhash.Sum64,
 	}
