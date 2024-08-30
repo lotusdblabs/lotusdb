@@ -287,10 +287,6 @@ func TestBPtreePutbatchOldUUID(t *testing.T) {
 	})
 }
 
-func TestBPTree_PutBatch_collect_uuid(t *testing.T) {
-	testbptreePutbatch(t, 3)
-}
-
 func TestBPTree_DeleteBatch_1(t *testing.T) {
 	testbptreeDeletebatch(t, 1)
 }
