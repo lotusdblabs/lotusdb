@@ -205,7 +205,7 @@ func TestBPtreePutbatchOldUUID(t *testing.T) {
 	partitionNum := 3
 	options := indexOptions{
 		indexType:       BTree,
-		dirPath:         filepath.Join(os.TempDir(), "bptree-putBatch-"+strconv.Itoa(partitionNum)),
+		dirPath:         filepath.Join(os.TempDir(), "bptree-putBatch-olduuid"+strconv.Itoa(partitionNum)),
 		partitionNum:    partitionNum,
 		keyHashFunction: xxhash.Sum64,
 	}
@@ -285,10 +285,6 @@ func TestBPtreePutbatchOldUUID(t *testing.T) {
 			}
 		}
 	})
-}
-
-func TestBPTree_PutBatch_collect_uuid(t *testing.T) {
-	testbptreePutbatch(t, 3)
 }
 
 func TestBPTree_DeleteBatch_1(t *testing.T) {
