@@ -248,7 +248,7 @@ func testHashTableDeleteBatch(t *testing.T, partitionNum int) {
 	}
 	for _, tt := range tests {
 		t.Run(tt.name, func(t *testing.T) {
-			if err = ht.DeleteBatch(tt.keys, tt.matchKeyFunc...); (err != nil) != tt.wantErr {
+			if _, err = ht.DeleteBatch(tt.keys, tt.matchKeyFunc...); (err != nil) != tt.wantErr {
 				t.Errorf("HashTable.DeleteBatch() error = %v, wantErr %v", err, tt.wantErr)
 			}
 		})

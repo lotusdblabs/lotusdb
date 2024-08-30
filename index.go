@@ -1,7 +1,6 @@
 package lotusdb
 
 import (
-	"github.com/google/uuid"
 	"github.com/rosedblabs/diskhash"
 )
 
@@ -18,13 +17,13 @@ const (
 // But you can implement your own index if you want.
 type Index interface {
 	// PutBatch put batch records to index
-	PutBatch(keyPositions []*KeyPosition, matchKeyFunc ...diskhash.MatchKeyFunc) ([]uuid.UUID, error)
+	PutBatch(keyPositions []*KeyPosition, matchKeyFunc ...diskhash.MatchKeyFunc) ([]*KeyPosition, error)
 
 	// Get chunk position by key
 	Get(key []byte, matchKeyFunc ...diskhash.MatchKeyFunc) (*KeyPosition, error)
 
 	// DeleteBatch delete batch records from index
-	DeleteBatch(keys [][]byte, matchKeyFunc ...diskhash.MatchKeyFunc) error
+	DeleteBatch(keys [][]byte, matchKeyFunc ...diskhash.MatchKeyFunc) ([]*KeyPosition, error)
 
 	// Sync sync index data to disk
 	Sync() error

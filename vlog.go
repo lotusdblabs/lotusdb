@@ -73,18 +73,18 @@ func openValueLog(options valueLogOptions) (*valueLog, error) {
 			return nil, err
 		}
 		walFiles = append(walFiles, vLogWal)
-	// init dpTable
-	dpTableOption := deprecatedtableOptions{
-		0,
-		options.deprecatedtableLowerThreshold,
-		options.deprecatedtableUpperThreshold,
-	}
+		// init dpTable
+		dpTableOption := deprecatedtableOptions{
+			0,
+			options.deprecatedtableLowerThreshold,
+			options.deprecatedtableUpperThreshold,
+		}
 
 		dpTable := newDeprecatedTable(i, dpTableOption)
-	dpTables = append(dpTables, dpTable)
+		dpTables = append(dpTables, dpTable)
 	}
 
-	return &valueLog{walFiles: walFiles, dpTables: dpTables,deprecatedNumber: options.deprecatedtableNumber, options: options}, nil
+	return &valueLog{walFiles: walFiles, dpTables: dpTables, deprecatedNumber: options.deprecatedtableNumber, options: options}, nil
 }
 
 // read the value log record from the specified position.

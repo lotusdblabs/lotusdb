@@ -461,23 +461,27 @@ func (db *DB) flushMemtable(table *memtable) {
 			putMatchKeys[i] = MatchKeyFunc(db, keyPos[i].key, nil, nil)
 		}
 	}
-	// Add old key uuid into deprecatedtable
-	for _, record := range logRecords {
-		var putKeyPos *KeyPosition
-		putKeyPos, err = db.index.Get(record.key, putMatchKeys...)
-		if err != nil {
-			log.Println("get put-key old pos fail:", err)
-		}
-		if putKeyPos != nil {
-			db.vlog.setDeprecated(putKeyPos.partition, putKeyPos.uid)
-			// db.vlog.dpTables[putKeyPos.partition].addEntry(putKeyPos.uid)
-		}
-	}
+	// // Add old key uuid into deprecatedtable
+	// for _, record := range logRecords {
+	// 	var putKeyPos *KeyPosition
+	// 	putKeyPos, err = db.index.Get(record.key, putMatchKeys...)
+	// 	if err != nil {
+	// 		log.Println("get put-key old pos fail:", err)
+	// 	}
+	// 	if putKeyPos != nil {
+	// 		db.vlog.setDeprecated(putKeyPos.partition, putKeyPos.uid)
+	// 		// db.vlog.dpTables[putKeyPos.partition].addEntry(putKeyPos.uid)
+	// 	}
+	// }
 
 	// Write all keys and positions to index.
-	if _, err = db.index.PutBatch(keyPos, putMatchKeys...); err != nil {
+	oldKeyPostions, err := db.index.PutBatch(keyPos, putMatchKeys...)
+	if err != nil {
 		log.Println("index PutBatch failed:", err)
 		return
+	}
+	for _, oldKeyPostion := range oldKeyPostions {
+		db.vlog.setDeprecated(oldKeyPostion.partition, oldKeyPostion.uid)
 	}
 
 	// Add deleted key uuid into deprecatedtable, and delete the deleted keys from index.
@@ -488,23 +492,26 @@ func (db *DB) flushMemtable(table *memtable) {
 			deleteMatchKeys[i] = MatchKeyFunc(db, deletedKeys[i], nil, nil)
 		}
 	}
-	// get deleted key uuid, add uuid into deprecatedtable
-	for _, key := range deletedKeys {
-		var delKeyPos *KeyPosition
-		delKeyPos, err = db.index.Get(key, deleteMatchKeys...)
-		if err != nil {
-			log.Println("get delete key pos fail:", err)
-		}
-		// add delKeyRecord.uid into deprecatedtable
-		if delKeyPos != nil {
-			// db.vlog.dpTables[delKeyPos.partition].addEntry(delKeyPos.uid)
-			db.vlog.setDeprecated(delKeyPos.partition, delKeyPos.uid)
-		}
-	}
+	// // get deleted key uuid, add uuid into deprecatedtable
+	// for _, key := range deletedKeys {
+	// 	var delKeyPos *KeyPosition
+	// 	delKeyPos, err = db.index.Get(key, deleteMatchKeys...)
+	// 	if err != nil {
+	// 		log.Println("get delete key pos fail:", err)
+	// 	}
+	// 	// add delKeyRecord.uid into deprecatedtable
+	// 	if delKeyPos != nil {
+	// 		// db.vlog.dpTables[delKeyPos.partition].addEntry(delKeyPos.uid)
+	// 		db.vlog.setDeprecated(delKeyPos.partition, delKeyPos.uid)
+	// 	}
+	// }
 	// delete the deleted keys from index
-	if err = db.index.DeleteBatch(deletedKeys, deleteMatchKeys...); err != nil {
+	if oldKeyPostions, err = db.index.DeleteBatch(deletedKeys, deleteMatchKeys...); err != nil {
 		log.Println("index DeleteBatch failed:", err)
 		return
+	}
+	for _, oldKeyPostion := range oldKeyPostions {
+		db.vlog.setDeprecated(oldKeyPostion.partition, oldKeyPostion.uid)
 	}
 	// sync the index
 	if err = db.index.Sync(); err != nil {
@@ -606,7 +613,7 @@ func (db *DB) listenAutoCompact() {
 					} else {
 						err = db.CompactWithDeprecatedtable()
 					}
-					
+
 				}
 				if err != nil {
 					panic(err)

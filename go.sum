@@ -54,8 +54,8 @@ github.com/stretchr/testify v1.8.4 h1:CcVxjf3Q8PM0mHUKJCdn+eZZtm5yQwehR5yeSVQQcU
 github.com/stretchr/testify v1.8.4/go.mod h1:sz/lmYIOXD/1dqDmKjjqLyZ2RngseejIcXlSw2iwfAo=
 github.com/valyala/bytebufferpool v1.0.0 h1:GqA5TC/0021Y/b9FG4Oi9Mr3q7XYx6KllzawFIhcdPw=
 github.com/valyala/bytebufferpool v1.0.0/go.mod h1:6bBcMArwyJ5K/AmCkWv1jt77kVWyCJ6HpOuEn7z0Csc=
-github.com/yanxiaoqi932/bbolt v1.3.9-0.20240828093707-ae274b5c5dae h1:5HGLuv34vVW5PjcwJc/e52FTXdvLP6pnfsYqdqxV6qk=
-github.com/yanxiaoqi932/bbolt v1.3.9-0.20240828093707-ae274b5c5dae/go.mod h1:zaO32+Ti0PK1ivdPtgMESzuzL2VPoIG1PCQNvOdo/dE=
+github.com/yanxiaoqi932/bbolt v1.3.9-0.20240829105042-5b817c5f51f8 h1:tJsdXNnp2LPnEZb97MA51dQygG2q01n3kJ72rQ4LL9Y=
+github.com/yanxiaoqi932/bbolt v1.3.9-0.20240829105042-5b817c5f51f8/go.mod h1:zaO32+Ti0PK1ivdPtgMESzuzL2VPoIG1PCQNvOdo/dE=
 github.com/yuin/goldmark v1.1.27/go.mod h1:3hX8gzYuyVAZsxl0MRgGTJEmQBFcNTphYh9decYSb74=
 github.com/yuin/goldmark v1.2.1/go.mod h1:3hX8gzYuyVAZsxl0MRgGTJEmQBFcNTphYh9decYSb74=
 golang.org/x/crypto v0.0.0-20190308221718-c2843e01d9a2/go.mod h1:djNgcEr1/C05ACkg1iLfiJU5Ep61QUkGW8qpdssI0+w=

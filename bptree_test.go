@@ -263,15 +263,14 @@ func TestBPtreePutbatchOldUUID(t *testing.T) {
 		if err != nil {
 			t.Errorf("put error = %v", err)
 		}
-		var uids []uuid.UUID
-		uids, err = bt.PutBatch(coverKeyPositions)
+		var oldKeyPostions []*KeyPosition
+		oldKeyPostions, err = bt.PutBatch(coverKeyPositions)
 		if err != nil {
 			t.Errorf("put error = %v", err)
 		}
-		log.Println("collect uids", uids)
 		uidMap := make(map[uuid.UUID]struct{})
-		for _, id := range uids {
-			uidMap[id] = struct{}{}
+		for _, oldKeyPostion := range oldKeyPostions {
+			uidMap[oldKeyPostion.uid] = struct{}{}
 		}
 		for _, position := range keyPositions {
 			log.Println("keyPositions", position.uid)
@@ -341,7 +340,7 @@ func testbptreeDeletebatch(t *testing.T, partitionNum int) {
 	}
 	for _, tt := range tests {
 		t.Run(tt.name, func(t *testing.T) {
-			if err = bt.DeleteBatch(tt.keys); (err != nil) != tt.wantErr {
+			if _, err = bt.DeleteBatch(tt.keys); (err != nil) != tt.wantErr {
 				t.Errorf("BPTree.DeleteBatch() error = %v, wantErr %v", err, tt.wantErr)
 			}
 		})
