@@ -199,7 +199,6 @@ func testbptreePutbatch(t *testing.T, partitionNum int) {
 			}
 		})
 	}
-
 }
 
 func TestBPtreePutbatchOldUUID(t *testing.T) {

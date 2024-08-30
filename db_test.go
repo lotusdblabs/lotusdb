@@ -1013,7 +1013,6 @@ func TestDeprecatetableMetaPersist(t *testing.T) {
 	require.NoError(t, err)
 
 	t.Run("test same deprecated number", func(t *testing.T) {
-
 		for i := 0; i <= 10; i++ {
 			// write logs and flush
 			logs := produceAndWriteLogs(20000, db)
@@ -1027,11 +1026,11 @@ func TestDeprecatetableMetaPersist(t *testing.T) {
 				}
 			}
 		}
-		DeprecatedNumberFirst := db.vlog.deprecatedNumber
+		deprecatedNumberFirst := db.vlog.deprecatedNumber
 		db.Close()
-		db, err := Open(options)
-		DeprecatedNumberSecond := db.vlog.deprecatedNumber
+		db, err = Open(options)
+		deprecatedNumberSecond := db.vlog.deprecatedNumber
 		require.NoError(t, err)
-		assert.Equal(t, DeprecatedNumberFirst, DeprecatedNumberSecond)
+		assert.Equal(t, deprecatedNumberFirst, deprecatedNumberSecond)
 	})
 }

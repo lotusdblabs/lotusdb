@@ -88,8 +88,10 @@ func Open(options Options) (*DB, error) {
 	// create deprecatedMeta file if not exist, read deprecatedNumber
 	deprecatedMetaPath := filepath.Join(options.DirPath, deprecatedMetaName)
 	var deprecatedNumber uint32
-	if _, err := os.Stat(deprecatedMetaPath); os.IsNotExist(err) {
-		file, err := os.Create(deprecatedMetaPath)
+	//nolint:nestif // The situation here requires more judgments, so there are quite a few nested conditions.
+	if _, err = os.Stat(deprecatedMetaPath); os.IsNotExist(err) {
+		var file *os.File
+		file, err = os.Create(deprecatedMetaPath)
 		if err != nil {
 			return nil, err
 		}
@@ -98,7 +100,8 @@ func Open(options Options) (*DB, error) {
 	} else if err != nil {
 		return nil, err
 	} else {
-		file, err := os.Open(deprecatedMetaPath)
+		var file *os.File
+		file, err = os.Open(deprecatedMetaPath)
 		if err != nil {
 			return nil, err
 		}
@@ -106,7 +109,6 @@ func Open(options Options) (*DB, error) {
 		if err != nil {
 			return nil, err
 		}
-		log.Println("load deprecatedNumber:", deprecatedNumber)
 		defer file.Close()
 	}
 
@@ -213,11 +215,11 @@ func (db *DB) Close() error {
 	defer file.Close()
 
 	// close value log
-	if err := db.vlog.close(); err != nil {
+	if err = db.vlog.close(); err != nil {
 		return err
 	}
 	// release file lock
-	if err := db.fileLock.Unlock(); err != nil {
+	if err = db.fileLock.Unlock(); err != nil {
 		return err
 	}
 
@@ -418,7 +420,7 @@ func (db *DB) waitMemtableSpace() error {
 // 4. Add deleted uuid, and delete the deleted keys from index.
 // 5. Delete the wal.
 //
-//nolint:gocognit,funlen
+//nolint:funlen
 func (db *DB) flushMemtable(table *memtable) {
 	db.flushLock.Lock()
 	defer db.flushLock.Unlock()
@@ -584,6 +586,8 @@ func (db *DB) listenMemtableFlush() {
 // listenAutoComapct is an automated, more fine-grained approach that does not block Bptree.
 // it dynamically detects the redundancy of each shard and decides
 // determine whether to do compact based on the current IO state.
+//
+//nolint:gocognit
 func (db *DB) listenAutoCompact() {
 	sig := make(chan os.Signal, 1)
 	signal.Notify(sig, os.Interrupt, syscall.SIGHUP, syscall.SIGINT, syscall.SIGTERM, syscall.SIGQUIT)
@@ -593,6 +597,7 @@ func (db *DB) listenAutoCompact() {
 		case state, ok := <-db.compactChan:
 			var err error
 			err = nil
+			//nolint:nestif // It requires multiple nested conditions for different thresholds and error judgments.
 			if ok {
 				if state.thresholdState == ThresholdState(ArriveUpperThreshold) {
 					// compact right now
@@ -613,7 +618,6 @@ func (db *DB) listenAutoCompact() {
 					} else {
 						err = db.CompactWithDeprecatedtable()
 					}
-
 				}
 				if err != nil {
 					panic(err)

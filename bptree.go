@@ -97,6 +97,8 @@ func (bt *BPTree) Get(key []byte, _ ...diskhash.MatchKeyFunc) (*KeyPosition, err
 }
 
 // PutBatch puts the specified key positions into the index.
+//
+//nolint:gocognit
 func (bt *BPTree) PutBatch(positions []*KeyPosition, _ ...diskhash.MatchKeyFunc) ([]*KeyPosition, error) {
 	if len(positions) == 0 {
 		return nil, nil
@@ -139,17 +141,15 @@ func (bt *BPTree) PutBatch(positions []*KeyPosition, _ ...diskhash.MatchKeyFunc)
 								return ErrKeyIsEmpty
 							}
 							return err
-						} else {
-							if oldValue != nil {
-								keyPos := new(KeyPosition)
-								keyPos.key, keyPos.partition = record.key, uint32(record.partition)
-								err := keyPos.uid.UnmarshalBinary(oldValue[:len(keyPos.uid)])
-								if err != nil {
-									return err
-								}
-								keyPos.position = wal.DecodeChunkPosition(oldValue[len(keyPos.uid):])
-								partitionDeprecatedKeyPosition = append(partitionDeprecatedKeyPosition, keyPos)
+						} else if oldValue != nil {
+							keyPos := new(KeyPosition)
+							keyPos.key, keyPos.partition = record.key, record.partition
+							err = keyPos.uid.UnmarshalBinary(oldValue[:len(keyPos.uid)])
+							if err != nil {
+								return err
 							}
+							keyPos.position = wal.DecodeChunkPosition(oldValue[len(keyPos.uid):])
+							partitionDeprecatedKeyPosition = append(partitionDeprecatedKeyPosition, keyPos)
 						}
 					}
 				}
@@ -162,7 +162,7 @@ func (bt *BPTree) PutBatch(positions []*KeyPosition, _ ...diskhash.MatchKeyFunc)
 	}
 	// Close the channel after all goroutines are done
 	go func() {
-		g.Wait()
+		_ = g.Wait()
 		close(deprecatedChan)
 	}()
 
@@ -180,6 +180,8 @@ func (bt *BPTree) PutBatch(positions []*KeyPosition, _ ...diskhash.MatchKeyFunc)
 }
 
 // DeleteBatch deletes the specified keys from the index.
+//
+//nolint:gocognit
 func (bt *BPTree) DeleteBatch(keys [][]byte, _ ...diskhash.MatchKeyFunc) ([]*KeyPosition, error) {
 	if len(keys) == 0 {
 		return nil, nil
@@ -219,17 +221,15 @@ func (bt *BPTree) DeleteBatch(keys [][]byte, _ ...diskhash.MatchKeyFunc) ([]*Key
 						}
 						if err, oldValue := bucket.Delete(key); err != nil {
 							return err
-						} else {
-							if oldValue != nil {
-								keyPos := new(KeyPosition)
-								keyPos.key, keyPos.partition = key, uint32(partition)
-								err := keyPos.uid.UnmarshalBinary(oldValue[:len(keyPos.uid)])
-								if err != nil {
-									return err
-								}
-								keyPos.position = wal.DecodeChunkPosition(oldValue[len(keyPos.uid):])
-								partitionDeprecatedKeyPosition = append(partitionDeprecatedKeyPosition, keyPos)
+						} else if oldValue != nil {
+							keyPos := new(KeyPosition)
+							keyPos.key, keyPos.partition = key, uint32(partition)
+							err = keyPos.uid.UnmarshalBinary(oldValue[:len(keyPos.uid)])
+							if err != nil {
+								return err
 							}
+							keyPos.position = wal.DecodeChunkPosition(oldValue[len(keyPos.uid):])
+							partitionDeprecatedKeyPosition = append(partitionDeprecatedKeyPosition, keyPos)
 						}
 					}
 				}
@@ -239,7 +239,7 @@ func (bt *BPTree) DeleteBatch(keys [][]byte, _ ...diskhash.MatchKeyFunc) ([]*Key
 	}
 	// Close the channel after all goroutines are done
 	go func() {
-		g.Wait()
+		_ = g.Wait()
 		close(deprecatedChan)
 	}()
 

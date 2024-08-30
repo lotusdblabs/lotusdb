@@ -84,7 +84,11 @@ func openValueLog(options valueLogOptions) (*valueLog, error) {
 		dpTables = append(dpTables, dpTable)
 	}
 
-	return &valueLog{walFiles: walFiles, dpTables: dpTables, deprecatedNumber: options.deprecatedtableNumber, options: options}, nil
+	return &valueLog{
+		walFiles:         walFiles,
+		dpTables:         dpTables,
+		deprecatedNumber: options.deprecatedtableNumber,
+		options:          options}, nil
 }
 
 // read the value log record from the specified position.
