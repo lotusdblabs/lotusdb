@@ -150,10 +150,10 @@ var DefaultOptions = Options{
 	deprecatedtableLowerThreshold: 2 * 100 * KB, // 200K
 	deprecatedtableUpperThreshold: 4 * 100 * KB, // 400K
 	//nolint:gomnd // default
-	diskIOSamplingInterval:        10,
-	diskIOReadBusyThreshold:       1 * KB,
-	diskIOWriteBusyThreshold:      1 * KB,
-	autoCompact:                   true,
+	diskIOSamplingInterval:   10,
+	diskIOReadBusyThreshold:  1 * KB,
+	diskIOWriteBusyThreshold: 1 * KB,
+	autoCompact:              true,
 	//nolint:gomnd // default
 	WaitMemSpaceTimeout: 100 * time.Millisecond,
 }
