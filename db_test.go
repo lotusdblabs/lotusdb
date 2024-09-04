@@ -2,6 +2,7 @@ package lotusdb
 
 import (
 	"bytes"
+	"log"
 	"os"
 	"sync"
 	"testing"
@@ -1032,5 +1033,63 @@ func TestDeprecatetableMetaPersist(t *testing.T) {
 		deprecatedNumberSecond := db.vlog.deprecatedNumber
 		require.NoError(t, err)
 		assert.Equal(t, deprecatedNumberFirst, deprecatedNumberSecond)
+	})
+}
+
+func SimpleIO(targetPath string, interval int, count int) {
+	data := []byte("This is a test I/O operation.\n")
+	pl := make([]byte, 30)
+	for count > 0 {
+		count--
+		file, err := os.Create(targetPath)
+		if err != nil {
+			log.Println("Error creating file:", err)
+			return
+		}
+
+		_, err = file.Write(data)
+		if err != nil {
+			log.Println("Error writing to file:", err)
+			return
+		}
+
+		err = file.Sync()
+		if err != nil {
+			log.Println("Error syncing file:", err)
+			return
+		}
+
+		_, err = file.Read(pl)
+		if err != nil {
+			return
+		}
+		file.Close()
+		time.Sleep(time.Duration(interval) * time.Millisecond)
+	}
+	log.Println("quit io")
+}
+
+func TestDiskIO(t *testing.T) {
+	options := DefaultOptions
+	options.autoCompact = true
+	path, err := os.MkdirTemp("", "db-test-diskio")
+	require.NoError(t, err)
+	options.DirPath = path
+	options.CompactBatchCount = 2 << 5
+
+	db, err := Open(options)
+	require.NoError(t, err)
+	defer destroyDB(db)
+
+	t.Run("test diskio", func(t *testing.T) {
+		go SimpleIO(options.DirPath+"iofile", 5, 2000)
+		var free bool
+		free = true
+		tryCount := 200
+		for free && tryCount > 0 {
+			free, _ = db.diskIO.IsFree()
+			tryCount--
+		}
+		assert.False(t, free)
 	})
 }

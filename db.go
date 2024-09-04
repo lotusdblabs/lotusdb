@@ -47,6 +47,7 @@ type DB struct {
 	flushChan   chan *memtable       // flushChan is used to notify the flush goroutine to flush memtable to disk.
 	flushLock   sync.Mutex           // flushLock is to prevent flush running while compaction doesn't occur
 	compactChan chan deprecatedState // compactChan is used to notify the shard need to compact
+	diskIO      DiskIO               // monitoring the IO status of disks and allowing autoCompact when appropriate
 	mu          sync.RWMutex
 	closed      bool
 	closeChan   chan struct{}
@@ -62,6 +63,8 @@ type DB struct {
 //
 // It will first open the wal to rebuild the memtable, then open the index and value log.
 // Return the DB object if succeeded, otherwise return the error.
+//
+//nolint:funlen // default
 func Open(options Options) (*DB, error) {
 	// check whether all options are valid
 	if err := validateOptions(&options); err != nil {
@@ -145,6 +148,13 @@ func Open(options Options) (*DB, error) {
 		return nil, err
 	}
 
+	diskIO := DiskIO{
+		targetPath:         options.DirPath,
+		samplingInterval:   options.diskIOSamplingInterval,
+		readBusyThreshold:  options.diskIOReadBusyThreshold,
+		writeBusyThreshold: options.diskIOWriteBusyThreshold,
+	}
+
 	db := &DB{
 		activeMem:   memtables[len(memtables)-1],
 		immuMems:    memtables[:len(memtables)-1],
@@ -154,6 +164,7 @@ func Open(options Options) (*DB, error) {
 		flushChan:   make(chan *memtable, options.MemtableNums-1),
 		closeChan:   make(chan struct{}),
 		compactChan: make(chan deprecatedState),
+		diskIO:      diskIO,
 		options:     options,
 		batchPool:   sync.Pool{New: makeBatch},
 	}
@@ -611,12 +622,18 @@ func (db *DB) listenAutoCompact() {
 				} else if state.thresholdState == ThresholdState(ArriveLowerThreshold) {
 					// determine whether to do compact based on the current IO state
 					log.Println("ArriveLowerThreshold")
-					// TODO: since the IO state module has not been implemented yet, we just compare it here
-					if firstCompact {
-						firstCompact = false
-						err = db.Compact()
-					} else {
-						err = db.CompactWithDeprecatedtable()
+					var free bool
+					free, err = db.diskIO.IsFree()
+					if err != nil {
+						panic(err)
+					}
+					if free {
+						if firstCompact {
+							firstCompact = false
+							err = db.Compact()
+						} else {
+							err = db.CompactWithDeprecatedtable()
+						}
 					}
 				}
 				if err != nil {

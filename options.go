@@ -63,6 +63,15 @@ type Options struct {
 	// deprecatedtable force compaction size
 	deprecatedtableUpperThreshold uint32
 
+	// sampling interval of diskIO, unit is millisecond
+	diskIOSamplingInterval int
+
+	// read bytes during samplingInterval > readBusyThreshold is busy
+	diskIOReadBusyThreshold uint64
+
+	// write bytes during samplingInterval > writeBusyThreshold is busy
+	diskIOWriteBusyThreshold uint64
+
 	// autoCompact support
 	autoCompact bool
 
@@ -140,6 +149,10 @@ var DefaultOptions = Options{
 	CompactBatchCount:             10000,
 	deprecatedtableLowerThreshold: 2 * 100 * KB, // 200K
 	deprecatedtableUpperThreshold: 4 * 100 * KB, // 400K
+	//nolint:gomnd // default
+	diskIOSamplingInterval:        10,
+	diskIOReadBusyThreshold:       1 * KB,
+	diskIOWriteBusyThreshold:      1 * KB,
 	autoCompact:                   true,
 	//nolint:gomnd // default
 	WaitMemSpaceTimeout: 100 * time.Millisecond,
