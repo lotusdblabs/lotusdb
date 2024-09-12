@@ -13,11 +13,11 @@ import (
 const IOBusySplit = 2
 
 type DiskIO struct {
-	targetPath         string
-	samplingInterval   int                 // unit millisecond
-	IOBusyThreshold    uint64              // rate, read/write bytes during samplingInterval > readBusyThreshold is busy
-	collectTimeStamp   time.Time           // used for collecting time in flushmemtable, and get Bandwidth
-	collectIOStat      disk.IOCountersStat // used for collecting io msg in flushmemtable, and get Bandwidth
+	targetPath       string
+	samplingInterval int                 // unit millisecond
+	IOBusyThreshold  uint64              // rate, read/write bytes during samplingInterval > readBusyThreshold is busy
+	collectTimeStamp time.Time           // used for collecting time in flushmemtable, and get Bandwidth
+	collectIOStat    disk.IOCountersStat // used for collecting io msg in flushmemtable, and get Bandwidth
 }
 
 func (io *DiskIO) IsFree() (bool, error) {
@@ -64,7 +64,7 @@ func (io *DiskIO) BandwidthCollectEnd() error {
 	ms := uint64(duration.Milliseconds())
 	readBytes := endCollectIOStat.ReadBytes - io.collectIOStat.ReadBytes
 	writeBytes := endCollectIOStat.WriteBytes - io.collectIOStat.WriteBytes
-	newIOBusyThreshold := ((readBytes + writeBytes)/ IOBusySplit) / ms
+	newIOBusyThreshold := ((readBytes + writeBytes) / IOBusySplit) / ms
 	if newIOBusyThreshold > io.IOBusyThreshold {
 		io.IOBusyThreshold = newIOBusyThreshold
 	}

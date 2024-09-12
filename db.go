@@ -149,8 +149,8 @@ func Open(options Options) (*DB, error) {
 	}
 
 	diskIO := DiskIO{
-		targetPath:         options.DirPath,
-		samplingInterval:   options.diskIOSamplingInterval,
+		targetPath:       options.DirPath,
+		samplingInterval: options.diskIOSamplingInterval,
 	}
 
 	db := &DB{
@@ -433,7 +433,7 @@ func (db *DB) waitMemtableSpace() error {
 func (db *DB) flushMemtable(table *memtable) {
 	db.flushLock.Lock()
 	defer db.flushLock.Unlock()
-	_= db.diskIO.BandwidthCollectStart()
+	_ = db.diskIO.BandwidthCollectStart()
 	sklIter := table.skl.NewIterator()
 	var deletedKeys [][]byte
 	var logRecords []*ValueLogRecord
@@ -493,7 +493,7 @@ func (db *DB) flushMemtable(table *memtable) {
 			deleteMatchKeys[i] = MatchKeyFunc(db, deletedKeys[i], nil, nil)
 		}
 	}
-	
+
 	// delete the deleted keys from index
 	if oldKeyPostions, err = db.index.DeleteBatch(deletedKeys, deleteMatchKeys...); err != nil {
 		log.Println("index DeleteBatch failed:", err)
@@ -536,7 +536,7 @@ func (db *DB) flushMemtable(table *memtable) {
 	}
 
 	db.mu.Unlock()
-	_= db.diskIO.BandwidthCollectEnd()
+	_ = db.diskIO.BandwidthCollectEnd()
 	if db.options.autoCompact {
 		// check deprecatedtable size
 		log.Println("[data in flush]", "deprecatedNumber:", db.vlog.deprecatedNumber,
