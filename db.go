@@ -151,8 +151,6 @@ func Open(options Options) (*DB, error) {
 	diskIO := DiskIO{
 		targetPath:         options.DirPath,
 		samplingInterval:   options.diskIOSamplingInterval,
-		readBusyThreshold:  options.diskIOReadBusyThreshold,
-		writeBusyThreshold: options.diskIOWriteBusyThreshold,
 	}
 
 	db := &DB{
@@ -435,7 +433,7 @@ func (db *DB) waitMemtableSpace() error {
 func (db *DB) flushMemtable(table *memtable) {
 	db.flushLock.Lock()
 	defer db.flushLock.Unlock()
-
+	_= db.diskIO.BandwidthCollectStart()
 	sklIter := table.skl.NewIterator()
 	var deletedKeys [][]byte
 	var logRecords []*ValueLogRecord
@@ -474,18 +472,6 @@ func (db *DB) flushMemtable(table *memtable) {
 			putMatchKeys[i] = MatchKeyFunc(db, keyPos[i].key, nil, nil)
 		}
 	}
-	// // Add old key uuid into deprecatedtable
-	// for _, record := range logRecords {
-	// 	var putKeyPos *KeyPosition
-	// 	putKeyPos, err = db.index.Get(record.key, putMatchKeys...)
-	// 	if err != nil {
-	// 		log.Println("get put-key old pos fail:", err)
-	// 	}
-	// 	if putKeyPos != nil {
-	// 		db.vlog.setDeprecated(putKeyPos.partition, putKeyPos.uid)
-	// 		// db.vlog.dpTables[putKeyPos.partition].addEntry(putKeyPos.uid)
-	// 	}
-	// }
 
 	// Write all keys and positions to index.
 	oldKeyPostions, err := db.index.PutBatch(keyPos, putMatchKeys...)
@@ -493,6 +479,8 @@ func (db *DB) flushMemtable(table *memtable) {
 		log.Println("index PutBatch failed:", err)
 		return
 	}
+
+	// Add old key uuid into deprecatedtable
 	for _, oldKeyPostion := range oldKeyPostions {
 		db.vlog.setDeprecated(oldKeyPostion.partition, oldKeyPostion.uid)
 	}
@@ -505,24 +493,14 @@ func (db *DB) flushMemtable(table *memtable) {
 			deleteMatchKeys[i] = MatchKeyFunc(db, deletedKeys[i], nil, nil)
 		}
 	}
-	// // get deleted key uuid, add uuid into deprecatedtable
-	// for _, key := range deletedKeys {
-	// 	var delKeyPos *KeyPosition
-	// 	delKeyPos, err = db.index.Get(key, deleteMatchKeys...)
-	// 	if err != nil {
-	// 		log.Println("get delete key pos fail:", err)
-	// 	}
-	// 	// add delKeyRecord.uid into deprecatedtable
-	// 	if delKeyPos != nil {
-	// 		// db.vlog.dpTables[delKeyPos.partition].addEntry(delKeyPos.uid)
-	// 		db.vlog.setDeprecated(delKeyPos.partition, delKeyPos.uid)
-	// 	}
-	// }
+	
 	// delete the deleted keys from index
 	if oldKeyPostions, err = db.index.DeleteBatch(deletedKeys, deleteMatchKeys...); err != nil {
 		log.Println("index DeleteBatch failed:", err)
 		return
 	}
+
+	// uuid into deprecatedtable
 	for _, oldKeyPostion := range oldKeyPostions {
 		db.vlog.setDeprecated(oldKeyPostion.partition, oldKeyPostion.uid)
 	}
@@ -558,7 +536,7 @@ func (db *DB) flushMemtable(table *memtable) {
 	}
 
 	db.mu.Unlock()
-
+	_= db.diskIO.BandwidthCollectEnd()
 	if db.options.autoCompact {
 		// check deprecatedtable size
 		log.Println("[data in flush]", "deprecatedNumber:", db.vlog.deprecatedNumber,

@@ -10,14 +10,17 @@ import (
 	"github.com/shirou/gopsutil/disk"
 )
 
+const IOBusySplit = 2
+
 type DiskIO struct {
 	targetPath         string
-	samplingInterval   int    // unit millisecond
-	readBusyThreshold  uint64 // read bytes during samplingInterval > readBusyThreshold is busy
-	writeBusyThreshold uint64 // write bytes during samplingInterval > writeBusyThreshold is busy
+	samplingInterval   int                 // unit millisecond
+	IOBusyThreshold    uint64              // rate, read/write bytes during samplingInterval > readBusyThreshold is busy
+	collectTimeStamp   time.Time           // used for collecting time in flushmemtable, and get Bandwidth
+	collectIOStat      disk.IOCountersStat // used for collecting io msg in flushmemtable, and get Bandwidth
 }
 
-func (io DiskIO) IsFree() (bool, error) {
+func (io *DiskIO) IsFree() (bool, error) {
 	var ioStart disk.IOCountersStat
 	var ioEnd disk.IOCountersStat
 	var err error
@@ -32,12 +35,41 @@ func (io DiskIO) IsFree() (bool, error) {
 	}
 	readBytes := ioEnd.ReadBytes - ioStart.ReadBytes
 	writeBytes := ioEnd.WriteBytes - ioStart.WriteBytes
-	log.Println("RdThreshold:", io.readBusyThreshold, "readBytes:", readBytes,
-		"WtThreshold:", io.writeBusyThreshold, "writeBytes:", writeBytes)
-	if io.readBusyThreshold < readBytes || io.writeBusyThreshold < writeBytes {
+	log.Println("IOThreshold:", io.IOBusyThreshold, "IOBytes:", readBytes+writeBytes)
+
+	if io.IOBusyThreshold < readBytes+writeBytes {
 		return false, nil
 	}
+
 	return true, nil
+}
+
+func (io *DiskIO) BandwidthCollectStart() error {
+	io.collectTimeStamp = time.Now()
+	var err error
+	io.collectIOStat, err = GetDiskIOInfo((io.targetPath))
+	if err != nil {
+		return err
+	}
+	return nil
+}
+
+func (io *DiskIO) BandwidthCollectEnd() error {
+	endCollTimeStamp := time.Now()
+	endCollectIOStat, err := GetDiskIOInfo((io.targetPath))
+	if err != nil {
+		return err
+	}
+	duration := endCollTimeStamp.Sub(io.collectTimeStamp)
+	ms := uint64(duration.Milliseconds())
+	readBytes := endCollectIOStat.ReadBytes - io.collectIOStat.ReadBytes
+	writeBytes := endCollectIOStat.WriteBytes - io.collectIOStat.WriteBytes
+	newIOBusyThreshold := ((readBytes + writeBytes)/ IOBusySplit) / ms
+	if newIOBusyThreshold > io.IOBusyThreshold {
+		io.IOBusyThreshold = newIOBusyThreshold
+	}
+	log.Println("Update IOBusyThreshold:", io.IOBusyThreshold)
+	return nil
 }
 
 func GetDiskIOInfo(targetPath string) (disk.IOCountersStat, error) {
