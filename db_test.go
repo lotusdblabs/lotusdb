@@ -619,6 +619,141 @@ func TestDBAutoCompact(t *testing.T) {
 	})
 }
 
+func TestDBAutoCompactWithBusyIO(t *testing.T) {
+	options := DefaultOptions
+	options.autoCompact = true
+	path, err := os.MkdirTemp("", "db-test-AutoCompactWithBusyIORate_0dot8")
+	require.NoError(t, err)
+	options.DirPath = path
+	options.CompactBatchCount = 2 << 5
+
+	db, err := Open(options)
+	require.NoError(t, err)
+	defer destroyDB(db)
+
+	testlogs := []*testLog{
+		{key: []byte("key 0"), value: []byte("value 0")},
+		{key: []byte("key 1"), value: []byte("value 1")},
+		{key: []byte("key 2"), value: []byte("value 2")},
+	}
+
+	testrmlogs := []*testLog{
+		{key: []byte("key 0 rm"), value: []byte("value 0")},
+		{key: []byte("key 1 rm"), value: []byte("value 1")},
+		{key: []byte("key 2 rm"), value: []byte("value 2")},
+	}
+
+	t.Run("test compaction", func(t *testing.T) {
+		for _, log := range testlogs {
+			_ = db.PutWithOptions(log.key, log.value, WriteOptions{
+				Sync:       true,
+				DisableWal: false,
+			})
+		}
+		for _, log := range testrmlogs {
+			_ = db.DeleteWithOptions(log.key, WriteOptions{
+				Sync:       true,
+				DisableWal: false,
+			})
+		}
+		go SimpleIO(options.DirPath + "iofile")
+		for i := 0; i <= 10; i++ {
+			// write logs and flush
+			logs := produceAndWriteLogs(50000, db)
+			// delete logs
+			for idx, log := range logs {
+				if idx%5 == 0 {
+					_ = db.DeleteWithOptions(log.key, WriteOptions{
+						Sync:       true,
+						DisableWal: false,
+					})
+				}
+			}
+		}
+		require.NoError(t, err)
+
+		var value []byte
+		for _, log := range testlogs {
+			value, err = getValueFromVlog(db, log.key)
+			require.NoError(t, err)
+			assert.Equal(t, log.value, value)
+		}
+		for _, log := range testrmlogs {
+			value, err = db.Get(log.key)
+			require.Error(t, err)
+			assert.Equal(t, []byte(nil), value)
+		}
+	})
+}
+
+func TestDBAutoCompactWithBusyIONoMonitor(t *testing.T) {
+	options := DefaultOptions
+	options.diskIOBusyRate = -1.0
+	options.autoCompact = true
+	path, err := os.MkdirTemp("", "db-test-AutoCompactWithBusyIORate_0dot8")
+	require.NoError(t, err)
+	options.DirPath = path
+	options.CompactBatchCount = 2 << 5
+
+	db, err := Open(options)
+	require.NoError(t, err)
+	defer destroyDB(db)
+
+	testlogs := []*testLog{
+		{key: []byte("key 0"), value: []byte("value 0")},
+		{key: []byte("key 1"), value: []byte("value 1")},
+		{key: []byte("key 2"), value: []byte("value 2")},
+	}
+
+	testrmlogs := []*testLog{
+		{key: []byte("key 0 rm"), value: []byte("value 0")},
+		{key: []byte("key 1 rm"), value: []byte("value 1")},
+		{key: []byte("key 2 rm"), value: []byte("value 2")},
+	}
+
+	t.Run("test compaction", func(t *testing.T) {
+		for _, log := range testlogs {
+			_ = db.PutWithOptions(log.key, log.value, WriteOptions{
+				Sync:       true,
+				DisableWal: false,
+			})
+		}
+		for _, log := range testrmlogs {
+			_ = db.DeleteWithOptions(log.key, WriteOptions{
+				Sync:       true,
+				DisableWal: false,
+			})
+		}
+		go SimpleIO(options.DirPath + "iofile")
+		for i := 0; i <= 10; i++ {
+			// write logs and flush
+			logs := produceAndWriteLogs(50000, db)
+			// delete logs
+			for idx, log := range logs {
+				if idx%5 == 0 {
+					_ = db.DeleteWithOptions(log.key, WriteOptions{
+						Sync:       true,
+						DisableWal: false,
+					})
+				}
+			}
+		}
+		require.NoError(t, err)
+
+		var value []byte
+		for _, log := range testlogs {
+			value, err = getValueFromVlog(db, log.key)
+			require.NoError(t, err)
+			assert.Equal(t, log.value, value)
+		}
+		for _, log := range testrmlogs {
+			value, err = db.Get(log.key)
+			require.Error(t, err)
+			assert.Equal(t, []byte(nil), value)
+		}
+	})
+}
+
 func getValueFromVlog(db *DB, key []byte) ([]byte, error) {
 	var value []byte
 	var matchKey func(diskhash.Slot) (bool, error)
@@ -1036,17 +1171,14 @@ func TestDeprecatetableMetaPersist(t *testing.T) {
 	})
 }
 
-func SimpleIO(targetPath string, interval int, count int) {
-	data := []byte("This is a test I/O operation.\n")
-	pl := make([]byte, 30)
-	for count > 0 {
-		count--
-		file, err := os.Create(targetPath)
-		if err != nil {
-			log.Println("Error creating file:", err)
-			return
-		}
-
+func SimpleIO(targetPath string) {
+	file, err := os.Create(targetPath)
+	if err != nil {
+		log.Println("Error creating file:", err)
+		return
+	}
+	data := util.RandomValue(1 << 25)
+	for {
 		_, err = file.Write(data)
 		if err != nil {
 			log.Println("Error writing to file:", err)
@@ -1059,14 +1191,8 @@ func SimpleIO(targetPath string, interval int, count int) {
 			return
 		}
 
-		_, err = file.Read(pl)
-		if err != nil {
-			return
-		}
-		file.Close()
-		time.Sleep(time.Duration(interval) * time.Millisecond)
+		// time.Sleep(time.Duration(sleepTime) * time.Millisecond)
 	}
-	log.Println("quit io")
 }
 
 func TestDiskIO(t *testing.T) {
@@ -1082,7 +1208,7 @@ func TestDiskIO(t *testing.T) {
 	defer destroyDB(db)
 
 	t.Run("test diskio", func(t *testing.T) {
-		go SimpleIO(options.DirPath+"iofile", 5, 2000)
+		go SimpleIO(options.DirPath + "iofile")
 		var free bool
 		free = true
 		tryCount := 200

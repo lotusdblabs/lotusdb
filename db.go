@@ -47,7 +47,7 @@ type DB struct {
 	flushChan   chan *memtable       // flushChan is used to notify the flush goroutine to flush memtable to disk.
 	flushLock   sync.Mutex           // flushLock is to prevent flush running while compaction doesn't occur
 	compactChan chan deprecatedState // compactChan is used to notify the shard need to compact
-	diskIO      DiskIO               // monitoring the IO status of disks and allowing autoCompact when appropriate
+	diskIO      *DiskIO              // monitoring the IO status of disks and allowing autoCompact when appropriate
 	mu          sync.RWMutex
 	closed      bool
 	closeChan   chan struct{}
@@ -148,10 +148,10 @@ func Open(options Options) (*DB, error) {
 		return nil, err
 	}
 
-	diskIO := DiskIO{
-		targetPath:       options.DirPath,
-		samplingInterval: options.diskIOSamplingInterval,
-	}
+	diskIO := new(DiskIO)
+	diskIO.targetPath = options.DirPath
+	diskIO.samplingInterval = options.diskIOSamplingInterval
+	diskIO.busyRate = options.diskIOBusyRate
 
 	db := &DB{
 		activeMem:   memtables[len(memtables)-1],
@@ -177,6 +177,10 @@ func Open(options Options) (*DB, error) {
 	// start flush memtables goroutine asynchronously,
 	// memtables with new coming writes will be flushed to disk if the active memtable is full.
 	go db.listenMemtableFlush()
+
+	// start disk IO monitoring,
+	// blocking low threshold compact operations when busy.
+	go db.listenDiskIOState()
 
 	// start autoCompact goroutine asynchronously,
 	// listen deprecatedtable state, and compact automatically.
@@ -433,7 +437,7 @@ func (db *DB) waitMemtableSpace() error {
 func (db *DB) flushMemtable(table *memtable) {
 	db.flushLock.Lock()
 	defer db.flushLock.Unlock()
-	_ = db.diskIO.BandwidthCollectStart()
+
 	sklIter := table.skl.NewIterator()
 	var deletedKeys [][]byte
 	var logRecords []*ValueLogRecord
@@ -536,7 +540,6 @@ func (db *DB) flushMemtable(table *memtable) {
 	}
 
 	db.mu.Unlock()
-	_ = db.diskIO.BandwidthCollectEnd()
 	if db.options.autoCompact {
 		// check deprecatedtable size
 		log.Println("[data in flush]", "deprecatedNumber:", db.vlog.deprecatedNumber,
@@ -612,6 +615,8 @@ func (db *DB) listenAutoCompact() {
 						} else {
 							err = db.CompactWithDeprecatedtable()
 						}
+					} else {
+						log.Println("IO Busy now.")
 					}
 				}
 				if err != nil {
@@ -626,6 +631,22 @@ func (db *DB) listenAutoCompact() {
 			}
 		case <-sig:
 			return
+		}
+	}
+}
+
+func (db *DB) listenDiskIOState() {
+	sig := make(chan os.Signal, 1)
+	signal.Notify(sig, os.Interrupt, syscall.SIGHUP, syscall.SIGINT, syscall.SIGTERM, syscall.SIGQUIT)
+	for {
+		select {
+		case <-sig:
+			return
+		default:
+			err := db.diskIO.Monitor()
+			if err != nil {
+				panic(err)
+			}
 		}
 	}
 }

@@ -5,6 +5,7 @@ import (
 	"log"
 	"path/filepath"
 	"strings"
+	"sync"
 	"time"
 
 	"github.com/shirou/gopsutil/disk"
@@ -14,62 +15,50 @@ const IOBusySplit = 2
 
 type DiskIO struct {
 	targetPath       string
-	samplingInterval int                 // unit millisecond
-	IOBusyThreshold  uint64              // rate, read/write bytes during samplingInterval > readBusyThreshold is busy
-	collectTimeStamp time.Time           // used for collecting time in flushmemtable, and get Bandwidth
-	collectIOStat    disk.IOCountersStat // used for collecting io msg in flushmemtable, and get Bandwidth
+	samplingInterval int     // unit millisecond
+	IOBusyThreshold  uint64  // rate, read/write bytes during samplingInterval > readBusyThreshold is busy
+	busyRate         float32 // express io busy status by the proportion of io time in the sampling time
+	freeFlag         bool    // freeFlag indicates whether the disk is free
+	mu               sync.Mutex
 }
 
-func (io *DiskIO) IsFree() (bool, error) {
+func (io *DiskIO) Monitor() error {
 	var ioStart disk.IOCountersStat
 	var ioEnd disk.IOCountersStat
 	var err error
+
 	ioStart, err = GetDiskIOInfo((io.targetPath))
 	if err != nil {
-		return false, err
+		return err
 	}
+
 	time.Sleep(time.Duration(io.samplingInterval) * time.Millisecond)
+
 	ioEnd, err = GetDiskIOInfo((io.targetPath))
 	if err != nil {
-		return false, err
-	}
-	readBytes := ioEnd.ReadBytes - ioStart.ReadBytes
-	writeBytes := ioEnd.WriteBytes - ioStart.WriteBytes
-	log.Println("IOThreshold:", io.IOBusyThreshold, "IOBytes:", readBytes+writeBytes)
-
-	if io.IOBusyThreshold < readBytes+writeBytes {
-		return false, nil
-	}
-
-	return true, nil
-}
-
-func (io *DiskIO) BandwidthCollectStart() error {
-	io.collectTimeStamp = time.Now()
-	var err error
-	io.collectIOStat, err = GetDiskIOInfo((io.targetPath))
-	if err != nil {
 		return err
+	}
+	ioTime := ioEnd.IoTime - ioStart.IoTime
+	io.mu.Lock()
+	defer io.mu.Unlock()
+	// if ioTime > 0 {
+	// 	log.Println("ioTime:",ioTime,"threshold",uint64(float32(io.samplingInterval) * io.busyRate))
+	// }
+	if ioTime > uint64(float32(io.samplingInterval)*io.busyRate) {
+		io.freeFlag = false
+	} else {
+		io.freeFlag = true
 	}
 	return nil
 }
 
-func (io *DiskIO) BandwidthCollectEnd() error {
-	endCollTimeStamp := time.Now()
-	endCollectIOStat, err := GetDiskIOInfo((io.targetPath))
-	if err != nil {
-		return err
+func (io *DiskIO) IsFree() (bool, error) {
+	if io.busyRate < 0 {
+		return true, nil
 	}
-	duration := endCollTimeStamp.Sub(io.collectTimeStamp)
-	ms := uint64(duration.Milliseconds())
-	readBytes := endCollectIOStat.ReadBytes - io.collectIOStat.ReadBytes
-	writeBytes := endCollectIOStat.WriteBytes - io.collectIOStat.WriteBytes
-	newIOBusyThreshold := ((readBytes + writeBytes) / IOBusySplit) / ms
-	if newIOBusyThreshold > io.IOBusyThreshold {
-		io.IOBusyThreshold = newIOBusyThreshold
-	}
-	log.Println("Update IOBusyThreshold:", io.IOBusyThreshold)
-	return nil
+	io.mu.Lock()
+	defer io.mu.Unlock()
+	return io.freeFlag, nil
 }
 
 func GetDiskIOInfo(targetPath string) (disk.IOCountersStat, error) {
@@ -103,6 +92,7 @@ func GetDiskIOInfo(targetPath string) (disk.IOCountersStat, error) {
 	if io, exists = ioCounters[targetDevice]; !exists {
 		return io, errors.New("No I/O stats available for device" + targetDevice)
 	}
+
 	return io, nil
 }
 

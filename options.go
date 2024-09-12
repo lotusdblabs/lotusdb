@@ -66,6 +66,9 @@ type Options struct {
 	// sampling interval of diskIO, unit is millisecond
 	diskIOSamplingInterval int
 
+	// rate of io time in the sampling time is used to represent the busy state of io
+	diskIOBusyRate float32
+
 	// autoCompact support
 	autoCompact bool
 
@@ -144,8 +147,10 @@ var DefaultOptions = Options{
 	deprecatedtableLowerThreshold: 2 * 100 * KB, // 200K
 	deprecatedtableUpperThreshold: 4 * 100 * KB, // 400K
 	//nolint:gomnd // default
-	diskIOSamplingInterval: 10,
-	autoCompact:            true,
+	diskIOSamplingInterval: 100,
+	//nolint:gomnd // default
+	diskIOBusyRate: 0.5,
+	autoCompact:    true,
 	//nolint:gomnd // default
 	WaitMemSpaceTimeout: 100 * time.Millisecond,
 }
