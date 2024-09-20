@@ -850,6 +850,7 @@ func TestDBMultiClients(t *testing.T) {
 //nolint:gocognit
 func TestDBIterator(t *testing.T) {
 	options := DefaultOptions
+	options.autoCompact = false
 	path, err := os.MkdirTemp("", "db-test-iter")
 	require.NoError(t, err)
 	options.DirPath = path
