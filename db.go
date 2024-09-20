@@ -563,7 +563,6 @@ func (db *DB) flushMemtable(table *memtable) {
 		}
 	}
 
-	db.mu.Unlock()
 	db.flushLock.Unlock()
 	if db.options.autoCompact {
 		// check deprecatedtable size
@@ -582,6 +581,7 @@ func (db *DB) flushMemtable(table *memtable) {
 			}
 		}
 	}
+	db.mu.Unlock()
 }
 
 func (db *DB) listenMemtableFlush() {
