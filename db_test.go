@@ -622,7 +622,7 @@ func TestDBAutoCompact(t *testing.T) {
 func TestDBAutoCompactWithBusyIO(t *testing.T) {
 	options := DefaultOptions
 	options.autoCompact = true
-	path, err := os.MkdirTemp("", "db-test-AutoCompactWithBusyIORate_0dot8")
+	path, err := os.MkdirTemp("", "db-test-AutoCompactWithBusyIO")
 	require.NoError(t, err)
 	options.DirPath = path
 	options.CompactBatchCount = 2 << 5
@@ -690,7 +690,7 @@ func TestDBAutoCompactWithBusyIONoMonitor(t *testing.T) {
 	options := DefaultOptions
 	options.diskIOBusyRate = -1.0
 	options.autoCompact = true
-	path, err := os.MkdirTemp("", "db-test-CompactWithBusyIONoMonitor")
+	path, err := os.MkdirTemp("", "db-test-AutoCompactWithBusyIONoMonito")
 	require.NoError(t, err)
 	options.DirPath = path
 	options.CompactBatchCount = 2 << 5

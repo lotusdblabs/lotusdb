@@ -460,7 +460,6 @@ func (db *DB) waitMemtableSpace() error {
 //nolint:funlen
 func (db *DB) flushMemtable(table *memtable) {
 	db.flushLock.Lock()
-	defer db.flushLock.Unlock()
 
 	sklIter := table.skl.NewIterator()
 	var deletedKeys [][]byte
@@ -564,6 +563,7 @@ func (db *DB) flushMemtable(table *memtable) {
 	}
 
 	db.mu.Unlock()
+	db.flushLock.Unlock()
 	if db.options.autoCompact {
 		// check deprecatedtable size
 		lowerThreshold := uint32((float32)(db.vlog.totalNumber) * db.options.deprecatedtableLowerRate)
