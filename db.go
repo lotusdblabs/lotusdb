@@ -11,6 +11,7 @@ import (
 	"os/signal"
 	"path/filepath"
 	"reflect"
+	"runtime"
 	"sync"
 	"syscall"
 	"time"
@@ -200,7 +201,11 @@ func Open(options Options) (*DB, error) {
 
 	// start disk IO monitoring,
 	// blocking low threshold compact operations when busy.
-	go db.listenDiskIOState()
+	if runtime.GOOS == "linux" {
+		fmt.Println("Env Linux")
+		go db.listenDiskIOState()
+	}
+	
 
 	// start autoCompact goroutine asynchronously,
 	// listen deprecatedtable state, and compact automatically.

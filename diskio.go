@@ -4,6 +4,7 @@ import (
 	"errors"
 	"log"
 	"path/filepath"
+	"runtime"
 	"strings"
 	"sync"
 	"time"
@@ -53,6 +54,9 @@ func (io *DiskIO) Monitor() error {
 }
 
 func (io *DiskIO) IsFree() (bool, error) {
+	if runtime.GOOS != "linux" {
+		return true, nil
+	}
 	if io.busyRate < 0 {
 		return true, nil
 	}
