@@ -1163,11 +1163,14 @@ func TestDeprecatetableMetaPersist(t *testing.T) {
 			}
 		}
 		deprecatedNumberFirst := db.vlog.deprecatedNumber
+		totalNumberFirst := db.vlog.totalNumber
 		db.Close()
 		db, err = Open(options)
 		deprecatedNumberSecond := db.vlog.deprecatedNumber
+		totalNumberSecond := db.vlog.totalNumber
 		require.NoError(t, err)
 		assert.Equal(t, deprecatedNumberFirst, deprecatedNumberSecond)
+		assert.Equal(t, totalNumberFirst, totalNumberSecond)
 	})
 }
 

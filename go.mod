@@ -14,7 +14,11 @@ require (
 	golang.org/x/sync v0.5.0
 )
 
-require github.com/shirou/gopsutil v3.21.11+incompatible // indirect
+require (
+	github.com/go-ole/go-ole v1.2.6 // indirect
+	github.com/shirou/gopsutil v3.21.11+incompatible // indirect
+	github.com/yusufpapurcu/wmi v1.2.4 // indirect
+)
 
 require (
 	github.com/davecgh/go-spew v1.1.1 // indirect

@@ -57,11 +57,11 @@ type Options struct {
 	// writing entries to disk after reading the specified number of entries.
 	CompactBatchCount int
 
-	// deprecatedtable recommend compaction size
-	deprecatedtableLowerThreshold uint32
+	// deprecatedtable recommend compaction rate
+	deprecatedtableLowerRate float32
 
-	// deprecatedtable force compaction size
-	deprecatedtableUpperThreshold uint32
+	// deprecatedtable force compaction rate
+	deprecatedtableUpperRate float32
 
 	// sampling interval of diskIO, unit is millisecond
 	diskIOSamplingInterval int
@@ -143,9 +143,11 @@ var DefaultOptions = Options{
 	ValueLogFileSize: 1 * GB,
 	IndexType:        BTree,
 	//nolint:gomnd // default
-	CompactBatchCount:             10000,
-	deprecatedtableLowerThreshold: 2 * 100 * KB, // 200K
-	deprecatedtableUpperThreshold: 4 * 100 * KB, // 400K
+	CompactBatchCount:        10000,
+	//nolint:gomnd // default
+	deprecatedtableLowerRate: 0.3,
+	//nolint:gomnd // default
+	deprecatedtableUpperRate: 0.5,
 	//nolint:gomnd // default
 	diskIOSamplingInterval: 100,
 	//nolint:gomnd // default

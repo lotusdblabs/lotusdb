@@ -91,6 +91,7 @@ func Open(options Options) (*DB, error) {
 	// create deprecatedMeta file if not exist, read deprecatedNumber
 	deprecatedMetaPath := filepath.Join(options.DirPath, deprecatedMetaName)
 	var deprecatedNumber uint32
+	var totalEntryNumber uint32
 	//nolint:nestif // The situation here requires more judgments, so there are quite a few nested conditions.
 	if _, err = os.Stat(deprecatedMetaPath); os.IsNotExist(err) {
 		var file *os.File
@@ -99,6 +100,7 @@ func Open(options Options) (*DB, error) {
 			return nil, err
 		}
 		deprecatedNumber = 0
+		totalEntryNumber = 0
 		defer file.Close()
 	} else if err != nil {
 		return nil, err
@@ -108,11 +110,28 @@ func Open(options Options) (*DB, error) {
 		if err != nil {
 			return nil, err
 		}
+		// 读取deprecatedNumber
 		err = binary.Read(file, binary.LittleEndian, &deprecatedNumber)
 		if err != nil {
+			// 处理错误
 			return nil, err
 		}
-		defer file.Close()
+
+		// 读取totalEntryNumber
+		err = binary.Read(file, binary.LittleEndian, &totalEntryNumber)
+		if err != nil {
+			// 处理错误
+			return nil, err
+		}
+
+		// 打印读取的值
+		log.Println("Deprecated Number:", deprecatedNumber)
+		log.Println("Total Entry Number:", totalEntryNumber)
+		// err = binary.Read(file, binary.LittleEndian, &deprecatedNumber)
+		// if err != nil {
+		// 	return nil, err
+		// }
+		// defer file.Close()
 	}
 
 	// open all memtables
@@ -134,15 +153,14 @@ func Open(options Options) (*DB, error) {
 
 	// open value log
 	vlog, err := openValueLog(valueLogOptions{
-		dirPath:                       options.DirPath,
-		segmentSize:                   options.ValueLogFileSize,
-		blockCache:                    options.BlockCache,
-		partitionNum:                  uint32(options.PartitionNum),
-		hashKeyFunction:               options.KeyHashFunction,
-		compactBatchCount:             options.CompactBatchCount,
-		deprecatedtableNumber:         deprecatedNumber,
-		deprecatedtableLowerThreshold: options.deprecatedtableLowerThreshold,
-		deprecatedtableUpperThreshold: options.deprecatedtableUpperThreshold,
+		dirPath:               options.DirPath,
+		segmentSize:           options.ValueLogFileSize,
+		blockCache:            options.BlockCache,
+		partitionNum:          uint32(options.PartitionNum),
+		hashKeyFunction:       options.KeyHashFunction,
+		compactBatchCount:     options.CompactBatchCount,
+		deprecatedtableNumber: deprecatedNumber,
+		totalNumber:           totalEntryNumber,
 	})
 	if err != nil {
 		return nil, err
@@ -213,7 +231,7 @@ func (db *DB) Close() error {
 		return err
 	}
 
-	// persist deprecated number
+	// persist deprecated number and total entry number
 	deprecatedMetaPath := filepath.Join(db.options.DirPath, deprecatedMetaName)
 	file, err := os.OpenFile(deprecatedMetaPath, os.O_RDWR|os.O_TRUNC, 0666)
 	if err != nil {
@@ -225,6 +243,12 @@ func (db *DB) Close() error {
 		return err
 	}
 	log.Println("store deprecatedNumber:", deprecatedNumber)
+	totalEntryNumberNumber := db.vlog.totalNumber
+	err = binary.Write(file, binary.LittleEndian, &totalEntryNumberNumber)
+	if err != nil {
+		return err
+	}
+	log.Println("store totalNumber:", totalEntryNumberNumber)
 	defer file.Close()
 
 	// close value log
@@ -542,14 +566,16 @@ func (db *DB) flushMemtable(table *memtable) {
 	db.mu.Unlock()
 	if db.options.autoCompact {
 		// check deprecatedtable size
+		lowerThreshold := uint32((float32)(db.vlog.totalNumber) * db.options.deprecatedtableLowerRate)
+		upperThreshold := uint32((float32)(db.vlog.totalNumber) * db.options.deprecatedtableUpperRate)
 		log.Println("[data in flush]", "deprecatedNumber:", db.vlog.deprecatedNumber,
-			"LowerThreshold:", db.options.deprecatedtableLowerThreshold,
-			"UpperThreshold:", db.options.deprecatedtableUpperThreshold)
-		if db.vlog.deprecatedNumber >= db.options.deprecatedtableUpperThreshold {
+			"LowerThreshold by rate:", lowerThreshold,
+			"UpperThreshold by rate:", upperThreshold)
+		if db.vlog.deprecatedNumber >= upperThreshold {
 			db.compactChan <- deprecatedState{
 				thresholdState: ThresholdState(ArriveUpperThreshold),
 			}
-		} else if db.vlog.deprecatedNumber > db.options.deprecatedtableLowerThreshold {
+		} else if db.vlog.deprecatedNumber > lowerThreshold {
 			db.compactChan <- deprecatedState{
 				thresholdState: ThresholdState(ArriveLowerThreshold),
 			}
@@ -771,7 +797,7 @@ func (db *DB) Compact() error {
 			return nil
 		})
 	}
-
+	db.vlog.cleanDeprecatedTable()
 	return g.Wait()
 }
 

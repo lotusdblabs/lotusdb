@@ -20,6 +20,7 @@ type valueLog struct {
 	walFiles         []*wal.WAL
 	dpTables         []*deprecatedtable
 	deprecatedNumber uint32
+	totalNumber      uint32
 	options          valueLogOptions
 }
 
@@ -44,14 +45,11 @@ type valueLogOptions struct {
 	// writing validEntries to disk after reading the specified number of entries.
 	compactBatchCount int
 
-	// deprecated Number
+	// deprecated number
 	deprecatedtableNumber uint32
 
-	// deprecatedtable recommend compaction size
-	deprecatedtableLowerThreshold uint32
-
-	// deprecatedtable force compaction size
-	deprecatedtableUpperThreshold uint32
+	// total number
+	totalNumber uint32
 }
 
 // open wal files for value log, it will open several wal files for concurrent writing and reading
@@ -74,13 +72,7 @@ func openValueLog(options valueLogOptions) (*valueLog, error) {
 		}
 		walFiles = append(walFiles, vLogWal)
 		// init dpTable
-		dpTableOption := deprecatedtableOptions{
-			0,
-			options.deprecatedtableLowerThreshold,
-			options.deprecatedtableUpperThreshold,
-		}
-
-		dpTable := newDeprecatedTable(i, dpTableOption)
+		dpTable := newDeprecatedTable(i)
 		dpTables = append(dpTables, dpTable)
 	}
 
@@ -88,6 +80,7 @@ func openValueLog(options valueLogOptions) (*valueLog, error) {
 		walFiles:         walFiles,
 		dpTables:         dpTables,
 		deprecatedNumber: options.deprecatedtableNumber,
+		totalNumber:      options.totalNumber,
 		options:          options}, nil
 }
 
@@ -106,6 +99,7 @@ func (vlog *valueLog) read(pos *KeyPosition) (*ValueLogRecord, error) {
 func (vlog *valueLog) writeBatch(records []*ValueLogRecord) ([]*KeyPosition, error) {
 	// group the records by partition
 	partitionRecords := make([][]*ValueLogRecord, vlog.options.partitionNum)
+	vlog.totalNumber += uint32(len(records))
 	for _, record := range records {
 		p := vlog.getKeyPartition(record.key)
 		partitionRecords[p] = append(partitionRecords[p], record)
@@ -209,5 +203,6 @@ func (vlog *valueLog) cleanDeprecatedTable() {
 	for i := 0; i < int(vlog.options.partitionNum); i++ {
 		vlog.dpTables[i].clean()
 	}
+	vlog.totalNumber -= vlog.deprecatedNumber
 	vlog.deprecatedNumber = 0
 }

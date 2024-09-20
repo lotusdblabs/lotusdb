@@ -20,18 +20,8 @@ type (
 	deprecatedtable struct {
 		partition int
 		// table   map[uint32]map[uuid.UUID]bool // we store deprecated uuid of keys,in memory
-		table   map[uuid.UUID]bool
-		size    uint32
-		options deprecatedtableOptions
-	}
-	// The deprecatedtableOptions used to init dptable,
-	// and we have set some default in DefaultOptions.
-	// When sum of dptables number >= lowerThreshold,it notifies autoCompact try to compact all vlog,
-	// and force compact all vlog when size arrive upperThreshold.
-	deprecatedtableOptions struct {
-		capacity       uint32
-		lowerThreshold uint32
-		upperThreshold uint32
+		table map[uuid.UUID]bool
+		size  uint32
 	}
 
 	// used to send message to autoCompact.
@@ -41,12 +31,11 @@ type (
 )
 
 // Create a new deprecatedtable.
-func newDeprecatedTable(partition int, options deprecatedtableOptions) *deprecatedtable {
+func newDeprecatedTable(partition int) *deprecatedtable {
 	return &deprecatedtable{
 		partition: partition,
 		table:     make(map[uuid.UUID]bool),
 		size:      0,
-		options:   options,
 	}
 }
 
