@@ -656,7 +656,7 @@ func TestDBAutoCompactWithBusyIO(t *testing.T) {
 				DisableWal: false,
 			})
 		}
-		go SimpleIO(options.DirPath + "iofile")
+		go SimpleIO(options.DirPath + "iofile",100)
 		for i := 0; i <= 10; i++ {
 			// write logs and flush
 			logs := produceAndWriteLogs(50000, db)
@@ -1106,14 +1106,15 @@ func TestDeprecatetableMetaPersist(t *testing.T) {
 	})
 }
 
-func SimpleIO(targetPath string) {
+func SimpleIO(targetPath string, count int) {
 	file, err := os.Create(targetPath)
 	if err != nil {
 		log.Println("Error creating file:", err)
 		return
 	}
 	data := util.RandomValue(1 << 25)
-	for {
+	for count > 0 {
+		count--
 		_, err = file.Write(data)
 		if err != nil {
 			log.Println("Error writing to file:", err)
@@ -1126,31 +1127,6 @@ func SimpleIO(targetPath string) {
 			return
 		}
 
-		time.Sleep(1 * time.Millisecond)
+		time.Sleep(10 * time.Millisecond)
 	}
 }
-
-// func TestDiskIO(t *testing.T) {
-// 	options := DefaultOptions
-// 	options.autoCompact = true
-// 	path, err := os.MkdirTemp("", "db-test-diskio")
-// 	require.NoError(t, err)
-// 	options.DirPath = path
-// 	options.CompactBatchCount = 2 << 5
-
-// 	db, err := Open(options)
-// 	require.NoError(t, err)
-// 	defer destroyDB(db)
-
-// 	t.Run("test diskio", func(t *testing.T) {
-// 		go SimpleIO(options.DirPath + "iofile")
-// 		var free bool
-// 		free = true
-// 		tryCount := 200
-// 		for free && tryCount > 0 {
-// 			free, _ = db.diskIO.IsFree()
-// 			tryCount--
-// 		}
-// 		assert.False(t, free)
-// 	})
-// }
