@@ -215,6 +215,8 @@ func Open(options Options) (*DB, error) {
 func (db *DB) Close() error {
 	close(db.flushChan)
 	<-db.closeChan
+	close(db.compactChan)
+	<-db.compactChan
 	db.mu.Lock()
 	defer db.mu.Unlock()
 	// close all memtables
