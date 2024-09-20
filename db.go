@@ -202,7 +202,6 @@ func Open(options Options) (*DB, error) {
 	// start disk IO monitoring,
 	// blocking low threshold compact operations when busy.
 	if runtime.GOOS == "linux" {
-		fmt.Println("Env Linux")
 		go db.listenDiskIOState()
 	}
 	
