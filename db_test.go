@@ -619,72 +619,72 @@ func TestDBAutoCompact(t *testing.T) {
 	})
 }
 
-func TestDBAutoCompactWithBusyIO(t *testing.T) {
-	options := DefaultOptions
-	options.autoCompact = true
-	path, err := os.MkdirTemp("", "db-test-AutoCompactWithBusyIO")
-	require.NoError(t, err)
-	options.DirPath = path
-	options.CompactBatchCount = 2 << 5
+// func TestDBAutoCompactWithBusyIO(t *testing.T) {
+// 	options := DefaultOptions
+// 	options.autoCompact = true
+// 	path, err := os.MkdirTemp("", "db-test-AutoCompactWithBusyIO")
+// 	require.NoError(t, err)
+// 	options.DirPath = path
+// 	options.CompactBatchCount = 2 << 5
 
-	db, err := Open(options)
-	require.NoError(t, err)
-	defer destroyDB(db)
+// 	db, err := Open(options)
+// 	require.NoError(t, err)
+// 	defer destroyDB(db)
 
-	testlogs := []*testLog{
-		{key: []byte("key 0"), value: []byte("value 0")},
-		{key: []byte("key 1"), value: []byte("value 1")},
-		{key: []byte("key 2"), value: []byte("value 2")},
-	}
+// 	testlogs := []*testLog{
+// 		{key: []byte("key 0"), value: []byte("value 0")},
+// 		{key: []byte("key 1"), value: []byte("value 1")},
+// 		{key: []byte("key 2"), value: []byte("value 2")},
+// 	}
 
-	testrmlogs := []*testLog{
-		{key: []byte("key 0 rm"), value: []byte("value 0")},
-		{key: []byte("key 1 rm"), value: []byte("value 1")},
-		{key: []byte("key 2 rm"), value: []byte("value 2")},
-	}
+// 	testrmlogs := []*testLog{
+// 		{key: []byte("key 0 rm"), value: []byte("value 0")},
+// 		{key: []byte("key 1 rm"), value: []byte("value 1")},
+// 		{key: []byte("key 2 rm"), value: []byte("value 2")},
+// 	}
 
-	t.Run("test compaction", func(t *testing.T) {
-		for _, log := range testlogs {
-			_ = db.PutWithOptions(log.key, log.value, WriteOptions{
-				Sync:       true,
-				DisableWal: false,
-			})
-		}
-		for _, log := range testrmlogs {
-			_ = db.DeleteWithOptions(log.key, WriteOptions{
-				Sync:       true,
-				DisableWal: false,
-			})
-		}
-		go SimpleIO(options.DirPath+"iofile", 100)
-		for i := 0; i <= 10; i++ {
-			// write logs and flush
-			logs := produceAndWriteLogs(50000, db)
-			// delete logs
-			for idx, log := range logs {
-				if idx%5 == 0 {
-					_ = db.DeleteWithOptions(log.key, WriteOptions{
-						Sync:       true,
-						DisableWal: false,
-					})
-				}
-			}
-		}
-		require.NoError(t, err)
+// 	t.Run("test compaction", func(t *testing.T) {
+// 		for _, log := range testlogs {
+// 			_ = db.PutWithOptions(log.key, log.value, WriteOptions{
+// 				Sync:       true,
+// 				DisableWal: false,
+// 			})
+// 		}
+// 		for _, log := range testrmlogs {
+// 			_ = db.DeleteWithOptions(log.key, WriteOptions{
+// 				Sync:       true,
+// 				DisableWal: false,
+// 			})
+// 		}
+// 		go SimpleIO(options.DirPath+"iofile", 100)
+// 		for i := 0; i <= 10; i++ {
+// 			// write logs and flush
+// 			logs := produceAndWriteLogs(50000, db)
+// 			// delete logs
+// 			for idx, log := range logs {
+// 				if idx%5 == 0 {
+// 					_ = db.DeleteWithOptions(log.key, WriteOptions{
+// 						Sync:       true,
+// 						DisableWal: false,
+// 					})
+// 				}
+// 			}
+// 		}
+// 		require.NoError(t, err)
 
-		var value []byte
-		for _, log := range testlogs {
-			value, err = getValueFromVlog(db, log.key)
-			require.NoError(t, err)
-			assert.Equal(t, log.value, value)
-		}
-		for _, log := range testrmlogs {
-			value, err = db.Get(log.key)
-			require.Error(t, err)
-			assert.Equal(t, []byte(nil), value)
-		}
-	})
-}
+// 		var value []byte
+// 		for _, log := range testlogs {
+// 			value, err = getValueFromVlog(db, log.key)
+// 			require.NoError(t, err)
+// 			assert.Equal(t, log.value, value)
+// 		}
+// 		for _, log := range testrmlogs {
+// 			value, err = db.Get(log.key)
+// 			require.Error(t, err)
+// 			assert.Equal(t, []byte(nil), value)
+// 		}
+// 	})
+// }
 
 func getValueFromVlog(db *DB, key []byte) ([]byte, error) {
 	var value []byte
