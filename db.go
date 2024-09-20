@@ -475,7 +475,7 @@ func (db *DB) flushMemtable(table *memtable) {
 		sklIter := table.skl.NewIterator()
 		var deletedKeys [][]byte
 		var logRecords []*ValueLogRecord
-	
+
 		// iterate all records in memtable, divide them into deleted keys and log records
 		// for every log record, we generate uuid.
 		for sklIter.SeekToFirst(); sklIter.Valid(); sklIter.Next() {
@@ -488,20 +488,20 @@ func (db *DB) flushMemtable(table *memtable) {
 			}
 		}
 		_ = sklIter.Close()
-	
+
 		// write to value log, get the positions of keys
 		keyPos, err := db.vlog.writeBatch(logRecords)
 		if err != nil {
 			log.Println("vlog writeBatch failed:", err)
 			return
 		}
-	
+
 		// sync the value log
 		if err = db.vlog.sync(); err != nil {
 			log.Println("vlog sync failed:", err)
 			return
 		}
-	
+
 		// Add old key uuid into deprecatedtable, write all keys and positions to index.
 		var putMatchKeys []diskhash.MatchKeyFunc
 		if db.options.IndexType == Hash && len(keyPos) > 0 {
@@ -510,19 +510,19 @@ func (db *DB) flushMemtable(table *memtable) {
 				putMatchKeys[i] = MatchKeyFunc(db, keyPos[i].key, nil, nil)
 			}
 		}
-	
+
 		// Write all keys and positions to index.
 		oldKeyPostions, err := db.index.PutBatch(keyPos, putMatchKeys...)
 		if err != nil {
 			log.Println("index PutBatch failed:", err)
 			return
 		}
-	
+
 		// Add old key uuid into deprecatedtable
 		for _, oldKeyPostion := range oldKeyPostions {
 			db.vlog.setDeprecated(oldKeyPostion.partition, oldKeyPostion.uid)
 		}
-	
+
 		// Add deleted key uuid into deprecatedtable, and delete the deleted keys from index.
 		var deleteMatchKeys []diskhash.MatchKeyFunc
 		if db.options.IndexType == Hash && len(deletedKeys) > 0 {
@@ -531,13 +531,13 @@ func (db *DB) flushMemtable(table *memtable) {
 				deleteMatchKeys[i] = MatchKeyFunc(db, deletedKeys[i], nil, nil)
 			}
 		}
-	
+
 		// delete the deleted keys from index
 		if oldKeyPostions, err = db.index.DeleteBatch(deletedKeys, deleteMatchKeys...); err != nil {
 			log.Println("index DeleteBatch failed:", err)
 			return
 		}
-	
+
 		// uuid into deprecatedtable
 		for _, oldKeyPostion := range oldKeyPostions {
 			db.vlog.setDeprecated(oldKeyPostion.partition, oldKeyPostion.uid)
@@ -547,13 +547,13 @@ func (db *DB) flushMemtable(table *memtable) {
 			log.Println("index sync failed:", err)
 			return
 		}
-	
+
 		// delete the wal
 		if err = table.deleteWAl(); err != nil {
 			log.Println("delete wal failed:", err)
 			return
 		}
-	
+
 		// delete old memtable kept in memory
 		db.mu.Lock()
 		if table == db.activeMem {
