@@ -656,7 +656,7 @@ func TestDBAutoCompactWithBusyIO(t *testing.T) {
 				DisableWal: false,
 			})
 		}
-		go SimpleIO(options.DirPath + "iofile",100)
+		go SimpleIO(options.DirPath+"iofile", 100)
 		for i := 0; i <= 10; i++ {
 			// write logs and flush
 			logs := produceAndWriteLogs(50000, db)
