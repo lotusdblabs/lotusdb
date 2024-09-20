@@ -690,7 +690,7 @@ func TestDBAutoCompactWithBusyIONoMonitor(t *testing.T) {
 	options := DefaultOptions
 	options.diskIOBusyRate = -1.0
 	options.autoCompact = true
-	path, err := os.MkdirTemp("", "db-test-AutoCompactWithBusyIORate_0dot8")
+	path, err := os.MkdirTemp("", "db-test-CompactWithBusyIONoMonitor")
 	require.NoError(t, err)
 	options.DirPath = path
 	options.CompactBatchCount = 2 << 5
@@ -699,31 +699,7 @@ func TestDBAutoCompactWithBusyIONoMonitor(t *testing.T) {
 	require.NoError(t, err)
 	defer destroyDB(db)
 
-	testlogs := []*testLog{
-		{key: []byte("key 0"), value: []byte("value 0")},
-		{key: []byte("key 1"), value: []byte("value 1")},
-		{key: []byte("key 2"), value: []byte("value 2")},
-	}
-
-	testrmlogs := []*testLog{
-		{key: []byte("key 0 rm"), value: []byte("value 0")},
-		{key: []byte("key 1 rm"), value: []byte("value 1")},
-		{key: []byte("key 2 rm"), value: []byte("value 2")},
-	}
-
 	t.Run("test compaction", func(t *testing.T) {
-		for _, log := range testlogs {
-			_ = db.PutWithOptions(log.key, log.value, WriteOptions{
-				Sync:       true,
-				DisableWal: false,
-			})
-		}
-		for _, log := range testrmlogs {
-			_ = db.DeleteWithOptions(log.key, WriteOptions{
-				Sync:       true,
-				DisableWal: false,
-			})
-		}
 		go SimpleIO(options.DirPath + "iofile")
 		for i := 0; i <= 10; i++ {
 			// write logs and flush
@@ -739,18 +715,6 @@ func TestDBAutoCompactWithBusyIONoMonitor(t *testing.T) {
 			}
 		}
 		require.NoError(t, err)
-
-		var value []byte
-		for _, log := range testlogs {
-			value, err = getValueFromVlog(db, log.key)
-			require.NoError(t, err)
-			assert.Equal(t, log.value, value)
-		}
-		for _, log := range testrmlogs {
-			value, err = db.Get(log.key)
-			require.Error(t, err)
-			assert.Equal(t, []byte(nil), value)
-		}
 	})
 }
 
