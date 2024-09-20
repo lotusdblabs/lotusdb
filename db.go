@@ -204,7 +204,6 @@ func Open(options Options) (*DB, error) {
 	if runtime.GOOS == "linux" {
 		go db.listenDiskIOState()
 	}
-	
 
 	// start autoCompact goroutine asynchronously,
 	// listen deprecatedtable state, and compact automatically.
