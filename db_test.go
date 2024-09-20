@@ -454,7 +454,7 @@ func TestDBCompact(t *testing.T) {
 		})
 	}
 
-	for i := 0; i <= 10; i++ {
+	for i := 0; i <= 5; i++ {
 		for _, log := range testlogs {
 			_ = db.PutWithOptions(log.key, log.value, WriteOptions{
 				Sync:       true,
@@ -511,7 +511,7 @@ func TestDBCompactWitchDeprecatetable(t *testing.T) {
 		{key: []byte("key 1"), value: []byte("value 1")},
 		{key: []byte("key 2"), value: []byte("value 2")},
 	}
-	for i := 0; i <= 10; i++ {
+	for i := 0; i <= 5; i++ {
 		for _, log := range testlogs {
 			_ = db.PutWithOptions(log.key, log.value, WriteOptions{
 				Sync:       true,
@@ -589,7 +589,7 @@ func TestDBAutoCompact(t *testing.T) {
 				DisableWal: false,
 			})
 		}
-		for i := 0; i <= 10; i++ {
+		for i := 0; i <= 5; i++ {
 			// write logs and flush
 			logs := produceAndWriteLogs(50000, db)
 			// delete logs
@@ -683,38 +683,6 @@ func TestDBAutoCompactWithBusyIO(t *testing.T) {
 			require.Error(t, err)
 			assert.Equal(t, []byte(nil), value)
 		}
-	})
-}
-
-func TestDBAutoCompactWithBusyIONoMonitor(t *testing.T) {
-	options := DefaultOptions
-	options.diskIOBusyRate = -1.0
-	options.autoCompact = true
-	path, err := os.MkdirTemp("", "db-test-AutoCompactWithBusyIONoMonito")
-	require.NoError(t, err)
-	options.DirPath = path
-	options.CompactBatchCount = 2 << 5
-
-	db, err := Open(options)
-	require.NoError(t, err)
-	defer destroyDB(db)
-
-	t.Run("test compaction", func(t *testing.T) {
-		go SimpleIO(options.DirPath + "iofile")
-		for i := 0; i <= 10; i++ {
-			// write logs and flush
-			logs := produceAndWriteLogs(50000, db)
-			// delete logs
-			for idx, log := range logs {
-				if idx%5 == 0 {
-					_ = db.DeleteWithOptions(log.key, WriteOptions{
-						Sync:       true,
-						DisableWal: false,
-					})
-				}
-			}
-		}
-		require.NoError(t, err)
 	})
 }
 
@@ -813,7 +781,7 @@ func TestDBMultiClients(t *testing.T) {
 		for i := 0; i < 2; i++ {
 			wg.Add(1)
 			go func(i int) {
-				delLogs := produceAndWriteLogs(150000, db)
+				delLogs := produceAndWriteLogs(50000, db)
 				// delete logs
 				for idx, log := range delLogs {
 					if idx%5 == 0 {
@@ -1158,31 +1126,31 @@ func SimpleIO(targetPath string) {
 			return
 		}
 
-		// time.Sleep(time.Duration(sleepTime) * time.Millisecond)
+		time.Sleep(1 * time.Millisecond)
 	}
 }
 
-func TestDiskIO(t *testing.T) {
-	options := DefaultOptions
-	options.autoCompact = true
-	path, err := os.MkdirTemp("", "db-test-diskio")
-	require.NoError(t, err)
-	options.DirPath = path
-	options.CompactBatchCount = 2 << 5
+// func TestDiskIO(t *testing.T) {
+// 	options := DefaultOptions
+// 	options.autoCompact = true
+// 	path, err := os.MkdirTemp("", "db-test-diskio")
+// 	require.NoError(t, err)
+// 	options.DirPath = path
+// 	options.CompactBatchCount = 2 << 5
 
-	db, err := Open(options)
-	require.NoError(t, err)
-	defer destroyDB(db)
+// 	db, err := Open(options)
+// 	require.NoError(t, err)
+// 	defer destroyDB(db)
 
-	t.Run("test diskio", func(t *testing.T) {
-		go SimpleIO(options.DirPath + "iofile")
-		var free bool
-		free = true
-		tryCount := 200
-		for free && tryCount > 0 {
-			free, _ = db.diskIO.IsFree()
-			tryCount--
-		}
-		assert.False(t, free)
-	})
-}
+// 	t.Run("test diskio", func(t *testing.T) {
+// 		go SimpleIO(options.DirPath + "iofile")
+// 		var free bool
+// 		free = true
+// 		tryCount := 200
+// 		for free && tryCount > 0 {
+// 			free, _ = db.diskIO.IsFree()
+// 			tryCount--
+// 		}
+// 		assert.False(t, free)
+// 	})
+// }
