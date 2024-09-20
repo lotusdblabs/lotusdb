@@ -39,20 +39,21 @@ const (
 // It combines the advantages of LSM tree and B+ tree, read and write are both very fast.
 // It is also very memory efficient, and can store billions of key-value pairs in a single machine.
 type DB struct {
-	activeMem   *memtable            // Active memtable for writing.
-	immuMems    []*memtable          // Immutable memtables, waiting to be flushed to disk.
-	index       Index                // index is multi-partition indexes to store key and chunk position.
-	vlog        *valueLog            // vlog is the value log.
-	fileLock    *flock.Flock         // fileLock to prevent multiple processes from using the same database directory.
-	flushChan   chan *memtable       // flushChan is used to notify the flush goroutine to flush memtable to disk.
-	flushLock   sync.Mutex           // flushLock is to prevent flush running while compaction doesn't occur
-	compactChan chan deprecatedState // compactChan is used to notify the shard need to compact
-	diskIO      *DiskIO              // monitoring the IO status of disks and allowing autoCompact when appropriate
-	mu          sync.RWMutex
-	closed      bool
-	closeChan   chan struct{}
-	options     Options
-	batchPool   sync.Pool // batchPool is a pool of batch, to reduce the cost of memory allocation.
+	activeMem        *memtable            // Active memtable for writing.
+	immuMems         []*memtable          // Immutable memtables, waiting to be flushed to disk.
+	index            Index                // index is multi-partition indexes to store key and chunk position.
+	vlog             *valueLog            // vlog is the value log.
+	fileLock         *flock.Flock         // fileLock to prevent multiple processes from using the same database directory.
+	flushChan        chan *memtable       // flushChan is used to notify the flush goroutine to flush memtable to disk.
+	flushLock        sync.Mutex           // flushLock is to prevent flush running while compaction doesn't occur
+	compactChan      chan deprecatedState // compactChan is used to notify the shard need to compact
+	diskIO           *DiskIO              // monitoring the IO status of disks and allowing autoCompact when appropriate
+	mu               sync.RWMutex
+	closed           bool
+	closeflushChan   chan struct{}
+	closeCompactChan chan struct{}
+	options          Options
+	batchPool        sync.Pool // batchPool is a pool of batch, to reduce the cost of memory allocation.
 }
 
 // Open a database with the specified options.
@@ -172,17 +173,18 @@ func Open(options Options) (*DB, error) {
 	diskIO.busyRate = options.diskIOBusyRate
 
 	db := &DB{
-		activeMem:   memtables[len(memtables)-1],
-		immuMems:    memtables[:len(memtables)-1],
-		index:       index,
-		vlog:        vlog,
-		fileLock:    fileLock,
-		flushChan:   make(chan *memtable, options.MemtableNums-1),
-		closeChan:   make(chan struct{}),
-		compactChan: make(chan deprecatedState),
-		diskIO:      diskIO,
-		options:     options,
-		batchPool:   sync.Pool{New: makeBatch},
+		activeMem:        memtables[len(memtables)-1],
+		immuMems:         memtables[:len(memtables)-1],
+		index:            index,
+		vlog:             vlog,
+		fileLock:         fileLock,
+		flushChan:        make(chan *memtable, options.MemtableNums-1),
+		closeflushChan:   make(chan struct{}),
+		closeCompactChan: make(chan struct{}),
+		compactChan:      make(chan deprecatedState),
+		diskIO:           diskIO,
+		options:          options,
+		batchPool:        sync.Pool{New: makeBatch},
 	}
 
 	// if there are some immutable memtables when opening the database, flush them to disk
@@ -216,8 +218,12 @@ func (db *DB) Close() error {
 	db.mu.Lock()
 	defer db.mu.Unlock()
 	close(db.flushChan)
-	close(db.compactChan)
-	<-db.closeChan
+	<-db.closeflushChan
+	if db.options.autoCompact {
+		close(db.compactChan)
+		<-db.closeCompactChan
+	}
+
 	// close all memtables
 	for _, table := range db.immuMems {
 		if err := table.close(); err != nil {
@@ -562,7 +568,7 @@ func (db *DB) flushMemtable(table *memtable) {
 			db.immuMems = db.immuMems[1:]
 		}
 	}
-
+	db.mu.Unlock()
 	db.flushLock.Unlock()
 	if db.options.autoCompact {
 		// check deprecatedtable size
@@ -581,7 +587,6 @@ func (db *DB) flushMemtable(table *memtable) {
 			}
 		}
 	}
-	db.mu.Unlock()
 }
 
 func (db *DB) listenMemtableFlush() {
@@ -593,7 +598,7 @@ func (db *DB) listenMemtableFlush() {
 			if ok {
 				db.flushMemtable(table)
 			} else {
-				db.closeChan <- struct{}{}
+				db.closeflushChan <- struct{}{}
 				return
 			}
 		case <-sig:
@@ -654,6 +659,7 @@ func (db *DB) listenAutoCompact() {
 					<-db.compactChan
 				}
 			} else {
+				db.closeCompactChan <- struct{}{}
 				return
 			}
 		case <-sig:
