@@ -46,13 +46,13 @@ type DB struct {
 	vlog             *valueLog            // vlog is the value log.
 	fileLock         *flock.Flock         // fileLock to prevent multiple processes from using the same database directory.
 	flushChan        chan *memtable       // flushChan is used to notify the flush goroutine to flush memtable to disk.
-	flushLock        sync.Mutex           // flushLock is to prevent flush running while compaction doesn't occur
-	compactChan      chan deprecatedState // compactChan is used to notify the shard need to compact
-	diskIO           *DiskIO              // monitoring the IO status of disks and allowing autoCompact when appropriate
+	flushLock        sync.Mutex           // flushLock is to prevent flush running while compaction doesn't occur.
+	compactChan      chan deprecatedState // compactChan is used to notify the shard need to compact.
+	diskIO           *DiskIO              // monitoring the IO status of disks and allowing autoCompact when appropriate.
 	mu               sync.RWMutex
 	closed           bool
-	closeflushChan   chan struct{}
-	closeCompactChan chan struct{}
+	closeflushChan   chan struct{} // used to elegantly close flush listening coroutines.
+	closeCompactChan chan struct{} // used to elegantly close autoCompact listening coroutines.
 	options          Options
 	batchPool        sync.Pool // batchPool is a pool of batch, to reduce the cost of memory allocation.
 }
@@ -92,48 +92,9 @@ func Open(options Options) (*DB, error) {
 
 	// create deprecatedMeta file if not exist, read deprecatedNumber
 	deprecatedMetaPath := filepath.Join(options.DirPath, deprecatedMetaName)
-	var deprecatedNumber uint32
-	var totalEntryNumber uint32
-	//nolint:nestif // The situation here requires more judgments, so there are quite a few nested conditions.
-	if _, err = os.Stat(deprecatedMetaPath); os.IsNotExist(err) {
-		var file *os.File
-		file, err = os.Create(deprecatedMetaPath)
-		if err != nil {
-			return nil, err
-		}
-		deprecatedNumber = 0
-		totalEntryNumber = 0
-		defer file.Close()
-	} else if err != nil {
+	deprecatedNumber, totalEntryNumber, err := loadDeprecatedEntryMeta(deprecatedMetaPath)
+	if err != nil {
 		return nil, err
-	} else {
-		var file *os.File
-		file, err = os.Open(deprecatedMetaPath)
-		if err != nil {
-			return nil, err
-		}
-		// 读取deprecatedNumber
-		err = binary.Read(file, binary.LittleEndian, &deprecatedNumber)
-		if err != nil {
-			// 处理错误
-			return nil, err
-		}
-
-		// 读取totalEntryNumber
-		err = binary.Read(file, binary.LittleEndian, &totalEntryNumber)
-		if err != nil {
-			// 处理错误
-			return nil, err
-		}
-
-		// 打印读取的值
-		log.Println("Deprecated Number:", deprecatedNumber)
-		log.Println("Total Entry Number:", totalEntryNumber)
-		// err = binary.Read(file, binary.LittleEndian, &deprecatedNumber)
-		// if err != nil {
-		// 	return nil, err
-		// }
-		// defer file.Close()
 	}
 
 	// open all memtables
@@ -243,23 +204,10 @@ func (db *DB) Close() error {
 
 	// persist deprecated number and total entry number
 	deprecatedMetaPath := filepath.Join(db.options.DirPath, deprecatedMetaName)
-	file, err := os.OpenFile(deprecatedMetaPath, os.O_RDWR|os.O_TRUNC, 0666)
+	err := storeDeprecatedEntryMeta(deprecatedMetaPath, db.vlog.deprecatedNumber, db.vlog.totalNumber)
 	if err != nil {
 		return err
 	}
-	deprecatedNumber := db.vlog.deprecatedNumber
-	err = binary.Write(file, binary.LittleEndian, &deprecatedNumber)
-	if err != nil {
-		return err
-	}
-	log.Println("store deprecatedNumber:", deprecatedNumber)
-	totalEntryNumberNumber := db.vlog.totalNumber
-	err = binary.Write(file, binary.LittleEndian, &totalEntryNumberNumber)
-	if err != nil {
-		return err
-	}
-	log.Println("store totalNumber:", totalEntryNumberNumber)
-	defer file.Close()
 
 	// close value log
 	if err = db.vlog.close(); err != nil {
@@ -584,11 +532,11 @@ func (db *DB) flushMemtable(table *memtable) {
 			"UpperThreshold by rate:", upperThreshold)
 		if db.vlog.deprecatedNumber >= upperThreshold {
 			db.compactChan <- deprecatedState{
-				thresholdState: ThresholdState(ArriveUpperThreshold),
+				thresholdState: ThresholdState(ArriveForceThreshold),
 			}
 		} else if db.vlog.deprecatedNumber > lowerThreshold {
 			db.compactChan <- deprecatedState{
-				thresholdState: ThresholdState(ArriveLowerThreshold),
+				thresholdState: ThresholdState(ArriveAdvisedThreshold),
 			}
 		}
 	}
@@ -628,7 +576,7 @@ func (db *DB) listenAutoCompact() {
 			err = nil
 			//nolint:nestif // It requires multiple nested conditions for different thresholds and error judgments.
 			if ok {
-				if state.thresholdState == ThresholdState(ArriveUpperThreshold) {
+				if state.thresholdState == ThresholdState(ArriveForceThreshold) {
 					// compact right now
 					log.Println("ArriveUpperThreshold")
 					if firstCompact {
@@ -637,7 +585,7 @@ func (db *DB) listenAutoCompact() {
 					} else {
 						err = db.CompactWithDeprecatedtable()
 					}
-				} else if state.thresholdState == ThresholdState(ArriveLowerThreshold) {
+				} else if state.thresholdState == ThresholdState(ArriveAdvisedThreshold) {
 					// determine whether to do compact based on the current IO state
 					log.Println("ArriveLowerThreshold")
 					var free bool
@@ -694,7 +642,6 @@ func (db *DB) listenDiskIOState() {
 //
 //nolint:gocognit,funlen
 func (db *DB) Compact() error {
-	log.Println("696:db.flushLock.Lock")
 	db.flushLock.Lock()
 	defer db.flushLock.Unlock()
 	log.Println("[Compact data]")
@@ -820,7 +767,6 @@ func (db *DB) Compact() error {
 //
 //nolint:gocognit,funlen
 func (db *DB) CompactWithDeprecatedtable() error {
-	log.Println("822:db.flushLock.Lock")
 	db.flushLock.Lock()
 	defer db.flushLock.Unlock()
 	log.Println("[CompactWithDeprecatedtable data]")
@@ -967,4 +913,72 @@ func (db *DB) rewriteValidRecords(walFile *wal.WAL, validRecords []*ValueLogReco
 	}
 	_, err = db.index.PutBatch(positions, matchKeys...)
 	return err
+}
+
+// load deprecated entries meta, and create meta file in first open.
+func loadDeprecatedEntryMeta(deprecatedMetaPath string) (uint32, uint32, error) {
+	var err error
+	var deprecatedNumber uint32
+	var totalEntryNumber uint32
+	if _, err = os.Stat(deprecatedMetaPath); os.IsNotExist(err) {
+		// no exist, create one
+		var file *os.File
+		file, err = os.Create(deprecatedMetaPath)
+		if err != nil {
+			return deprecatedNumber, totalEntryNumber, err
+		}
+		deprecatedNumber = 0
+		totalEntryNumber = 0
+		file.Close()
+	} else if err != nil {
+		return deprecatedNumber, totalEntryNumber, err
+	} else {
+		// not err, we load meta
+		var file *os.File
+		file, err = os.Open(deprecatedMetaPath)
+		if err != nil {
+			return deprecatedNumber, totalEntryNumber, err
+		}
+
+		// set the file pointer to 0
+		file.Seek(0, 0)
+
+		// read deprecatedNumber
+		err = binary.Read(file, binary.LittleEndian, &deprecatedNumber)
+		if err != nil {
+			return deprecatedNumber, totalEntryNumber, err
+		}
+
+		// read totalEntryNumber
+		err = binary.Read(file, binary.LittleEndian, &totalEntryNumber)
+		if err != nil {
+			return deprecatedNumber, totalEntryNumber, err
+		}
+	}
+	return deprecatedNumber, totalEntryNumber, nil
+}
+
+// persist deprecated number and total entry number
+func storeDeprecatedEntryMeta(deprecatedMetaPath string, deprecatedNumber uint32, totalNumber uint32) error {
+	file, err := os.OpenFile(deprecatedMetaPath, os.O_RDWR|os.O_TRUNC, 0666)
+	if err != nil {
+		return err
+	}
+
+	// set the file pointer to 0 and overwrite
+	file.Seek(0, 0)
+
+	// write deprecatedNumber
+	err = binary.Write(file, binary.LittleEndian, &deprecatedNumber)
+	if err != nil {
+		return err
+	}
+
+	// write totalEntryNumber
+	err = binary.Write(file, binary.LittleEndian, &totalNumber)
+	if err != nil {
+		return err
+	}
+	file.Close()
+	return nil
 }

@@ -7,8 +7,8 @@ import (
 type ThresholdState int
 
 const (
-	ArriveLowerThreshold int = iota
-	ArriveUpperThreshold
+	ArriveAdvisedThreshold int = iota // Recommended to perform a comparison at this time
+	ArriveForceThreshold              // At this point, force a comparison
 )
 
 type (
@@ -16,12 +16,10 @@ type (
 	// for every write/update generated an uuid, we store uuid in the table.
 	// It is useful in compaction, allowing us to know whether the kv
 	// in the value log is up-to-date without accessing the index.
-	// we always build deprecatedtable immediately after compaction.
 	deprecatedtable struct {
-		partition int
-		// table   map[uint32]map[uuid.UUID]bool // we store deprecated uuid of keys,in memory
-		table map[uuid.UUID]bool
-		size  uint32
+		partition int                    // which shard in vlog
+		table     map[uuid.UUID]struct{} // we store deprecated uuid of keys,in memory
+		size      uint32                 // number of deprecated entry now
 	}
 
 	// used to send message to autoCompact.
@@ -34,22 +32,23 @@ type (
 func newDeprecatedTable(partition int) *deprecatedtable {
 	return &deprecatedtable{
 		partition: partition,
-		table:     make(map[uuid.UUID]bool),
+		table:     make(map[uuid.UUID]struct{}),
 		size:      0,
 	}
 }
 
 // Add a uuid to the specified key.
 func (dt *deprecatedtable) addEntry(id uuid.UUID) {
-	dt.table[id] = true
+	dt.table[id] = struct{}{}
 	dt.size++
 }
 
 func (dt *deprecatedtable) existEntry(id uuid.UUID) bool {
-	return dt.table[id]
+	_, exists := dt.table[id]
+	return exists
 }
 
 func (dt *deprecatedtable) clean() {
-	dt.table = make(map[uuid.UUID]bool)
+	dt.table = make(map[uuid.UUID]struct{})
 	dt.size = 0
 }
