@@ -166,7 +166,7 @@ func TestMemTablePutBatch(t *testing.T) {
 	pendingWrites := make(map[string]*LogRecord)
 	val := util.RandomValue(512)
 	for i := 0; i < 1000; i++ {
-		log := &LogRecord{Key: util.GetTestKey(i), Value: val}
+		log := &LogRecord{Key: util.GetTestKey(int64(i)), Value: val}
 		pendingWrites[string(log.Key)] = log
 	}
 
@@ -208,7 +208,7 @@ func TestMemTablePutBatchReopen(t *testing.T) {
 	pendingWrites := make(map[string]*LogRecord)
 	val := util.RandomValue(512)
 	for i := 0; i < 1000; i++ {
-		log := &LogRecord{Key: util.GetTestKey(i), Value: val}
+		log := &LogRecord{Key: util.GetTestKey(int64(i)), Value: val}
 		pendingWrites[string(log.Key)] = log
 	}
 
@@ -433,7 +433,7 @@ func TestMemTableSync(t *testing.T) {
 	pendingWrites := make(map[string]*LogRecord)
 	val := util.RandomValue(512)
 	for i := 0; i < 1000; i++ {
-		log := &LogRecord{Key: util.GetTestKey(i), Value: val}
+		log := &LogRecord{Key: util.GetTestKey(int64(i)), Value: val}
 		pendingWrites[string(log.Key)] = log
 	}
 	err = table.putBatch(pendingWrites, node.Generate(), writeOpts)

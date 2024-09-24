@@ -4,7 +4,6 @@ import (
 	"errors"
 	"log"
 	"path/filepath"
-	"runtime"
 	"strings"
 	"sync"
 	"time"
@@ -12,15 +11,20 @@ import (
 	"github.com/shirou/gopsutil/disk"
 )
 
-const IOBusySplit = 2
-
 type DiskIO struct {
-	targetPath       string
-	samplingInterval int     // unit millisecond
-	IOBusyThreshold  uint64  // rate, read/write bytes during samplingInterval > readBusyThreshold is busy
-	busyRate         float32 // express io busy status by the proportion of io time in the sampling time
-	freeFlag         bool    // freeFlag indicates whether the disk is free
+	targetPath       string   // db path, we use it to find disk device
+	samplingInterval int      // sampling time, millisecond
+	samplingWindow   []uint64 // sampling window is used to sample the average IoTime over a period of time
+	windowSize       int      // size of the sliding window used for sampling.
+	windowPoint      int      // next sampling offset in window
+	busyRate         float32  // express io busy status by the proportion of io time in the sampling time
+	freeFlag         bool     // freeFlag indicates whether the disk is free
 	mu               sync.Mutex
+}
+
+func (io *DiskIO) Init() {
+	io.samplingWindow = make([]uint64, io.windowSize)
+	io.windowPoint = 0
 }
 
 func (io *DiskIO) Monitor() error {
@@ -39,13 +43,28 @@ func (io *DiskIO) Monitor() error {
 	if err != nil {
 		return err
 	}
+
+	// IoTime is device active time since system boot, we get it during sampling.
 	ioTime := ioEnd.IoTime - ioStart.IoTime
+
+	// set time and move point to next slot
+	io.samplingWindow[io.windowPoint] = ioTime
+	io.windowPoint++
+	io.windowPoint %= io.windowSize
+
+	// get mean IoTime
+	var sum uint64
+	for _, value := range io.samplingWindow {
+		sum += value
+	}
+	meanTime := sum / (uint64(io.windowSize))
+
+	// others may read io.freeFlag by IsFree, so we need lock it when changing.
 	io.mu.Lock()
 	defer io.mu.Unlock()
-	// if ioTime > 0 {
-	// 	log.Println("ioTime:",ioTime,"threshold",uint64(float32(io.samplingInterval) * io.busyRate))
-	// }
-	if ioTime > uint64(float32(io.samplingInterval)*io.busyRate) {
+	// this log maybe useful
+	// log.Println("meantime:", meanTime, "BusyThreshold:", uint64(float32(io.samplingInterval)*io.busyRate))
+	if meanTime > uint64(float32(io.samplingInterval)*io.busyRate) {
 		io.freeFlag = false
 	} else {
 		io.freeFlag = true
@@ -54,9 +73,9 @@ func (io *DiskIO) Monitor() error {
 }
 
 func (io *DiskIO) IsFree() (bool, error) {
-	if runtime.GOOS != "linux" {
-		return true, nil
-	}
+	// if runtime.GOOS != "linux" {
+	// 	return true, nil
+	// }
 	if io.busyRate < 0 {
 		return true, nil
 	}

@@ -11,7 +11,6 @@ import (
 	"os/signal"
 	"path/filepath"
 	"reflect"
-	"runtime"
 	"sync"
 	"syscall"
 	"time"
@@ -65,8 +64,6 @@ type DB struct {
 //
 // It will first open the wal to rebuild the memtable, then open the index and value log.
 // Return the DB object if succeeded, otherwise return the error.
-//
-//nolint:funlen // default
 func Open(options Options) (*DB, error) {
 	// check whether all options are valid
 	if err := validateOptions(&options); err != nil {
@@ -129,10 +126,13 @@ func Open(options Options) (*DB, error) {
 		return nil, err
 	}
 
+	// init diskIO
 	diskIO := new(DiskIO)
 	diskIO.targetPath = options.DirPath
-	diskIO.samplingInterval = options.diskIOSamplingInterval
-	diskIO.busyRate = options.diskIOBusyRate
+	diskIO.samplingInterval = options.DiskIOSamplingInterval
+	diskIO.windowSize = options.DiskIOSamplingWindow
+	diskIO.busyRate = options.DiskIOBusyRate
+	diskIO.Init()
 
 	db := &DB{
 		activeMem:        memtables[len(memtables)-1],
@@ -160,16 +160,14 @@ func Open(options Options) (*DB, error) {
 	// memtables with new coming writes will be flushed to disk if the active memtable is full.
 	go db.listenMemtableFlush()
 
-	// start disk IO monitoring,
-	// blocking low threshold compact operations when busy.
-	if runtime.GOOS == "linux" {
-		go db.listenDiskIOState()
-	}
-
-	// start autoCompact goroutine asynchronously,
-	// listen deprecatedtable state, and compact automatically.
-	if options.autoCompact {
+	if options.AutoCompactSupport {
+		// start autoCompact goroutine asynchronously,
+		// listen deprecatedtable state, and compact automatically.
 		go db.listenAutoCompact()
+
+		// start disk IO monitoring,
+		// blocking low threshold compact operations when busy.
+		go db.listenDiskIOState()
 	}
 
 	return db, nil
@@ -179,14 +177,19 @@ func Open(options Options) (*DB, error) {
 // Set the closed flag to true.
 // The DB instance cannot be used after closing.
 func (db *DB) Close() error {
+	log.Println("CLOSE!")
 	close(db.flushChan)
+	log.Println("wait <-db.closeflushChan")
 	<-db.closeflushChan
-	if db.options.autoCompact {
+	if db.options.AutoCompactSupport {
+		log.Println("wait <-db.closeCompactChan")
 		close(db.compactChan)
 		<-db.closeCompactChan
 	}
+	log.Println("close db.mu.Lock()")
 	db.mu.Lock()
 	defer db.mu.Unlock()
+	log.Println("ok!")
 
 	// close all memtables
 	for _, table := range db.immuMems {
@@ -418,8 +421,8 @@ func (db *DB) waitMemtableSpace() error {
 //nolint:funlen
 func (db *DB) flushMemtable(table *memtable) {
 	{
+		log.Println("flushmemtable lock flushLock")
 		db.flushLock.Lock()
-		defer db.flushLock.Unlock()
 		sklIter := table.skl.NewIterator()
 		var deletedKeys [][]byte
 		var logRecords []*ValueLogRecord
@@ -436,6 +439,7 @@ func (db *DB) flushMemtable(table *memtable) {
 			}
 		}
 		_ = sklIter.Close()
+		// log.Println("len del:",len(deletedKeys),len(logRecords))
 
 		// write to value log, get the positions of keys
 		keyPos, err := db.vlog.writeBatch(logRecords)
@@ -490,6 +494,7 @@ func (db *DB) flushMemtable(table *memtable) {
 		for _, oldKeyPostion := range oldKeyPostions {
 			db.vlog.setDeprecated(oldKeyPostion.partition, oldKeyPostion.uid)
 		}
+
 		// sync the index
 		if err = db.index.Sync(); err != nil {
 			log.Println("index sync failed:", err)
@@ -503,6 +508,7 @@ func (db *DB) flushMemtable(table *memtable) {
 		}
 
 		// delete old memtable kept in memory
+		log.Println("flushmemtable lock mu")
 		db.mu.Lock()
 		if table == db.activeMem {
 			options := db.activeMem.options
@@ -520,14 +526,19 @@ func (db *DB) flushMemtable(table *memtable) {
 				db.immuMems = db.immuMems[1:]
 			}
 		}
+		log.Println("flushmemtable unlock mu")
 		db.mu.Unlock()
+		log.Println("flushmemtable unlock flushLock")
+		db.flushLock.Unlock()
 	}
 
-	if db.options.autoCompact {
+	if db.options.AutoCompactSupport {
 		// check deprecatedtable size
-		lowerThreshold := uint32((float32)(db.vlog.totalNumber) * db.options.deprecatedtableLowerRate)
-		upperThreshold := uint32((float32)(db.vlog.totalNumber) * db.options.deprecatedtableUpperRate)
-		log.Println("[data in flush]", "deprecatedNumber:", db.vlog.deprecatedNumber,
+		lowerThreshold := uint32((float32)(db.vlog.totalNumber) * db.options.AdvisedCompactionRate)
+		upperThreshold := uint32((float32)(db.vlog.totalNumber) * db.options.ForceCompactionRate)
+		log.Println("[data in flush]",
+			"deprecatedNumber:", db.vlog.deprecatedNumber,
+			"totalNumber", db.vlog.totalNumber,
 			"LowerThreshold by rate:", lowerThreshold,
 			"UpperThreshold by rate:", upperThreshold)
 		if db.vlog.deprecatedNumber >= upperThreshold {
@@ -547,6 +558,7 @@ func (db *DB) listenMemtableFlush() {
 	signal.Notify(sig, os.Interrupt, syscall.SIGHUP, syscall.SIGINT, syscall.SIGTERM, syscall.SIGQUIT)
 	for {
 		select {
+		// timer
 		case table, ok := <-db.flushChan:
 			if ok {
 				db.flushMemtable(table)
@@ -569,54 +581,56 @@ func (db *DB) listenAutoCompact() {
 	sig := make(chan os.Signal, 1)
 	signal.Notify(sig, os.Interrupt, syscall.SIGHUP, syscall.SIGINT, syscall.SIGTERM, syscall.SIGQUIT)
 	firstCompact := true
+	thresholdstate := ThresholdState(UnarriveThreshold)
+	ticker := time.NewTicker(1 * time.Second)
+	defer ticker.Stop()
 	for {
 		select {
 		case state, ok := <-db.compactChan:
-			var err error
-			err = nil
-			//nolint:nestif // It requires multiple nested conditions for different thresholds and error judgments.
 			if ok {
-				if state.thresholdState == ThresholdState(ArriveForceThreshold) {
-					// compact right now
-					log.Println("ArriveUpperThreshold")
-					if firstCompact {
-						firstCompact = false
-						err = db.Compact()
-					} else {
-						err = db.CompactWithDeprecatedtable()
-					}
-				} else if state.thresholdState == ThresholdState(ArriveAdvisedThreshold) {
-					// determine whether to do compact based on the current IO state
-					log.Println("ArriveLowerThreshold")
-					var free bool
-					free, err = db.diskIO.IsFree()
-					if err != nil {
-						panic(err)
-					}
-					if free {
-						if firstCompact {
-							firstCompact = false
-							err = db.Compact()
-						} else {
-							err = db.CompactWithDeprecatedtable()
-						}
-					} else {
-						log.Println("IO Busy now.")
-					}
-				}
-				if err != nil {
-					panic(err)
-				}
-				for len(db.compactChan) > 0 {
-					// discard squeezed messages
-					<-db.compactChan
-				}
+				thresholdstate = state.thresholdState
 			} else {
 				db.closeCompactChan <- struct{}{}
 				return
 			}
 		case <-sig:
 			return
+		case <-ticker.C:
+			//nolint:nestif // It requires multiple nested conditions for different thresholds and error judgments.
+			if thresholdstate == ThresholdState(ArriveForceThreshold) {
+				var err error
+				if firstCompact {
+					firstCompact = false
+					err = db.Compact()
+				} else {
+					err = db.CompactWithDeprecatedtable()
+				}
+				if err != nil {
+					panic(err)
+				}
+				thresholdstate = ThresholdState(UnarriveThreshold)
+			} else if thresholdstate == ThresholdState(ArriveAdvisedThreshold) {
+				// determine whether to do compact based on the current IO state
+				log.Println("Arrive Advised Threshold")
+				free, err := db.diskIO.IsFree()
+				if err != nil {
+					panic(err)
+				}
+				if free {
+					if firstCompact {
+						firstCompact = false
+						err = db.Compact()
+					} else {
+						err = db.CompactWithDeprecatedtable()
+					}
+					if err != nil {
+						panic(err)
+					}
+					thresholdstate = ThresholdState(UnarriveThreshold)
+				} else {
+					log.Println("IO Busy now")
+				}
+			}
 		}
 	}
 }
@@ -642,8 +656,13 @@ func (db *DB) listenDiskIOState() {
 //
 //nolint:gocognit,funlen
 func (db *DB) Compact() error {
+	log.Println("Compact lock flushLock")
 	db.flushLock.Lock()
-	defer db.flushLock.Unlock()
+	defer func() {
+		log.Println("Compact unlock flushLock")
+		db.flushLock.Unlock()
+	}()
+	// defer db.flushLock.Unlock()
 	log.Println("[Compact data]")
 	openVlogFile := func(part int, ext string) *wal.WAL {
 		walFile, err := wal.Open(wal.Options{
@@ -767,8 +786,13 @@ func (db *DB) Compact() error {
 //
 //nolint:gocognit,funlen
 func (db *DB) CompactWithDeprecatedtable() error {
+	log.Println("CompactWithDeprecatedtable lock flushLock")
 	db.flushLock.Lock()
-	defer db.flushLock.Unlock()
+	defer func() {
+		log.Println("CompactWithDeprecatedtable unlock flushLock")
+		db.flushLock.Unlock()
+	}()
+	// defer db.flushLock.Unlock()
 	log.Println("[CompactWithDeprecatedtable data]")
 	openVlogFile := func(part int, ext string) *wal.WAL {
 		walFile, err := wal.Open(wal.Options{
@@ -916,6 +940,8 @@ func (db *DB) rewriteValidRecords(walFile *wal.WAL, validRecords []*ValueLogReco
 }
 
 // load deprecated entries meta, and create meta file in first open.
+//
+// //nolint:nestif //default.
 func loadDeprecatedEntryMeta(deprecatedMetaPath string) (uint32, uint32, error) {
 	var err error
 	var deprecatedNumber uint32
@@ -941,7 +967,10 @@ func loadDeprecatedEntryMeta(deprecatedMetaPath string) (uint32, uint32, error) 
 		}
 
 		// set the file pointer to 0
-		file.Seek(0, 0)
+		_, err = file.Seek(0, 0)
+		if err != nil {
+			return deprecatedNumber, totalEntryNumber, err
+		}
 
 		// read deprecatedNumber
 		err = binary.Read(file, binary.LittleEndian, &deprecatedNumber)
@@ -958,7 +987,7 @@ func loadDeprecatedEntryMeta(deprecatedMetaPath string) (uint32, uint32, error) 
 	return deprecatedNumber, totalEntryNumber, nil
 }
 
-// persist deprecated number and total entry number
+// persist deprecated number and total entry number.
 func storeDeprecatedEntryMeta(deprecatedMetaPath string, deprecatedNumber uint32, totalNumber uint32) error {
 	file, err := os.OpenFile(deprecatedMetaPath, os.O_RDWR|os.O_TRUNC, 0666)
 	if err != nil {
@@ -966,7 +995,10 @@ func storeDeprecatedEntryMeta(deprecatedMetaPath string, deprecatedNumber uint32
 	}
 
 	// set the file pointer to 0 and overwrite
-	file.Seek(0, 0)
+	_, err = file.Seek(0, 0)
+	if err != nil {
+		return err
+	}
 
 	// write deprecatedNumber
 	err = binary.Write(file, binary.LittleEndian, &deprecatedNumber)

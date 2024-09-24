@@ -7,8 +7,9 @@ import (
 type ThresholdState int
 
 const (
-	ArriveAdvisedThreshold int = iota // Recommended to perform a comparison at this time
-	ArriveForceThreshold              // At this point, force a comparison
+	ArriveAdvisedThreshold int = iota // Recommended to perform a compaction at this time
+	ArriveForceThreshold              // At this point, force a compaction
+	UnarriveThreshold                 // Not require compaction
 )
 
 type (

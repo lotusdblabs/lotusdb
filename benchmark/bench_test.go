@@ -35,7 +35,7 @@ func BenchmarkPut(b *testing.B) {
 	b.ResetTimer()
 
 	for i := 0; i < b.N; i++ {
-		err := db.Put(util.GetTestKey(i), util.RandomValue(1024))
+		err := db.Put(util.GetTestKey(int64(i)), util.RandomValue(1024))
 		//nolint:testifylint // benchmark
 		assert.Nil(b, err)
 	}
@@ -45,7 +45,7 @@ func BenchmarkGet(b *testing.B) {
 	destroy := openDB()
 	defer destroy()
 	for i := 0; i < 1000000; i++ {
-		err := db.Put(util.GetTestKey(i), util.RandomValue(128))
+		err := db.Put(util.GetTestKey(int64(i)), util.RandomValue(128))
 		//nolint:testifylint // benchmark
 		assert.Nil(b, err)
 	}
@@ -53,7 +53,7 @@ func BenchmarkGet(b *testing.B) {
 	b.ResetTimer()
 
 	for i := 0; i < b.N; i++ {
-		val, err := db.Get(util.GetTestKey(i))
+		val, err := db.Get(util.GetTestKey(int64(i)))
 		if err == nil {
 			assert.NotNil(b, val)
 		} else if errors.Is(err, lotusdb.ErrKeyNotFound) {

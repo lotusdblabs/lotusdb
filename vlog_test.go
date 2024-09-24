@@ -170,7 +170,7 @@ func writeBatch(opts valueLogOptions, numRW int, numPart int) error {
 	val := util.RandomValue(512)
 	var logs []*ValueLogRecord
 	for i := 0; i < numRW; i++ {
-		log := &ValueLogRecord{key: util.GetTestKey(i), value: val}
+		log := &ValueLogRecord{key: util.GetTestKey(int64(i)), value: val}
 		logs = append(logs, log)
 	}
 

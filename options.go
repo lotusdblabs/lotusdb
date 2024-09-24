@@ -58,19 +58,22 @@ type Options struct {
 	CompactBatchCount int
 
 	// deprecatedtable recommend compaction rate
-	deprecatedtableLowerRate float32
+	AdvisedCompactionRate float32
 
 	// deprecatedtable force compaction rate
-	deprecatedtableUpperRate float32
+	ForceCompactionRate float32
 
 	// sampling interval of diskIO, unit is millisecond
-	diskIOSamplingInterval int
+	DiskIOSamplingInterval int
+
+	// window is used to retrieve the state of IO bury over a period of time
+	DiskIOSamplingWindow int
 
 	// rate of io time in the sampling time is used to represent the busy state of io
-	diskIOBusyRate float32
+	DiskIOBusyRate float32
 
-	// autoCompact support
-	autoCompact bool
+	// AutoCompactSupport support
+	AutoCompactSupport bool
 
 	// WaitMemSpaceTimeout specifies the timeout for waiting for space in the memtable.
 	// When all memtables are full, it will be flushed to disk by the background goroutine.
@@ -145,14 +148,16 @@ var DefaultOptions = Options{
 	//nolint:gomnd // default
 	CompactBatchCount: 10000,
 	//nolint:gomnd // default
-	deprecatedtableLowerRate: 0.3,
+	AdvisedCompactionRate: 0.3,
 	//nolint:gomnd // default
-	deprecatedtableUpperRate: 0.5,
+	ForceCompactionRate: 0.5,
 	//nolint:gomnd // default
-	diskIOSamplingInterval: 100,
+	DiskIOSamplingInterval: 100,
 	//nolint:gomnd // default
-	diskIOBusyRate: 0.5,
-	autoCompact:    true,
+	DiskIOSamplingWindow: 10,
+	//nolint:gomnd // default
+	DiskIOBusyRate:     0.3,
+	AutoCompactSupport: true,
 	//nolint:gomnd // default
 	WaitMemSpaceTimeout: 100 * time.Millisecond,
 }

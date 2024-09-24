@@ -432,7 +432,7 @@ func TestDBFlushMemTables(t *testing.T) {
 
 func TestDBCompact(t *testing.T) {
 	options := DefaultOptions
-	options.autoCompact = false
+	options.AutoCompactSupport = false
 	path, err := os.MkdirTemp("", "db-test-compact")
 	require.NoError(t, err)
 	options.DirPath = path
@@ -447,6 +447,7 @@ func TestDBCompact(t *testing.T) {
 		{key: []byte("key 1"), value: []byte("value 1")},
 		{key: []byte("key 2"), value: []byte("value 2")},
 	}
+
 	for _, log := range testlogs {
 		_ = db.PutWithOptions(log.key, log.value, WriteOptions{
 			Sync:       true,
@@ -454,25 +455,13 @@ func TestDBCompact(t *testing.T) {
 		})
 	}
 
-	for i := 0; i <= 5; i++ {
-		for _, log := range testlogs {
-			_ = db.PutWithOptions(log.key, log.value, WriteOptions{
-				Sync:       true,
-				DisableWal: false,
-			})
-		}
-		// write logs and flush
-		logs := produceAndWriteLogs(50000, db)
-		// delete logs
-		for idx, log := range logs {
-			if idx%5 == 0 {
-				_ = db.DeleteWithOptions(log.key, WriteOptions{
-					Sync:       true,
-					DisableWal: false,
-				})
-			}
-		}
-	}
+	produceAndWriteLogs(100000, 0, db)
+	// overwrite half. background busy flushing.
+	produceAndWriteLogs(50000, 0, db)
+	produceAndWriteLogs(50000, 0, db)
+	produceAndWriteLogs(50000, 0, db)
+	produceAndWriteLogs(50000, 0, db)
+
 	t.Run("test compaction", func(t *testing.T) {
 		var size, sizeCompact int64
 
@@ -496,7 +485,7 @@ func TestDBCompact(t *testing.T) {
 
 func TestDBCompactWitchDeprecatetable(t *testing.T) {
 	options := DefaultOptions
-	options.autoCompact = false
+	options.AutoCompactSupport = false
 	path, err := os.MkdirTemp("", "db-test-CompactWitchDeprecatetable")
 	require.NoError(t, err)
 	options.DirPath = path
@@ -511,25 +500,20 @@ func TestDBCompactWitchDeprecatetable(t *testing.T) {
 		{key: []byte("key 1"), value: []byte("value 1")},
 		{key: []byte("key 2"), value: []byte("value 2")},
 	}
-	for i := 0; i <= 5; i++ {
-		for _, log := range testlogs {
-			_ = db.PutWithOptions(log.key, log.value, WriteOptions{
-				Sync:       true,
-				DisableWal: false,
-			})
-		}
-		// write logs and flush
-		logs := produceAndWriteLogs(50000, db)
-		// delete logs
-		for idx, log := range logs {
-			if idx%5 == 0 {
-				_ = db.DeleteWithOptions(log.key, WriteOptions{
-					Sync:       true,
-					DisableWal: false,
-				})
-			}
-		}
+
+	for _, log := range testlogs {
+		_ = db.PutWithOptions(log.key, log.value, WriteOptions{
+			Sync:       true,
+			DisableWal: false,
+		})
 	}
+
+	produceAndWriteLogs(100000, 0, db)
+	// overwrite half. background busy flushing.
+	produceAndWriteLogs(50000, 0, db)
+	produceAndWriteLogs(50000, 0, db)
+	produceAndWriteLogs(50000, 0, db)
+	produceAndWriteLogs(50000, 0, db)
 
 	t.Run("test compaction", func(t *testing.T) {
 		var size, sizeCompact int64
@@ -554,7 +538,7 @@ func TestDBCompactWitchDeprecatetable(t *testing.T) {
 
 func TestDBAutoCompact(t *testing.T) {
 	options := DefaultOptions
-	options.autoCompact = true
+	options.AutoCompactSupport = true
 	path, err := os.MkdirTemp("", "db-test-AutoCompact")
 	require.NoError(t, err)
 	options.DirPath = path
@@ -589,19 +573,17 @@ func TestDBAutoCompact(t *testing.T) {
 				DisableWal: false,
 			})
 		}
-		for i := 0; i <= 5; i++ {
-			// write logs and flush
-			logs := produceAndWriteLogs(50000, db)
-			// delete logs
-			for idx, log := range logs {
-				if idx%5 == 0 {
-					_ = db.DeleteWithOptions(log.key, WriteOptions{
-						Sync:       true,
-						DisableWal: false,
-					})
-				}
-			}
-		}
+		// load init key value.
+		produceAndWriteLogs(100000, 0, db)
+		// overwrite half. background busy flushing.
+		produceAndWriteLogs(50000, 0, db)
+		produceAndWriteLogs(50000, 0, db)
+		produceAndWriteLogs(50000, 0, db)
+		produceAndWriteLogs(50000, 0, db)
+		// we sleep 1s, this time not IO busy. So that background will do autoCompact.
+		time.Sleep(1 * time.Second)
+		produceAndWriteLogs(50000, 0, db)
+		produceAndWriteLogs(50000, 0, db)
 
 		require.NoError(t, err)
 
@@ -621,7 +603,9 @@ func TestDBAutoCompact(t *testing.T) {
 
 func TestDBAutoCompactWithBusyIO(t *testing.T) {
 	options := DefaultOptions
-	options.autoCompact = true
+	options.AutoCompactSupport = true
+	options.AdvisedCompactionRate = 0.2
+	options.ForceCompactionRate = 0.5
 	path, err := os.MkdirTemp("", "db-test-AutoCompactWithBusyIO")
 	require.NoError(t, err)
 	options.DirPath = path
@@ -656,20 +640,25 @@ func TestDBAutoCompactWithBusyIO(t *testing.T) {
 				DisableWal: false,
 			})
 		}
-		go SimpleIO(options.DirPath+"iofile", 100)
-		for i := 0; i <= 10; i++ {
-			// write logs and flush
-			logs := produceAndWriteLogs(50000, db)
-			// delete logs
-			for idx, log := range logs {
-				if idx%5 == 0 {
-					_ = db.DeleteWithOptions(log.key, WriteOptions{
-						Sync:       true,
-						DisableWal: false,
-					})
-				}
-			}
-		}
+		// load init key value.
+		ioCloseChan := make(chan struct{})
+		go func() {
+			SimpleIO(options.DirPath+"iofile", 10)
+			ioCloseChan <- struct{}{}
+		}()
+		go SimpleIO(options.DirPath+"iofile", 10)
+		produceAndWriteLogs(100000, 0, db)
+		// overwrite half. background busy flushing.
+		produceAndWriteLogs(50000, 0, db)
+		produceAndWriteLogs(50000, 0, db)
+		produceAndWriteLogs(50000, 0, db)
+		produceAndWriteLogs(50000, 0, db)
+		// we sleep 1s, this time not IO busy. So that background will do autoCompact.
+		time.Sleep(1 * time.Second)
+		<-ioCloseChan
+		close(ioCloseChan)
+		produceAndWriteLogs(50000, 0, db)
+		produceAndWriteLogs(50000, 0, db)
 		require.NoError(t, err)
 
 		var value []byte
@@ -712,11 +701,12 @@ func getValueFromVlog(db *DB, key []byte) ([]byte, error) {
 	return record.value, nil
 }
 
-func produceAndWriteLogs(numLogs int, db *DB) []*testLog {
+func produceAndWriteLogs(numLogs int64, offset int64, db *DB) []*testLog {
 	var logs []*testLog
-	for i := 0; i < numLogs; i++ {
+	var i int64
+	for i = 0; i < numLogs; i++ {
 		// the size of a logRecord is about 1KB (a little bigger than 1KB due to encode)
-		log := &testLog{key: []byte(string(rune(i))), value: util.RandomValue(1 << 10)}
+		log := &testLog{key: util.GetTestKey(offset + i), value: util.RandomValue(1 << 10)}
 		logs = append(logs, log)
 	}
 	for _, log := range logs {
@@ -781,7 +771,7 @@ func TestDBMultiClients(t *testing.T) {
 		for i := 0; i < 2; i++ {
 			wg.Add(1)
 			go func(i int) {
-				delLogs := produceAndWriteLogs(50000, db)
+				delLogs := produceAndWriteLogs(50000, int64(i)*50000, db)
 				// delete logs
 				for idx, log := range delLogs {
 					if idx%5 == 0 {
@@ -791,7 +781,7 @@ func TestDBMultiClients(t *testing.T) {
 						})
 					}
 				}
-				produceAndWriteLogs(50000, db)
+				produceAndWriteLogs(50000, int64(i)*50000, db)
 				time.Sleep(time.Millisecond * 500)
 				for _, log := range logs[i] {
 					_ = db.PutWithOptions(log.key, log.value, WriteOptions{
@@ -850,7 +840,7 @@ func TestDBMultiClients(t *testing.T) {
 //nolint:gocognit
 func TestDBIterator(t *testing.T) {
 	options := DefaultOptions
-	options.autoCompact = false
+	options.AutoCompactSupport = false
 	path, err := os.MkdirTemp("", "db-test-iter")
 	require.NoError(t, err)
 	options.DirPath = path
@@ -1072,7 +1062,7 @@ func TestDBIterator(t *testing.T) {
 
 func TestDeprecatetableMetaPersist(t *testing.T) {
 	options := DefaultOptions
-	options.autoCompact = true
+	options.AutoCompactSupport = true
 	path, err := os.MkdirTemp("", "db-test-DeprecatetableMetaPersist")
 	require.NoError(t, err)
 	options.DirPath = path
@@ -1084,7 +1074,7 @@ func TestDeprecatetableMetaPersist(t *testing.T) {
 	t.Run("test same deprecated number", func(t *testing.T) {
 		for i := 0; i <= 10; i++ {
 			// write logs and flush
-			logs := produceAndWriteLogs(20000, db)
+			logs := produceAndWriteLogs(20000, int64(i)*20000, db)
 			// delete logs
 			for idx, log := range logs {
 				if idx%5 == 0 {
@@ -1113,7 +1103,7 @@ func SimpleIO(targetPath string, count int) {
 		log.Println("Error creating file:", err)
 		return
 	}
-	data := util.RandomValue(1 << 25)
+	data := util.RandomValue(1 << 24)
 	for count > 0 {
 		count--
 		_, err = file.Write(data)
@@ -1128,6 +1118,6 @@ func SimpleIO(targetPath string, count int) {
 			return
 		}
 
-		time.Sleep(10 * time.Millisecond)
+		time.Sleep(1 * time.Millisecond)
 	}
 }

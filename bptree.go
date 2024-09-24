@@ -207,7 +207,7 @@ func (bt *BPTree) DeleteBatch(keys [][]byte, _ ...diskhash.MatchKeyFunc) ([]*Key
 		g.Go(func() error {
 			tree := bt.trees[partition]
 			partitionDeprecatedKeyPosition := make([]*KeyPosition, 0)
-			return tree.Update(func(tx *bbolt.Tx) error {
+			err := tree.Update(func(tx *bbolt.Tx) error {
 				// get the bolt db instance for this partition
 				bucket := tx.Bucket(indexBucketName)
 				// delete each key from the bucket
@@ -235,6 +235,9 @@ func (bt *BPTree) DeleteBatch(keys [][]byte, _ ...diskhash.MatchKeyFunc) ([]*Key
 				}
 				return nil
 			})
+			// send deprecateduuid uuid slice to chan
+			deprecatedChan <- partitionDeprecatedKeyPosition
+			return err
 		})
 	}
 	// Close the channel after all goroutines are done
