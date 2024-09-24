@@ -144,10 +144,10 @@ func Open(options Options) (*DB, error) {
 		closeflushChan:   make(chan struct{}),
 		closeCompactChan: make(chan struct{}),
 		//nolint:gomnd // default
-		compactChan:      make(chan deprecatedState, 16), // asynchronous chan for noblocking
-		diskIO:           diskIO,
-		options:          options,
-		batchPool:        sync.Pool{New: makeBatch},
+		compactChan: make(chan deprecatedState, 16), // asynchronous chan for noblocking
+		diskIO:      diskIO,
+		options:     options,
+		batchPool:   sync.Pool{New: makeBatch},
 	}
 
 	// if there are some immutable memtables when opening the database, flush them to disk
