@@ -143,7 +143,7 @@ func Open(options Options) (*DB, error) {
 		flushChan:        make(chan *memtable, options.MemtableNums-1),
 		closeflushChan:   make(chan struct{}),
 		closeCompactChan: make(chan struct{}),
-		compactChan:      make(chan deprecatedState, len(memtables)), // asynchronous chan for noblocking recv
+		compactChan:      make(chan deprecatedState),
 		diskIO:           diskIO,
 		options:          options,
 		batchPool:        sync.Pool{New: makeBatch},
@@ -200,12 +200,14 @@ func (db *DB) Close() error {
 		return err
 	}
 
+	db.flushLock.Lock()
 	// persist deprecated number and total entry number
 	deprecatedMetaPath := filepath.Join(db.options.DirPath, deprecatedMetaName)
 	err := storeDeprecatedEntryMeta(deprecatedMetaPath, db.vlog.deprecatedNumber, db.vlog.totalNumber)
 	if err != nil {
 		return err
 	}
+	defer db.flushLock.Unlock()
 
 	// close value log
 	if err = db.vlog.close(); err != nil {
@@ -521,20 +523,29 @@ func (db *DB) flushMemtable(table *memtable) {
 			db.immuMems = db.immuMems[1:]
 		}
 	}
+	db.sendThresholdState()
+}
 
+func (db *DB) sendThresholdState() {
 	if db.options.AutoCompactSupport {
 		// check deprecatedtable size
 		lowerThreshold := uint32((float32)(db.vlog.totalNumber) * db.options.AdvisedCompactionRate)
 		upperThreshold := uint32((float32)(db.vlog.totalNumber) * db.options.ForceCompactionRate)
-
+		thresholdState := deprecatedState{
+			thresholdState: ThresholdState(UnarriveThreshold),
+		}
 		if db.vlog.deprecatedNumber >= upperThreshold {
-			db.compactChan <- deprecatedState{
+			thresholdState = deprecatedState{
 				thresholdState: ThresholdState(ArriveForceThreshold),
 			}
 		} else if db.vlog.deprecatedNumber > lowerThreshold {
-			db.compactChan <- deprecatedState{
+			thresholdState = deprecatedState{
 				thresholdState: ThresholdState(ArriveAdvisedThreshold),
 			}
+		}
+		select {
+		case db.compactChan <- thresholdState:
+		default: // this compacting, just do nothing.
 		}
 	}
 }

@@ -1069,22 +1069,15 @@ func TestDeprecatetableMetaPersist(t *testing.T) {
 	require.NoError(t, err)
 
 	t.Run("test same deprecated number", func(t *testing.T) {
-		for i := 0; i <= 10; i++ {
-			// write logs and flush
-			logs := produceAndWriteLogs(20000, int64(i)*20000, db)
-			// delete logs
-			for idx, log := range logs {
-				if idx%5 == 0 {
-					_ = db.DeleteWithOptions(log.key, WriteOptions{
-						Sync:       true,
-						DisableWal: false,
-					})
-				}
-			}
+		produceAndWriteLogs(100000, 0, db)
+		// overwrite half. background busy flushing.
+		for i := 0; i < 3; i++ {
+			time.Sleep(500 * time.Microsecond)
+			produceAndWriteLogs(50000, 0, db)
 		}
+		db.Close()
 		deprecatedNumberFirst := db.vlog.deprecatedNumber
 		totalNumberFirst := db.vlog.totalNumber
-		db.Close()
 		db, err = Open(options)
 		deprecatedNumberSecond := db.vlog.deprecatedNumber
 		totalNumberSecond := db.vlog.totalNumber
