@@ -143,8 +143,7 @@ func Open(options Options) (*DB, error) {
 		flushChan:        make(chan *memtable, options.MemtableNums-1),
 		closeflushChan:   make(chan struct{}),
 		closeCompactChan: make(chan struct{}),
-		//nolint:gomnd // default
-		compactChan: make(chan deprecatedState, 16), // asynchronous chan for noblocking
+		compactChan: make(chan deprecatedState,len(memtables)), // asynchronous chan for noblocking recv
 		diskIO:      diskIO,
 		options:     options,
 		batchPool:   sync.Pool{New: makeBatch},
@@ -178,19 +177,14 @@ func Open(options Options) (*DB, error) {
 // Set the closed flag to true.
 // The DB instance cannot be used after closing.
 func (db *DB) Close() error {
-	log.Println("CLOSE!")
 	close(db.flushChan)
-	log.Println("wait <-db.closeflushChan")
 	<-db.closeflushChan
 	if db.options.AutoCompactSupport {
-		log.Println("wait <-db.closeCompactChan")
 		close(db.compactChan)
 		<-db.closeCompactChan
 	}
-	log.Println("close db.mu.Lock()")
 	db.mu.Lock()
 	defer db.mu.Unlock()
-	log.Println("ok!")
 
 	// close all memtables
 	for _, table := range db.immuMems {
@@ -422,10 +416,7 @@ func (db *DB) waitMemtableSpace() error {
 //nolint:funlen
 func (db *DB) flushMemtable(table *memtable) {
 	{
-		log.Println("flushmemtable lock flushLock")
 		db.flushLock.Lock()
-		log.Println("flushmemtable lock flushLock done..")
-		defer log.Println("flushmemtable unlock flushLock")
 		defer db.flushLock.Unlock()
 
 		sklIter := table.skl.NewIterator()
@@ -513,10 +504,7 @@ func (db *DB) flushMemtable(table *memtable) {
 		}
 
 		// delete old memtable kept in memory
-		log.Println("flushmemtable lock mu")
 		db.mu.Lock()
-		log.Println("flushmemtable lock mu done..")
-		defer log.Println("flushmemtable unlock mu")
 		defer db.mu.Unlock()
 		if table == db.activeMem {
 			options := db.activeMem.options
@@ -545,6 +533,7 @@ func (db *DB) flushMemtable(table *memtable) {
 			"totalNumber", db.vlog.totalNumber,
 			"LowerThreshold by rate:", lowerThreshold,
 			"UpperThreshold by rate:", upperThreshold)
+
 		if db.vlog.deprecatedNumber >= upperThreshold {
 			db.compactChan <- deprecatedState{
 				thresholdState: ThresholdState(ArriveForceThreshold),
@@ -593,10 +582,6 @@ func (db *DB) listenAutoCompact() {
 		case state, ok := <-db.compactChan:
 			if ok {
 				thresholdstate = state.thresholdState
-				// we always get newest thresholdState
-				for data := range db.compactChan {
-					thresholdstate = data.thresholdState
-				}
 			} else {
 				db.closeCompactChan <- struct{}{}
 				return
@@ -664,14 +649,9 @@ func (db *DB) listenDiskIOState() {
 //
 //nolint:gocognit,funlen
 func (db *DB) Compact() error {
-	log.Println("Compact lock flushLock")
 	db.flushLock.Lock()
-	log.Println("Compact lock flushLock done ...")
-	defer func() {
-		log.Println("Compact unlock flushLock")
-		db.flushLock.Unlock()
-	}()
-	// defer db.flushLock.Unlock()
+	defer db.flushLock.Unlock()
+
 	log.Println("[Compact data]")
 	openVlogFile := func(part int, ext string) *wal.WAL {
 		walFile, err := wal.Open(wal.Options{
@@ -795,13 +775,9 @@ func (db *DB) Compact() error {
 //
 //nolint:gocognit,funlen
 func (db *DB) CompactWithDeprecatedtable() error {
-	log.Println("CompactWithDeprecatedtable lock flushLock")
 	db.flushLock.Lock()
-	defer func() {
-		log.Println("CompactWithDeprecatedtable unlock flushLock")
-		db.flushLock.Unlock()
-	}()
-	// defer db.flushLock.Unlock()
+	defer db.flushLock.Unlock()
+
 	log.Println("[CompactWithDeprecatedtable data]")
 	openVlogFile := func(part int, ext string) *wal.WAL {
 		walFile, err := wal.Open(wal.Options{

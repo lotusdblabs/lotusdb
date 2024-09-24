@@ -156,7 +156,7 @@ var DefaultOptions = Options{
 	//nolint:gomnd // default
 	DiskIOSamplingWindow: 10,
 	//nolint:gomnd // default
-	DiskIOBusyRate:     0.3,
+	DiskIOBusyRate:     0.5,
 	AutoCompactSupport: true,
 	//nolint:gomnd // default
 	WaitMemSpaceTimeout: 100 * time.Millisecond,

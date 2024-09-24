@@ -576,14 +576,10 @@ func TestDBAutoCompact(t *testing.T) {
 		// load init key value.
 		produceAndWriteLogs(100000, 0, db)
 		// overwrite half. background busy flushing.
-		produceAndWriteLogs(50000, 0, db)
-		produceAndWriteLogs(50000, 0, db)
-		produceAndWriteLogs(50000, 0, db)
-		produceAndWriteLogs(50000, 0, db)
-		// we sleep 1s, this time not IO busy. So that background will do autoCompact.
-		time.Sleep(1 * time.Second)
-		produceAndWriteLogs(50000, 0, db)
-		produceAndWriteLogs(50000, 0, db)
+		for i:=0; i< 6; i++ {
+			time.Sleep(500 * time.Microsecond)
+			produceAndWriteLogs(50000, 0, db)
+		}
 
 		require.NoError(t, err)
 
@@ -646,10 +642,11 @@ func TestDBAutoCompactWithBusyIO(t *testing.T) {
 			SimpleIO(options.DirPath+"iofile", 10)
 			ioCloseChan <- struct{}{}
 		}()
-		go SimpleIO(options.DirPath+"iofile", 10)
+		
 		produceAndWriteLogs(100000, 0, db)
 		// overwrite half. background busy flushing.
 		produceAndWriteLogs(50000, 0, db)
+		go SimpleIO(options.DirPath+"iofile", 10)
 		produceAndWriteLogs(50000, 0, db)
 		produceAndWriteLogs(50000, 0, db)
 		produceAndWriteLogs(50000, 0, db)
