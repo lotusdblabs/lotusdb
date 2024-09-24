@@ -143,7 +143,8 @@ func Open(options Options) (*DB, error) {
 		flushChan:        make(chan *memtable, options.MemtableNums-1),
 		closeflushChan:   make(chan struct{}),
 		closeCompactChan: make(chan struct{}),
-		compactChan:      make(chan deprecatedState),
+		//nolint:gomnd // default
+		compactChan:      make(chan deprecatedState, 16), // asynchronous chan for noblocking
 		diskIO:           diskIO,
 		options:          options,
 		batchPool:        sync.Pool{New: makeBatch},
@@ -423,6 +424,10 @@ func (db *DB) flushMemtable(table *memtable) {
 	{
 		log.Println("flushmemtable lock flushLock")
 		db.flushLock.Lock()
+		log.Println("flushmemtable lock flushLock done..")
+		defer log.Println("flushmemtable unlock flushLock")
+		defer db.flushLock.Unlock()
+
 		sklIter := table.skl.NewIterator()
 		var deletedKeys [][]byte
 		var logRecords []*ValueLogRecord
@@ -510,6 +515,9 @@ func (db *DB) flushMemtable(table *memtable) {
 		// delete old memtable kept in memory
 		log.Println("flushmemtable lock mu")
 		db.mu.Lock()
+		log.Println("flushmemtable lock mu done..")
+		defer log.Println("flushmemtable unlock mu")
+		defer db.mu.Unlock()
 		if table == db.activeMem {
 			options := db.activeMem.options
 			options.tableID++
@@ -526,10 +534,6 @@ func (db *DB) flushMemtable(table *memtable) {
 				db.immuMems = db.immuMems[1:]
 			}
 		}
-		log.Println("flushmemtable unlock mu")
-		db.mu.Unlock()
-		log.Println("flushmemtable unlock flushLock")
-		db.flushLock.Unlock()
 	}
 
 	if db.options.AutoCompactSupport {
@@ -589,6 +593,10 @@ func (db *DB) listenAutoCompact() {
 		case state, ok := <-db.compactChan:
 			if ok {
 				thresholdstate = state.thresholdState
+				// we always get newest thresholdState
+				for data := range db.compactChan {
+					thresholdstate = data.thresholdState
+				}
 			} else {
 				db.closeCompactChan <- struct{}{}
 				return
@@ -658,6 +666,7 @@ func (db *DB) listenDiskIOState() {
 func (db *DB) Compact() error {
 	log.Println("Compact lock flushLock")
 	db.flushLock.Lock()
+	log.Println("Compact lock flushLock done ...")
 	defer func() {
 		log.Println("Compact unlock flushLock")
 		db.flushLock.Unlock()
