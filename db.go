@@ -143,10 +143,10 @@ func Open(options Options) (*DB, error) {
 		flushChan:        make(chan *memtable, options.MemtableNums-1),
 		closeflushChan:   make(chan struct{}),
 		closeCompactChan: make(chan struct{}),
-		compactChan: make(chan deprecatedState,len(memtables)), // asynchronous chan for noblocking recv
-		diskIO:      diskIO,
-		options:     options,
-		batchPool:   sync.Pool{New: makeBatch},
+		compactChan:      make(chan deprecatedState, len(memtables)), // asynchronous chan for noblocking recv
+		diskIO:           diskIO,
+		options:          options,
+		batchPool:        sync.Pool{New: makeBatch},
 	}
 
 	// if there are some immutable memtables when opening the database, flush them to disk
@@ -528,11 +528,6 @@ func (db *DB) flushMemtable(table *memtable) {
 		// check deprecatedtable size
 		lowerThreshold := uint32((float32)(db.vlog.totalNumber) * db.options.AdvisedCompactionRate)
 		upperThreshold := uint32((float32)(db.vlog.totalNumber) * db.options.ForceCompactionRate)
-		log.Println("[data in flush]",
-			"deprecatedNumber:", db.vlog.deprecatedNumber,
-			"totalNumber", db.vlog.totalNumber,
-			"LowerThreshold by rate:", lowerThreshold,
-			"UpperThreshold by rate:", upperThreshold)
 
 		if db.vlog.deprecatedNumber >= upperThreshold {
 			db.compactChan <- deprecatedState{
@@ -604,7 +599,6 @@ func (db *DB) listenAutoCompact() {
 				thresholdstate = ThresholdState(UnarriveThreshold)
 			} else if thresholdstate == ThresholdState(ArriveAdvisedThreshold) {
 				// determine whether to do compact based on the current IO state
-				log.Println("Arrive Advised Threshold")
 				free, err := db.diskIO.IsFree()
 				if err != nil {
 					panic(err)
@@ -647,7 +641,7 @@ func (db *DB) listenDiskIOState() {
 // Compact will iterate all values in vlog, and write the valid values to a new vlog file.
 // Then replace the old vlog file with the new one, and delete the old one.
 //
-//nolint:gocognit,funlen
+//nolint:gocognit
 func (db *DB) Compact() error {
 	db.flushLock.Lock()
 	defer db.flushLock.Unlock()
@@ -673,23 +667,15 @@ func (db *DB) Compact() error {
 	for i := 0; i < int(db.vlog.options.partitionNum); i++ {
 		part := i
 		g.Go(func() error {
-			var bptreeTime time.Duration
-			var readerTime time.Duration
-			var rewriteTime time.Duration
-			var allTime time.Duration
 			newVlogFile := openVlogFile(part, tempValueLogFileExt)
 
 			validRecords := make([]*ValueLogRecord, 0, db.vlog.options.compactBatchCount)
 			reader := db.vlog.walFiles[part].NewReader()
 			count := 0
-			allsTime := time.Now()
 			// iterate all records in wal, find the valid records
 			for {
 				count++
-				clsTime := time.Now()
 				chunk, pos, err := reader.Next()
-				cleTime := time.Now()
-				readerTime += cleTime.Sub(clsTime)
 				if err != nil {
 					if errors.Is(err, io.EOF) {
 						break
@@ -704,10 +690,7 @@ func (db *DB) Compact() error {
 				if db.options.IndexType == Hash {
 					matchKey = MatchKeyFunc(db, record.key, &hashTableKeyPos, nil)
 				}
-				bptreesTime := time.Now()
 				keyPos, err := db.index.Get(record.key, matchKey)
-				bptreeeTime := time.Now()
-				bptreeTime += bptreeeTime.Sub(bptreesTime)
 				if err != nil {
 					_ = newVlogFile.Delete()
 					return err
@@ -723,7 +706,6 @@ func (db *DB) Compact() error {
 				if keyPos.partition == uint32(part) && reflect.DeepEqual(keyPos.position, pos) {
 					validRecords = append(validRecords, record)
 				}
-				rewsTime := time.Now()
 				if count%db.vlog.options.compactBatchCount == 0 {
 					err = db.rewriteValidRecords(newVlogFile, validRecords, part)
 					if err != nil {
@@ -732,15 +714,10 @@ func (db *DB) Compact() error {
 					}
 					validRecords = validRecords[:0]
 				}
-				reweTime := time.Now()
-				rewriteTime += reweTime.Sub(rewsTime)
 			}
 
 			if len(validRecords) > 0 {
-				rewsTime := time.Now()
 				err := db.rewriteValidRecords(newVlogFile, validRecords, part)
-				reweTime := time.Now()
-				rewriteTime += reweTime.Sub(rewsTime)
 				if err != nil {
 					_ = newVlogFile.Delete()
 					return err
@@ -754,14 +731,10 @@ func (db *DB) Compact() error {
 				return err
 			}
 			db.vlog.walFiles[part] = openVlogFile(part, valueLogFileExt)
-			alleTime := time.Now()
-			// clean dpTable after compact
 
+			// clean dpTable after compact
 			db.vlog.dpTables[part].clean()
 
-			allTime = alleTime.Sub(allsTime)
-			log.Printf("(shard:%d) bptreeTime:%4v\treaderTIme:%4v\trewriteTime:%4v\tall:%4v\n",
-				part, bptreeTime, readerTime, rewriteTime, allTime)
 			return nil
 		})
 	}
@@ -773,7 +746,7 @@ func (db *DB) Compact() error {
 // and write the valid values to a new vlog file.
 // Then replace the old vlog file with the new one, and delete the old one.
 //
-//nolint:gocognit,funlen
+//nolint:gocognit
 func (db *DB) CompactWithDeprecatedtable() error {
 	db.flushLock.Lock()
 	defer db.flushLock.Unlock()
@@ -799,23 +772,14 @@ func (db *DB) CompactWithDeprecatedtable() error {
 	for i := 0; i < int(db.vlog.options.partitionNum); i++ {
 		part := i
 		g.Go(func() error {
-			var dptableTime time.Duration
-			var readerTime time.Duration
-			var rewriteTime time.Duration
-			var allTime time.Duration
 			newVlogFile := openVlogFile(part, tempValueLogFileExt)
-
 			validRecords := make([]*ValueLogRecord, 0, db.vlog.options.compactBatchCount)
 			reader := db.vlog.walFiles[part].NewReader()
 			count := 0
-			allsTime := time.Now()
 			// iterate all records in wal, find the valid records
 			for {
 				count++
-				clsTime := time.Now()
 				chunk, pos, err := reader.Next()
-				cleTime := time.Now()
-				readerTime += cleTime.Sub(clsTime)
 				if err != nil {
 					if errors.Is(err, io.EOF) {
 						break
@@ -825,13 +789,10 @@ func (db *DB) CompactWithDeprecatedtable() error {
 				}
 
 				record := decodeValueLogRecord(chunk)
-				startTime := time.Now()
 				if !db.vlog.isDeprecated(part, record.uid) {
 					// not find old uuid in dptable, we add it to validRecords.
 					validRecords = append(validRecords, record)
 				}
-				endTime := time.Now()
-				dptableTime += endTime.Sub(startTime)
 				if db.options.IndexType == Hash {
 					var hashTableKeyPos *KeyPosition
 					// var matchKey func(diskhash.Slot) (bool, error)
@@ -856,10 +817,7 @@ func (db *DB) CompactWithDeprecatedtable() error {
 				}
 
 				if count%db.vlog.options.compactBatchCount == 0 {
-					rewsTime := time.Now()
 					err = db.rewriteValidRecords(newVlogFile, validRecords, part)
-					reweTime := time.Now()
-					rewriteTime += reweTime.Sub(rewsTime)
 
 					if err != nil {
 						_ = newVlogFile.Delete()
@@ -883,10 +841,6 @@ func (db *DB) CompactWithDeprecatedtable() error {
 				return err
 			}
 			db.vlog.walFiles[part] = openVlogFile(part, valueLogFileExt)
-			alleTime := time.Now()
-			allTime = alleTime.Sub(allsTime)
-			log.Printf("(shard:%d) dptableTime:%4v\treader:%4v\trewriteTime:%4v\tall:%4v\n",
-				part, dptableTime, readerTime, rewriteTime, allTime)
 			return nil
 		})
 	}
