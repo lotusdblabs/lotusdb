@@ -55,7 +55,6 @@ func TestMemtableOpenAll(t *testing.T) {
 			memSize:         DefaultOptions.MemtableSize,
 			walBytesPerSync: DefaultOptions.BytesPerSync,
 			walSync:         DefaultBatchOptions.Sync,
-
 		}
 		table, err = openMemtable(opts)
 		require.NoError(t, err)
