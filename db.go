@@ -115,7 +115,6 @@ func Open(options Options) (*DB, error) {
 	vlog, err := openValueLog(valueLogOptions{
 		dirPath:               options.DirPath,
 		segmentSize:           options.ValueLogFileSize,
-		blockCache:            options.BlockCache,
 		partitionNum:          uint32(options.PartitionNum),
 		hashKeyFunction:       options.KeyHashFunction,
 		compactBatchCount:     options.CompactBatchCount,
@@ -661,7 +660,6 @@ func (db *DB) Compact() error {
 			DirPath:        db.vlog.options.dirPath,
 			SegmentSize:    db.vlog.options.segmentSize,
 			SegmentFileExt: fmt.Sprintf(ext, part),
-			BlockCache:     db.vlog.options.blockCache,
 			Sync:           false, // we will sync manually
 			BytesPerSync:   0,     // the same as Sync
 		})
@@ -766,7 +764,6 @@ func (db *DB) CompactWithDeprecatedtable() error {
 			DirPath:        db.vlog.options.dirPath,
 			SegmentSize:    db.vlog.options.segmentSize,
 			SegmentFileExt: fmt.Sprintf(ext, part),
-			BlockCache:     db.vlog.options.blockCache,
 			Sync:           false, // we will sync manually
 			BytesPerSync:   0,     // the same as Sync
 		})

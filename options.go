@@ -20,11 +20,6 @@ type Options struct {
 	// Default value is 15.
 	MemtableNums int
 
-	// BlockCache specifies the size of the block cache in number of bytes.
-	// A block cache is used to store recently accessed data blocks, improving read performance.
-	// If BlockCache is set to 0, no block cache will be used.
-	BlockCache uint32
-
 	// Sync is whether to synchronize writes through os buffer cache and down onto the actual disk.
 	// Setting sync is required for durability of a single write operation, but also results in slower writes.
 	//
@@ -137,7 +132,6 @@ var DefaultOptions = Options{
 	MemtableSize: 64 * MB,
 	//nolint:gomnd // default
 	MemtableNums: 15,
-	BlockCache:   0,
 	Sync:         false,
 	BytesPerSync: 0,
 	//nolint:gomnd // default

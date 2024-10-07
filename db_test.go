@@ -851,7 +851,6 @@ func TestDBIterator(t *testing.T) {
 		memSize:         DefaultOptions.MemtableSize,
 		walBytesPerSync: DefaultOptions.BytesPerSync,
 		walSync:         DefaultBatchOptions.Sync,
-		walBlockCache:   DefaultOptions.BlockCache,
 	}
 	for i := 0; i < 3; i++ {
 		opts.tableID = uint32(i)

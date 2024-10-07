@@ -31,11 +31,6 @@ type valueLogOptions struct {
 	// segmentSize specifies the maximum size of each segment file in bytes.
 	segmentSize int64
 
-	// blockCache specifies the size of the block cache in number of bytes.
-	// A block cache is used to store recently accessed data blocks, improving read performance.
-	// If BlockCache is set to 0, no block cache will be used.
-	blockCache uint32
-
 	// value log are partitioned to several parts for concurrent writing and reading
 	partitionNum uint32
 
@@ -63,7 +58,6 @@ func openValueLog(options valueLogOptions) (*valueLog, error) {
 			DirPath:        options.dirPath,
 			SegmentSize:    options.segmentSize,
 			SegmentFileExt: fmt.Sprintf(valueLogFileExt, i),
-			BlockCache:     options.blockCache,
 			Sync:           false, // we will sync manually
 			BytesPerSync:   0,     // the same as Sync
 		})
