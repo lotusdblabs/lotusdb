@@ -672,8 +672,8 @@ func (db *DB) Compact() error {
 	}
 
 	g, _ := errgroup.WithContext(context.Background())
-	var capacity int64 = 0
-	var capacityList []int64 = make([]int64, db.options.PartitionNum)
+	var capacity int64
+	var capacityList = make([]int64, db.options.PartitionNum)
 	for i := 0; i < int(db.vlog.options.partitionNum); i++ {
 		part := i
 		g.Go(func() error {
@@ -717,7 +717,7 @@ func (db *DB) Compact() error {
 				}
 
 				if capacity >= int64(db.vlog.options.compactBatchCapacity) {
-					err := db.rewriteValidRecords(newVlogFile, validRecords, part)
+					err = db.rewriteValidRecords(newVlogFile, validRecords, part)
 					if err != nil {
 						_ = newVlogFile.Delete()
 						return err
@@ -780,8 +780,8 @@ func (db *DB) CompactWithDeprecatedtable() error {
 	}
 
 	g, _ := errgroup.WithContext(context.Background())
-	var capacity int64 = 0
-	var capacityList []int64 = make([]int64, db.options.PartitionNum)
+	var capacity int64
+	var capacityList = make([]int64, db.options.PartitionNum)
 	for i := 0; i < int(db.vlog.options.partitionNum); i++ {
 		part := i
 		g.Go(func() error {
@@ -830,7 +830,7 @@ func (db *DB) CompactWithDeprecatedtable() error {
 				}
 
 				if capacity >= int64(db.vlog.options.compactBatchCapacity) {
-					err := db.rewriteValidRecords(newVlogFile, validRecords, part)
+					err = db.rewriteValidRecords(newVlogFile, validRecords, part)
 					if err != nil {
 						_ = newVlogFile.Delete()
 						return err
