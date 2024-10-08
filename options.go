@@ -49,8 +49,8 @@ type Options struct {
 	// default value is bptree.
 	IndexType IndexType
 
-	// writing entries to disk after reading the specified number of entries.
-	CompactBatchCount int
+	// writing entries to disk after reading the specified memory capacity of entries.
+	CompactBatchCapacity int
 
 	// deprecatedtable recommend compaction rate
 	AdvisedCompactionRate float32
@@ -140,7 +140,7 @@ var DefaultOptions = Options{
 	ValueLogFileSize: 1 * GB,
 	IndexType:        BTree,
 	//nolint:gomnd // default
-	CompactBatchCount: 10000,
+	CompactBatchCapacity: 1 << 30,
 	//nolint:gomnd // default
 	AdvisedCompactionRate: 0.3,
 	//nolint:gomnd // default

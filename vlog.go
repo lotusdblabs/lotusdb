@@ -37,8 +37,8 @@ type valueLogOptions struct {
 	// hash function for sharding
 	hashKeyFunction func([]byte) uint64
 
-	// writing validEntries to disk after reading the specified number of entries.
-	compactBatchCount int
+	// writing validEntries to disk after reading the specified memory capacity of entries.
+	compactBatchCapacity int
 
 	// deprecated number
 	deprecatedtableNumber uint32

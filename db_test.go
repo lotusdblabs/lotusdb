@@ -436,7 +436,7 @@ func TestDBCompact(t *testing.T) {
 	path, err := os.MkdirTemp("", "db-test-compact")
 	require.NoError(t, err)
 	options.DirPath = path
-	options.CompactBatchCount = 2 << 5
+	options.CompactBatchCapacity = 1 << 6
 
 	db, err := Open(options)
 	require.NoError(t, err)
@@ -489,7 +489,7 @@ func TestDBCompactWitchDeprecatetable(t *testing.T) {
 	path, err := os.MkdirTemp("", "db-test-CompactWitchDeprecatetable")
 	require.NoError(t, err)
 	options.DirPath = path
-	options.CompactBatchCount = 2 << 5
+	options.CompactBatchCapacity = 1 << 6
 
 	db, err := Open(options)
 	require.NoError(t, err)
@@ -542,7 +542,7 @@ func TestDBAutoCompact(t *testing.T) {
 	path, err := os.MkdirTemp("", "db-test-AutoCompact")
 	require.NoError(t, err)
 	options.DirPath = path
-	options.CompactBatchCount = 2 << 5
+	options.CompactBatchCapacity = 1 << 6
 
 	db, err := Open(options)
 	require.NoError(t, err)
@@ -605,7 +605,7 @@ func TestDBAutoCompactWithBusyIO(t *testing.T) {
 	path, err := os.MkdirTemp("", "db-test-AutoCompactWithBusyIO")
 	require.NoError(t, err)
 	options.DirPath = path
-	options.CompactBatchCount = 2 << 5
+	options.CompactBatchCapacity = 1 << 6
 
 	db, err := Open(options)
 	require.NoError(t, err)
@@ -1062,7 +1062,7 @@ func TestDeprecatetableMetaPersist(t *testing.T) {
 	path, err := os.MkdirTemp("", "db-test-DeprecatetableMetaPersist")
 	require.NoError(t, err)
 	options.DirPath = path
-	options.CompactBatchCount = 2 << 5
+	options.CompactBatchCapacity = 1 << 6
 
 	db, err := Open(options)
 	require.NoError(t, err)

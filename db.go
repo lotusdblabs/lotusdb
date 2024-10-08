@@ -12,6 +12,7 @@ import (
 	"path/filepath"
 	"reflect"
 	"sync"
+	"sync/atomic"
 	"syscall"
 	"time"
 
@@ -117,7 +118,7 @@ func Open(options Options) (*DB, error) {
 		segmentSize:           options.ValueLogFileSize,
 		partitionNum:          uint32(options.PartitionNum),
 		hashKeyFunction:       options.KeyHashFunction,
-		compactBatchCount:     options.CompactBatchCount,
+		compactBatchCapacity:  options.CompactBatchCapacity,
 		deprecatedtableNumber: deprecatedNumber,
 		totalNumber:           totalEntryNumber,
 	})
@@ -671,18 +672,19 @@ func (db *DB) Compact() error {
 	}
 
 	g, _ := errgroup.WithContext(context.Background())
+	var capacity int64 = 0
+	var capacityList []int64 = make([]int64, db.options.PartitionNum)
 	for i := 0; i < int(db.vlog.options.partitionNum); i++ {
 		part := i
 		g.Go(func() error {
 			newVlogFile := openVlogFile(part, tempValueLogFileExt)
-
-			validRecords := make([]*ValueLogRecord, 0, db.vlog.options.compactBatchCount)
+			validRecords := make([]*ValueLogRecord, 0)
 			reader := db.vlog.walFiles[part].NewReader()
-			count := 0
 			// iterate all records in wal, find the valid records
 			for {
-				count++
 				chunk, pos, err := reader.Next()
+				atomic.AddInt64(&capacity, int64(len(chunk)))
+				capacityList[part] += int64(len(chunk))
 				if err != nil {
 					if errors.Is(err, io.EOF) {
 						break
@@ -713,13 +715,16 @@ func (db *DB) Compact() error {
 				if keyPos.partition == uint32(part) && reflect.DeepEqual(keyPos.position, pos) {
 					validRecords = append(validRecords, record)
 				}
-				if count%db.vlog.options.compactBatchCount == 0 {
-					err = db.rewriteValidRecords(newVlogFile, validRecords, part)
+
+				if capacity >= int64(db.vlog.options.compactBatchCapacity) {
+					err := db.rewriteValidRecords(newVlogFile, validRecords, part)
 					if err != nil {
 						_ = newVlogFile.Delete()
 						return err
 					}
 					validRecords = validRecords[:0]
+					atomic.AddInt64(&capacity, -capacityList[part])
+					capacityList[part] = 0
 				}
 			}
 
@@ -775,17 +780,19 @@ func (db *DB) CompactWithDeprecatedtable() error {
 	}
 
 	g, _ := errgroup.WithContext(context.Background())
+	var capacity int64 = 0
+	var capacityList []int64 = make([]int64, db.options.PartitionNum)
 	for i := 0; i < int(db.vlog.options.partitionNum); i++ {
 		part := i
 		g.Go(func() error {
 			newVlogFile := openVlogFile(part, tempValueLogFileExt)
-			validRecords := make([]*ValueLogRecord, 0, db.vlog.options.compactBatchCount)
+			validRecords := make([]*ValueLogRecord, 0)
 			reader := db.vlog.walFiles[part].NewReader()
-			count := 0
 			// iterate all records in wal, find the valid records
 			for {
-				count++
 				chunk, pos, err := reader.Next()
+				atomic.AddInt64(&capacity, int64(len(chunk)))
+				capacityList[part] += int64(len(chunk))
 				if err != nil {
 					if errors.Is(err, io.EOF) {
 						break
@@ -822,14 +829,15 @@ func (db *DB) CompactWithDeprecatedtable() error {
 					}
 				}
 
-				if count%db.vlog.options.compactBatchCount == 0 {
-					err = db.rewriteValidRecords(newVlogFile, validRecords, part)
-
+				if capacity >= int64(db.vlog.options.compactBatchCapacity) {
+					err := db.rewriteValidRecords(newVlogFile, validRecords, part)
 					if err != nil {
 						_ = newVlogFile.Delete()
 						return err
 					}
 					validRecords = validRecords[:0]
+					atomic.AddInt64(&capacity, -capacityList[part])
+					capacityList[part] = 0
 				}
 			}
 			if len(validRecords) > 0 {
