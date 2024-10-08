@@ -8,6 +8,7 @@ import (
 	"os"
 	"path/filepath"
 
+	"github.com/google/uuid"
 	"github.com/rosedblabs/diskhash"
 	"github.com/rosedblabs/wal"
 	"go.etcd.io/bbolt"
@@ -81,7 +82,11 @@ func (bt *BPTree) Get(key []byte, _ ...diskhash.MatchKeyFunc) (*KeyPosition, err
 		if len(value) != 0 {
 			keyPos = new(KeyPosition)
 			keyPos.key, keyPos.partition = key, uint32(p)
-			keyPos.position = wal.DecodeChunkPosition(value)
+			err := keyPos.uid.UnmarshalBinary(value[:len(keyPos.uid)])
+			if err != nil {
+				return err
+			}
+			keyPos.position = wal.DecodeChunkPosition(value[len(keyPos.uid):])
 		}
 		return nil
 	}); err != nil {
@@ -92,9 +97,11 @@ func (bt *BPTree) Get(key []byte, _ ...diskhash.MatchKeyFunc) (*KeyPosition, err
 }
 
 // PutBatch puts the specified key positions into the index.
-func (bt *BPTree) PutBatch(positions []*KeyPosition, _ ...diskhash.MatchKeyFunc) error {
+//
+//nolint:gocognit
+func (bt *BPTree) PutBatch(positions []*KeyPosition, _ ...diskhash.MatchKeyFunc) ([]*KeyPosition, error) {
 	if len(positions) == 0 {
-		return nil
+		return nil, nil
 	}
 
 	// group positions by partition
@@ -104,7 +111,10 @@ func (bt *BPTree) PutBatch(positions []*KeyPosition, _ ...diskhash.MatchKeyFunc)
 		partitionRecords[p] = append(partitionRecords[p], pos)
 	}
 
+	// create chan to collect deprecated entry
+	deprecatedChan := make(chan []*KeyPosition, len(partitionRecords))
 	g, ctx := errgroup.WithContext(context.Background())
+
 	for i := range partitionRecords {
 		partition := i
 		if len(partitionRecords[partition]) == 0 {
@@ -113,7 +123,8 @@ func (bt *BPTree) PutBatch(positions []*KeyPosition, _ ...diskhash.MatchKeyFunc)
 		g.Go(func() error {
 			// get the bolt db instance for this partition
 			tree := bt.trees[partition]
-			return tree.Update(func(tx *bbolt.Tx) error {
+			partitionDeprecatedKeyPosition := make([]*KeyPosition, 0)
+			err := tree.Update(func(tx *bbolt.Tx) error {
 				bucket := tx.Bucket(indexBucketName)
 				// put each record into the bucket
 				for _, record := range partitionRecords[partition] {
@@ -121,26 +132,59 @@ func (bt *BPTree) PutBatch(positions []*KeyPosition, _ ...diskhash.MatchKeyFunc)
 					case <-ctx.Done():
 						return ctx.Err()
 					default:
+						uidBytes, _ := record.uid.MarshalBinary()
 						encPos := record.position.Encode()
-						if err := bucket.Put(record.key, encPos); err != nil {
+						//nolint:gocritic // Need to combine uidbytes with encPos and place them in bptree
+						valueBytes := append(uidBytes, encPos...)
+						if err, oldValue := bucket.Put(record.key, valueBytes); err != nil {
 							if errors.Is(err, bbolt.ErrKeyRequired) {
 								return ErrKeyIsEmpty
 							}
 							return err
+						} else if oldValue != nil {
+							keyPos := new(KeyPosition)
+							keyPos.key, keyPos.partition = record.key, record.partition
+							err = keyPos.uid.UnmarshalBinary(oldValue[:len(keyPos.uid)])
+							if err != nil {
+								return err
+							}
+							keyPos.position = wal.DecodeChunkPosition(oldValue[len(keyPos.uid):])
+							partitionDeprecatedKeyPosition = append(partitionDeprecatedKeyPosition, keyPos)
 						}
 					}
 				}
 				return nil
 			})
+			// send deprecateduuid uuid slice to chan
+			deprecatedChan <- partitionDeprecatedKeyPosition
+			return err
 		})
 	}
-	return g.Wait()
+	// Close the channel after all goroutines are done
+	go func() {
+		_ = g.Wait()
+		close(deprecatedChan)
+	}()
+
+	var deprecatedKeyPosition []*KeyPosition
+	for partitionDeprecatedKeyPosition := range deprecatedChan {
+		deprecatedKeyPosition = append(deprecatedKeyPosition, partitionDeprecatedKeyPosition...)
+	}
+
+	// Wait for all goroutines to finish
+	if err := g.Wait(); err != nil {
+		return nil, err
+	}
+
+	return deprecatedKeyPosition, nil
 }
 
 // DeleteBatch deletes the specified keys from the index.
-func (bt *BPTree) DeleteBatch(keys [][]byte, _ ...diskhash.MatchKeyFunc) error {
+//
+//nolint:gocognit
+func (bt *BPTree) DeleteBatch(keys [][]byte, _ ...diskhash.MatchKeyFunc) ([]*KeyPosition, error) {
 	if len(keys) == 0 {
-		return nil
+		return nil, nil
 	}
 
 	// group keys by partition
@@ -149,6 +193,9 @@ func (bt *BPTree) DeleteBatch(keys [][]byte, _ ...diskhash.MatchKeyFunc) error {
 		p := bt.options.getKeyPartition(key)
 		partitionKeys[p] = append(partitionKeys[p], key)
 	}
+
+	// create chan to collect deprecated entry
+	deprecatedChan := make(chan []*KeyPosition, len(partitionKeys))
 
 	// delete keys from each partition
 	g, ctx := errgroup.WithContext(context.Background())
@@ -159,7 +206,8 @@ func (bt *BPTree) DeleteBatch(keys [][]byte, _ ...diskhash.MatchKeyFunc) error {
 		}
 		g.Go(func() error {
 			tree := bt.trees[partition]
-			return tree.Update(func(tx *bbolt.Tx) error {
+			partitionDeprecatedKeyPosition := make([]*KeyPosition, 0)
+			err := tree.Update(func(tx *bbolt.Tx) error {
 				// get the bolt db instance for this partition
 				bucket := tx.Bucket(indexBucketName)
 				// delete each key from the bucket
@@ -171,16 +219,44 @@ func (bt *BPTree) DeleteBatch(keys [][]byte, _ ...diskhash.MatchKeyFunc) error {
 						if len(key) == 0 {
 							return ErrKeyIsEmpty
 						}
-						if err := bucket.Delete(key); err != nil {
+						if err, oldValue := bucket.Delete(key); err != nil {
 							return err
+						} else if oldValue != nil {
+							keyPos := new(KeyPosition)
+							keyPos.key, keyPos.partition = key, uint32(partition)
+							err = keyPos.uid.UnmarshalBinary(oldValue[:len(keyPos.uid)])
+							if err != nil {
+								return err
+							}
+							keyPos.position = wal.DecodeChunkPosition(oldValue[len(keyPos.uid):])
+							partitionDeprecatedKeyPosition = append(partitionDeprecatedKeyPosition, keyPos)
 						}
 					}
 				}
 				return nil
 			})
+			// send deprecateduuid uuid slice to chan
+			deprecatedChan <- partitionDeprecatedKeyPosition
+			return err
 		})
 	}
-	return g.Wait()
+	// Close the channel after all goroutines are done
+	go func() {
+		_ = g.Wait()
+		close(deprecatedChan)
+	}()
+
+	var deprecatedKeyPosition []*KeyPosition
+	for partitionDeprecatedKeyPosition := range deprecatedChan {
+		deprecatedKeyPosition = append(deprecatedKeyPosition, partitionDeprecatedKeyPosition...)
+	}
+
+	// Wait for all goroutines to finish
+	if err := g.Wait(); err != nil {
+		return nil, err
+	}
+
+	return deprecatedKeyPosition, nil
 }
 
 // Close releases all boltdb database resources.
@@ -291,7 +367,8 @@ func (bi *bptreeIterator) Key() []byte {
 
 // Value get the current value.
 func (bi *bptreeIterator) Value() any {
-	return bi.value
+	var uid uuid.UUID
+	return bi.value[len(uid):]
 }
 
 // Valid returns whether the iterator is exhausted.

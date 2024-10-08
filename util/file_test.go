@@ -30,6 +30,6 @@ func TestDirSize(t *testing.T) {
 	t.Run("test DirSize", func(t *testing.T) {
 		size, errDirSize := DirSize(dirPath)
 		require.NoError(t, errDirSize)
-		assert.Greater(t, size, int64(0))
+		assert.Positive(t, size, int64(0))
 	})
 }

@@ -4,6 +4,7 @@ import (
 	"context"
 	"fmt"
 
+	"github.com/google/uuid"
 	"github.com/rosedblabs/wal"
 	"golang.org/x/sync/errgroup"
 )
@@ -16,8 +17,11 @@ const (
 // valueLog value log is named after the concept in Wisckey paper
 // https://www.usenix.org/system/files/conference/fast16/fast16-papers-lu.pdf
 type valueLog struct {
-	walFiles []*wal.WAL
-	options  valueLogOptions
+	walFiles         []*wal.WAL
+	dpTables         []*deprecatedtable
+	deprecatedNumber uint32
+	totalNumber      uint32
+	options          valueLogOptions
 }
 
 type valueLogOptions struct {
@@ -27,32 +31,33 @@ type valueLogOptions struct {
 	// segmentSize specifies the maximum size of each segment file in bytes.
 	segmentSize int64
 
-	// blockCache specifies the size of the block cache in number of bytes.
-	// A block cache is used to store recently accessed data blocks, improving read performance.
-	// If BlockCache is set to 0, no block cache will be used.
-	blockCache uint32
-
 	// value log are partitioned to several parts for concurrent writing and reading
 	partitionNum uint32
 
 	// hash function for sharding
 	hashKeyFunction func([]byte) uint64
 
-	// writing validEntries to disk after reading the specified number of entries.
-	compactBatchCount int
+	// writing validEntries to disk after reading the specified memory capacity of entries.
+	compactBatchCapacity int
+
+	// deprecated number
+	deprecatedtableNumber uint32
+
+	// total number
+	totalNumber uint32
 }
 
 // open wal files for value log, it will open several wal files for concurrent writing and reading
 // the number of wal files is specified by the partitionNum.
+// init deprecatedtable for every wal, we should build dpTable aftering compacting vlog.
 func openValueLog(options valueLogOptions) (*valueLog, error) {
 	var walFiles []*wal.WAL
-
+	var dpTables []*deprecatedtable
 	for i := 0; i < int(options.partitionNum); i++ {
 		vLogWal, err := wal.Open(wal.Options{
 			DirPath:        options.dirPath,
 			SegmentSize:    options.segmentSize,
 			SegmentFileExt: fmt.Sprintf(valueLogFileExt, i),
-			BlockCache:     options.blockCache,
 			Sync:           false, // we will sync manually
 			BytesPerSync:   0,     // the same as Sync
 		})
@@ -60,9 +65,17 @@ func openValueLog(options valueLogOptions) (*valueLog, error) {
 			return nil, err
 		}
 		walFiles = append(walFiles, vLogWal)
+		// init dpTable
+		dpTable := newDeprecatedTable(i)
+		dpTables = append(dpTables, dpTable)
 	}
 
-	return &valueLog{walFiles: walFiles, options: options}, nil
+	return &valueLog{
+		walFiles:         walFiles,
+		dpTables:         dpTables,
+		deprecatedNumber: options.deprecatedtableNumber,
+		totalNumber:      options.totalNumber,
+		options:          options}, nil
 }
 
 // read the value log record from the specified position.
@@ -80,6 +93,7 @@ func (vlog *valueLog) read(pos *KeyPosition) (*ValueLogRecord, error) {
 func (vlog *valueLog) writeBatch(records []*ValueLogRecord) ([]*KeyPosition, error) {
 	// group the records by partition
 	partitionRecords := make([][]*ValueLogRecord, vlog.options.partitionNum)
+	vlog.totalNumber += uint32(len(records))
 	for _, record := range records {
 		p := vlog.getKeyPartition(record.key)
 		partitionRecords[p] = append(partitionRecords[p], record)
@@ -121,6 +135,7 @@ func (vlog *valueLog) writeBatch(records []*ValueLogRecord) ([]*KeyPosition, err
 				keyPositions = append(keyPositions, &KeyPosition{
 					key:       partitionRecords[part][writeIdx+i].key,
 					partition: uint32(part),
+					uid:       partitionRecords[part][writeIdx+i].uid,
 					position:  pos,
 				})
 			}
@@ -166,4 +181,22 @@ func (vlog *valueLog) close() error {
 
 func (vlog *valueLog) getKeyPartition(key []byte) int {
 	return int(vlog.options.hashKeyFunction(key) % uint64(vlog.options.partitionNum))
+}
+
+// we add middle layer of DeprecatedTable for interacting with autoCompact func.
+func (vlog *valueLog) setDeprecated(partition uint32, id uuid.UUID) {
+	vlog.dpTables[partition].addEntry(id)
+	vlog.deprecatedNumber++
+}
+
+func (vlog *valueLog) isDeprecated(partition int, id uuid.UUID) bool {
+	return vlog.dpTables[partition].existEntry(id)
+}
+
+func (vlog *valueLog) cleanDeprecatedTable() {
+	for i := 0; i < int(vlog.options.partitionNum); i++ {
+		vlog.dpTables[i].clean()
+	}
+	vlog.totalNumber -= vlog.deprecatedNumber
+	vlog.deprecatedNumber = 0
 }

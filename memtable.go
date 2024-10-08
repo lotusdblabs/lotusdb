@@ -51,7 +51,6 @@ type (
 		memSize         uint32 // max size of the memtable
 		walBytesPerSync uint32 // flush wal file to disk throughput BytesPerSync parameter
 		walSync         bool   // WAL flush immediately after each writing
-		walBlockCache   uint32 // block cache size of wal
 	}
 )
 
@@ -91,7 +90,6 @@ func openAllMemtables(options Options) ([]*memtable, error) {
 			memSize:         options.MemtableSize,
 			walSync:         options.Sync,
 			walBytesPerSync: options.BytesPerSync,
-			walBlockCache:   options.BlockCache,
 		})
 		if errOpenMemtable != nil {
 			return nil, errOpenMemtable
@@ -116,7 +114,6 @@ func openMemtable(options memtableOptions) (*memtable, error) {
 		DirPath:        options.dirPath,
 		SegmentSize:    math.MaxInt, // no limit, guarantee that a wal file only contains one segment file
 		SegmentFileExt: fmt.Sprintf(walFileExt, options.tableID),
-		BlockCache:     options.walBlockCache,
 		Sync:           options.walSync,
 		BytesPerSync:   options.walBytesPerSync,
 	})
