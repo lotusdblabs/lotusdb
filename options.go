@@ -20,11 +20,6 @@ type Options struct {
 	// Default value is 15.
 	MemtableNums int
 
-	// BlockCache specifies the size of the block cache in number of bytes.
-	// A block cache is used to store recently accessed data blocks, improving read performance.
-	// If BlockCache is set to 0, no block cache will be used.
-	BlockCache uint32
-
 	// Sync is whether to synchronize writes through os buffer cache and down onto the actual disk.
 	// Setting sync is required for durability of a single write operation, but also results in slower writes.
 	//
@@ -54,8 +49,26 @@ type Options struct {
 	// default value is bptree.
 	IndexType IndexType
 
-	// writing entries to disk after reading the specified number of entries.
-	CompactBatchCount int
+	// writing entries to disk after reading the specified memory capacity of entries.
+	CompactBatchCapacity int
+
+	// deprecatedtable recommend compaction rate
+	AdvisedCompactionRate float32
+
+	// deprecatedtable force compaction rate
+	ForceCompactionRate float32
+
+	// sampling interval of diskIO, unit is millisecond
+	DiskIOSamplingInterval int
+
+	// window is used to retrieve the state of IO bury over a period of time
+	DiskIOSamplingWindow int
+
+	// rate of io time in the sampling time is used to represent the busy state of io
+	DiskIOBusyRate float32
+
+	// AutoCompactSupport support
+	AutoCompactSupport bool
 
 	// WaitMemSpaceTimeout specifies the timeout for waiting for space in the memtable.
 	// When all memtables are full, it will be flushed to disk by the background goroutine.
@@ -119,7 +132,6 @@ var DefaultOptions = Options{
 	MemtableSize: 64 * MB,
 	//nolint:gomnd // default
 	MemtableNums: 15,
-	BlockCache:   0,
 	Sync:         false,
 	BytesPerSync: 0,
 	//nolint:gomnd // default
@@ -128,7 +140,18 @@ var DefaultOptions = Options{
 	ValueLogFileSize: 1 * GB,
 	IndexType:        BTree,
 	//nolint:gomnd // default
-	CompactBatchCount: 10000,
+	CompactBatchCapacity: 1 << 30,
+	//nolint:gomnd // default
+	AdvisedCompactionRate: 0.3,
+	//nolint:gomnd // default
+	ForceCompactionRate: 0.5,
+	//nolint:gomnd // default
+	DiskIOSamplingInterval: 100,
+	//nolint:gomnd // default
+	DiskIOSamplingWindow: 10,
+	//nolint:gomnd // default
+	DiskIOBusyRate:     0.5,
+	AutoCompactSupport: true,
 	//nolint:gomnd // default
 	WaitMemSpaceTimeout: 100 * time.Millisecond,
 }

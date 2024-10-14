@@ -27,7 +27,6 @@ func TestMemtableOpen(t *testing.T) {
 		memSize:         DefaultOptions.MemtableSize,
 		walBytesPerSync: DefaultOptions.BytesPerSync,
 		walSync:         DefaultBatchOptions.Sync,
-		walBlockCache:   DefaultOptions.BlockCache,
 	}
 
 	t.Run("open memtable", func(t *testing.T) {
@@ -56,7 +55,6 @@ func TestMemtableOpenAll(t *testing.T) {
 			memSize:         DefaultOptions.MemtableSize,
 			walBytesPerSync: DefaultOptions.BytesPerSync,
 			walSync:         DefaultBatchOptions.Sync,
-			walBlockCache:   DefaultOptions.BlockCache,
 		}
 		table, err = openMemtable(opts)
 		require.NoError(t, err)
@@ -93,7 +91,6 @@ func TestMemTablePutAllKindsEntries(t *testing.T) {
 		memSize:         DefaultOptions.MemtableSize,
 		walBytesPerSync: DefaultOptions.BytesPerSync,
 		walSync:         DefaultBatchOptions.Sync,
-		walBlockCache:   DefaultOptions.BlockCache,
 	}
 	table, err := openMemtable(opts)
 	require.NoError(t, err)
@@ -151,7 +148,6 @@ func TestMemTablePutBatch(t *testing.T) {
 		memSize:         DefaultOptions.MemtableSize,
 		walBytesPerSync: DefaultOptions.BytesPerSync,
 		walSync:         DefaultBatchOptions.Sync,
-		walBlockCache:   DefaultOptions.BlockCache,
 	}
 	table, err := openMemtable(opts)
 	require.NoError(t, err)
@@ -166,7 +162,7 @@ func TestMemTablePutBatch(t *testing.T) {
 	pendingWrites := make(map[string]*LogRecord)
 	val := util.RandomValue(512)
 	for i := 0; i < 1000; i++ {
-		log := &LogRecord{Key: util.GetTestKey(i), Value: val}
+		log := &LogRecord{Key: util.GetTestKey(int64(i)), Value: val}
 		pendingWrites[string(log.Key)] = log
 	}
 
@@ -193,7 +189,6 @@ func TestMemTablePutBatchReopen(t *testing.T) {
 		memSize:         DefaultOptions.MemtableSize,
 		walBytesPerSync: DefaultOptions.BytesPerSync,
 		walSync:         DefaultBatchOptions.Sync,
-		walBlockCache:   DefaultOptions.BlockCache,
 	}
 	table, err := openMemtable(opts)
 	require.NoError(t, err)
@@ -208,7 +203,7 @@ func TestMemTablePutBatchReopen(t *testing.T) {
 	pendingWrites := make(map[string]*LogRecord)
 	val := util.RandomValue(512)
 	for i := 0; i < 1000; i++ {
-		log := &LogRecord{Key: util.GetTestKey(i), Value: val}
+		log := &LogRecord{Key: util.GetTestKey(int64(i)), Value: val}
 		pendingWrites[string(log.Key)] = log
 	}
 
@@ -242,7 +237,6 @@ func TestMemTableGet(t *testing.T) {
 		memSize:         DefaultOptions.MemtableSize,
 		walBytesPerSync: DefaultOptions.BytesPerSync,
 		walSync:         DefaultBatchOptions.Sync,
-		walBlockCache:   DefaultOptions.BlockCache,
 	}
 	table, err := openMemtable(opts)
 	require.NoError(t, err)
@@ -303,7 +297,6 @@ func TestMemTableGetReopen(t *testing.T) {
 		memSize:         DefaultOptions.MemtableSize,
 		walBytesPerSync: DefaultOptions.BytesPerSync,
 		walSync:         DefaultBatchOptions.Sync,
-		walBlockCache:   DefaultOptions.BlockCache,
 	}
 
 	writeOpts := WriteOptions{
@@ -385,7 +378,6 @@ func TestMemTableDelWal(t *testing.T) {
 		memSize:         DefaultOptions.MemtableSize,
 		walBytesPerSync: DefaultOptions.BytesPerSync,
 		walSync:         DefaultBatchOptions.Sync,
-		walBlockCache:   DefaultOptions.BlockCache,
 	}
 	table, err := openMemtable(opts)
 	require.NoError(t, err)
@@ -418,7 +410,6 @@ func TestMemTableSync(t *testing.T) {
 		memSize:         DefaultOptions.MemtableSize,
 		walBytesPerSync: DefaultOptions.BytesPerSync,
 		walSync:         DefaultBatchOptions.Sync,
-		walBlockCache:   DefaultOptions.BlockCache,
 	}
 	table, err := openMemtable(opts)
 	require.NoError(t, err)
@@ -433,7 +424,7 @@ func TestMemTableSync(t *testing.T) {
 	pendingWrites := make(map[string]*LogRecord)
 	val := util.RandomValue(512)
 	for i := 0; i < 1000; i++ {
-		log := &LogRecord{Key: util.GetTestKey(i), Value: val}
+		log := &LogRecord{Key: util.GetTestKey(int64(i)), Value: val}
 		pendingWrites[string(log.Key)] = log
 	}
 	err = table.putBatch(pendingWrites, node.Generate(), writeOpts)
@@ -463,7 +454,6 @@ func TestMemtableClose(t *testing.T) {
 		memSize:         DefaultOptions.MemtableSize,
 		walBytesPerSync: DefaultOptions.BytesPerSync,
 		walSync:         DefaultBatchOptions.Sync,
-		walBlockCache:   DefaultOptions.BlockCache,
 	}
 
 	table, err := openMemtable(opts)
@@ -489,7 +479,6 @@ func TestNewMemtableIterator(t *testing.T) {
 		memSize:         DefaultOptions.MemtableSize,
 		walBytesPerSync: DefaultOptions.BytesPerSync,
 		walSync:         DefaultBatchOptions.Sync,
-		walBlockCache:   DefaultOptions.BlockCache,
 	}
 
 	table, err := openMemtable(opts)
@@ -524,7 +513,6 @@ func Test_memtableIterator(t *testing.T) {
 		memSize:         DefaultOptions.MemtableSize,
 		walBytesPerSync: DefaultOptions.BytesPerSync,
 		walSync:         DefaultBatchOptions.Sync,
-		walBlockCache:   DefaultOptions.BlockCache,
 	}
 	table, err := openMemtable(opts)
 	require.NoError(t, err)

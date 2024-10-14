@@ -2,6 +2,7 @@ package lotusdb
 
 import (
 	"bytes"
+	"log"
 	"os"
 	"sync"
 	"testing"
@@ -380,6 +381,16 @@ func TestDBFlushMemTables(t *testing.T) {
 			DisableWal: false,
 		})
 	}
+
+	delLogs := []*testLog{
+		{key: []byte("key 3"), value: []byte("value 3")},
+	}
+	for _, log := range delLogs {
+		_ = db.PutWithOptions(log.key, log.value, WriteOptions{
+			Sync:       true,
+			DisableWal: false,
+		})
+	}
 	for i := 0; i < numLogs; i++ {
 		// the size of a logRecord is about 1MB (a little bigger than 1MB due to encode)
 		log := &testLog{key: util.RandomValue(2 << 18), value: util.RandomValue(2 << 18)}
@@ -397,15 +408,35 @@ func TestDBFlushMemTables(t *testing.T) {
 			require.NoError(t, err)
 			assert.Equal(t, log.value, value)
 		}
+
+		for _, log := range delLogs {
+			partition := db.vlog.getKeyPartition(log.key)
+			record, _ := getRecordFromVlog(db, log.key)
+			_ = db.DeleteWithOptions(log.key, WriteOptions{
+				Sync:       true,
+				DisableWal: false,
+			})
+			for i := 0; i < numLogs; i++ {
+				// the size of a logRecord is about 1MB (a little bigger than 1MB due to encode)
+				tlog := &testLog{key: util.RandomValue(2 << 18), value: util.RandomValue(2 << 18)}
+				_ = db.PutWithOptions(tlog.key, tlog.value, WriteOptions{
+					Sync:       true,
+					DisableWal: false,
+				})
+			}
+			time.Sleep(1 * time.Second)
+			assert.True(t, true, db.vlog.dpTables[partition].existEntry(record.uid))
+		}
 	})
 }
 
 func TestDBCompact(t *testing.T) {
 	options := DefaultOptions
+	options.AutoCompactSupport = false
 	path, err := os.MkdirTemp("", "db-test-compact")
 	require.NoError(t, err)
 	options.DirPath = path
-	options.CompactBatchCount = 2 << 5
+	options.CompactBatchCapacity = 1 << 6
 
 	db, err := Open(options)
 	require.NoError(t, err)
@@ -416,27 +447,24 @@ func TestDBCompact(t *testing.T) {
 		{key: []byte("key 1"), value: []byte("value 1")},
 		{key: []byte("key 2"), value: []byte("value 2")},
 	}
+
 	for _, log := range testlogs {
 		_ = db.PutWithOptions(log.key, log.value, WriteOptions{
 			Sync:       true,
 			DisableWal: false,
 		})
 	}
-	// write logs and flush
-	logs := produceAndWriteLogs(500, db)
-	// delete logs
-	for _, log := range logs {
-		_ = db.DeleteWithOptions(log.key, WriteOptions{
-			Sync:       true,
-			DisableWal: false,
-		})
-	}
-	// make sure deleted logs will be flush
-	produceAndWriteLogs(100, db)
+
+	produceAndWriteLogs(100000, 0, db)
+	// overwrite half. background busy flushing.
+	produceAndWriteLogs(50000, 0, db)
+	produceAndWriteLogs(50000, 0, db)
+	produceAndWriteLogs(50000, 0, db)
+	produceAndWriteLogs(50000, 0, db)
 
 	t.Run("test compaction", func(t *testing.T) {
 		var size, sizeCompact int64
-		time.Sleep(time.Millisecond * 5000)
+
 		size, err = util.DirSize(db.options.DirPath)
 		require.NoError(t, err)
 
@@ -451,6 +479,195 @@ func TestDBCompact(t *testing.T) {
 			value, err = getValueFromVlog(db, log.key)
 			require.NoError(t, err)
 			assert.Equal(t, log.value, value)
+		}
+	})
+}
+
+func TestDBCompactWitchDeprecatetable(t *testing.T) {
+	options := DefaultOptions
+	options.AutoCompactSupport = false
+	path, err := os.MkdirTemp("", "db-test-CompactWitchDeprecatetable")
+	require.NoError(t, err)
+	options.DirPath = path
+	options.CompactBatchCapacity = 1 << 6
+
+	db, err := Open(options)
+	require.NoError(t, err)
+	defer destroyDB(db)
+
+	testlogs := []*testLog{
+		{key: []byte("key 0"), value: []byte("value 0")},
+		{key: []byte("key 1"), value: []byte("value 1")},
+		{key: []byte("key 2"), value: []byte("value 2")},
+	}
+
+	for _, log := range testlogs {
+		_ = db.PutWithOptions(log.key, log.value, WriteOptions{
+			Sync:       true,
+			DisableWal: false,
+		})
+	}
+
+	produceAndWriteLogs(100000, 0, db)
+	// overwrite half. background busy flushing.
+	produceAndWriteLogs(50000, 0, db)
+	produceAndWriteLogs(50000, 0, db)
+	produceAndWriteLogs(50000, 0, db)
+	produceAndWriteLogs(50000, 0, db)
+
+	t.Run("test compaction", func(t *testing.T) {
+		var size, sizeCompact int64
+
+		size, err = util.DirSize(db.options.DirPath)
+		require.NoError(t, err)
+
+		err = db.CompactWithDeprecatedtable()
+		require.NoError(t, err)
+
+		sizeCompact, err = util.DirSize(db.options.DirPath)
+		require.NoError(t, err)
+		require.Greater(t, size, sizeCompact)
+		var value []byte
+		for _, log := range testlogs {
+			value, err = getValueFromVlog(db, log.key)
+			require.NoError(t, err)
+			assert.Equal(t, log.value, value)
+		}
+	})
+}
+
+func TestDBAutoCompact(t *testing.T) {
+	options := DefaultOptions
+	options.AutoCompactSupport = true
+	path, err := os.MkdirTemp("", "db-test-AutoCompact")
+	require.NoError(t, err)
+	options.DirPath = path
+	options.CompactBatchCapacity = 1 << 6
+
+	db, err := Open(options)
+	require.NoError(t, err)
+	defer destroyDB(db)
+
+	testlogs := []*testLog{
+		{key: []byte("key 0"), value: []byte("value 0")},
+		{key: []byte("key 1"), value: []byte("value 1")},
+		{key: []byte("key 2"), value: []byte("value 2")},
+	}
+
+	testrmlogs := []*testLog{
+		{key: []byte("key 0 rm"), value: []byte("value 0")},
+		{key: []byte("key 1 rm"), value: []byte("value 1")},
+		{key: []byte("key 2 rm"), value: []byte("value 2")},
+	}
+
+	t.Run("test compaction", func(t *testing.T) {
+		for _, log := range testlogs {
+			_ = db.PutWithOptions(log.key, log.value, WriteOptions{
+				Sync:       true,
+				DisableWal: false,
+			})
+		}
+		for _, log := range testrmlogs {
+			_ = db.DeleteWithOptions(log.key, WriteOptions{
+				Sync:       true,
+				DisableWal: false,
+			})
+		}
+		// load init key value.
+		produceAndWriteLogs(100000, 0, db)
+		// overwrite half. background busy flushing.
+		for i := 0; i < 6; i++ {
+			time.Sleep(500 * time.Microsecond)
+			produceAndWriteLogs(50000, 0, db)
+		}
+
+		require.NoError(t, err)
+
+		var value []byte
+		for _, log := range testlogs {
+			value, err = getValueFromVlog(db, log.key)
+			require.NoError(t, err)
+			assert.Equal(t, log.value, value)
+		}
+		for _, log := range testrmlogs {
+			value, err = db.Get(log.key)
+			require.Error(t, err)
+			assert.Equal(t, []byte(nil), value)
+		}
+	})
+}
+
+func TestDBAutoCompactWithBusyIO(t *testing.T) {
+	options := DefaultOptions
+	options.AutoCompactSupport = true
+	options.AdvisedCompactionRate = 0.2
+	options.ForceCompactionRate = 0.5
+	path, err := os.MkdirTemp("", "db-test-AutoCompactWithBusyIO")
+	require.NoError(t, err)
+	options.DirPath = path
+	options.CompactBatchCapacity = 1 << 6
+
+	db, err := Open(options)
+	require.NoError(t, err)
+	defer destroyDB(db)
+
+	testlogs := []*testLog{
+		{key: []byte("key 0"), value: []byte("value 0")},
+		{key: []byte("key 1"), value: []byte("value 1")},
+		{key: []byte("key 2"), value: []byte("value 2")},
+	}
+
+	testrmlogs := []*testLog{
+		{key: []byte("key 0 rm"), value: []byte("value 0")},
+		{key: []byte("key 1 rm"), value: []byte("value 1")},
+		{key: []byte("key 2 rm"), value: []byte("value 2")},
+	}
+
+	t.Run("test compaction", func(t *testing.T) {
+		for _, log := range testlogs {
+			_ = db.PutWithOptions(log.key, log.value, WriteOptions{
+				Sync:       true,
+				DisableWal: false,
+			})
+		}
+		for _, log := range testrmlogs {
+			_ = db.DeleteWithOptions(log.key, WriteOptions{
+				Sync:       true,
+				DisableWal: false,
+			})
+		}
+		// load init key value.
+		ioCloseChan := make(chan struct{})
+		go func() {
+			SimpleIO(options.DirPath+"iofile", 10)
+			ioCloseChan <- struct{}{}
+		}()
+
+		produceAndWriteLogs(100000, 0, db)
+		// overwrite half. background busy flushing.
+		produceAndWriteLogs(50000, 0, db)
+		go SimpleIO(options.DirPath+"iofile", 10)
+		produceAndWriteLogs(50000, 0, db)
+		produceAndWriteLogs(50000, 0, db)
+		produceAndWriteLogs(50000, 0, db)
+		// we sleep 1s, this time not IO busy. So that background will do autoCompact.
+		time.Sleep(1 * time.Second)
+		<-ioCloseChan
+		close(ioCloseChan)
+		produceAndWriteLogs(50000, 0, db)
+		produceAndWriteLogs(50000, 0, db)
+		require.NoError(t, err)
+
+		var value []byte
+		for _, log := range testlogs {
+			value, err = getValueFromVlog(db, log.key)
+			require.NoError(t, err)
+			assert.Equal(t, log.value, value)
+		}
+		for _, log := range testrmlogs {
+			value, err = db.Get(log.key)
+			require.Error(t, err)
+			assert.Equal(t, []byte(nil), value)
 		}
 	})
 }
@@ -481,11 +698,12 @@ func getValueFromVlog(db *DB, key []byte) ([]byte, error) {
 	return record.value, nil
 }
 
-func produceAndWriteLogs(numLogs int, db *DB) []*testLog {
+func produceAndWriteLogs(numLogs int64, offset int64, db *DB) []*testLog {
 	var logs []*testLog
-	for i := 0; i < numLogs; i++ {
-		// the size of a logRecord is about 1MB (a little bigger than 1MB due to encode)
-		log := &testLog{key: util.RandomValue(1 << 5), value: util.RandomValue(1 << 20)}
+	var i int64
+	for i = 0; i < numLogs; i++ {
+		// the size of a logRecord is about 1KB (a little bigger than 1KB due to encode)
+		log := &testLog{key: util.GetTestKey(offset + i), value: util.RandomValue(1 << 10)}
 		logs = append(logs, log)
 	}
 	for _, log := range logs {
@@ -497,6 +715,27 @@ func produceAndWriteLogs(numLogs int, db *DB) []*testLog {
 	return logs
 }
 
+func getRecordFromVlog(db *DB, key []byte) (*ValueLogRecord, error) {
+	var value []byte
+	var matchKey func(diskhash.Slot) (bool, error)
+	if db.options.IndexType == Hash {
+		matchKey = MatchKeyFunc(db, key, nil, &value)
+	}
+	position, err := db.index.Get(key, matchKey)
+	if err != nil {
+		return nil, err
+	}
+	if position == nil {
+		return nil, ErrKeyNotFound
+	}
+	record, err := db.vlog.read(position)
+	if err != nil {
+		return nil, err
+	}
+	return record, nil
+}
+
+//nolint:gocognit
 func TestDBMultiClients(t *testing.T) {
 	type testLog struct {
 		key   []byte
@@ -529,6 +768,18 @@ func TestDBMultiClients(t *testing.T) {
 		for i := 0; i < 2; i++ {
 			wg.Add(1)
 			go func(i int) {
+				delLogs := produceAndWriteLogs(50000, int64(i)*50000, db)
+				// delete logs
+				for idx, log := range delLogs {
+					if idx%5 == 0 {
+						_ = db.DeleteWithOptions(log.key, WriteOptions{
+							Sync:       true,
+							DisableWal: false,
+						})
+					}
+				}
+				produceAndWriteLogs(50000, int64(i)*50000, db)
+				time.Sleep(time.Millisecond * 500)
 				for _, log := range logs[i] {
 					_ = db.PutWithOptions(log.key, log.value, WriteOptions{
 						Sync:       true,
@@ -586,6 +837,7 @@ func TestDBMultiClients(t *testing.T) {
 //nolint:gocognit
 func TestDBIterator(t *testing.T) {
 	options := DefaultOptions
+	options.AutoCompactSupport = false
 	path, err := os.MkdirTemp("", "db-test-iter")
 	require.NoError(t, err)
 	options.DirPath = path
@@ -599,7 +851,6 @@ func TestDBIterator(t *testing.T) {
 		memSize:         DefaultOptions.MemtableSize,
 		walBytesPerSync: DefaultOptions.BytesPerSync,
 		walSync:         DefaultBatchOptions.Sync,
-		walBlockCache:   DefaultOptions.BlockCache,
 	}
 	for i := 0; i < 3; i++ {
 		opts.tableID = uint32(i)
@@ -803,4 +1054,59 @@ func TestDBIterator(t *testing.T) {
 	itr, err := db.NewIterator(IteratorOptions{Reverse: false})
 	assert.Equal(t, ErrDBIteratorUnsupportedTypeHASH, err)
 	assert.Nil(t, itr)
+}
+
+func TestDeprecatetableMetaPersist(t *testing.T) {
+	options := DefaultOptions
+	options.AutoCompactSupport = true
+	path, err := os.MkdirTemp("", "db-test-DeprecatetableMetaPersist")
+	require.NoError(t, err)
+	options.DirPath = path
+	options.CompactBatchCapacity = 1 << 6
+
+	db, err := Open(options)
+	require.NoError(t, err)
+
+	t.Run("test same deprecated number", func(t *testing.T) {
+		produceAndWriteLogs(100000, 0, db)
+		// overwrite half. background busy flushing.
+		for i := 0; i < 3; i++ {
+			time.Sleep(500 * time.Microsecond)
+			produceAndWriteLogs(50000, 0, db)
+		}
+		db.Close()
+		deprecatedNumberFirst := db.vlog.deprecatedNumber
+		totalNumberFirst := db.vlog.totalNumber
+		db, err = Open(options)
+		deprecatedNumberSecond := db.vlog.deprecatedNumber
+		totalNumberSecond := db.vlog.totalNumber
+		require.NoError(t, err)
+		assert.Equal(t, deprecatedNumberFirst, deprecatedNumberSecond)
+		assert.Equal(t, totalNumberFirst, totalNumberSecond)
+	})
+}
+
+func SimpleIO(targetPath string, count int) {
+	file, err := os.Create(targetPath)
+	if err != nil {
+		log.Println("Error creating file:", err)
+		return
+	}
+	data := util.RandomValue(1 << 24)
+	for count > 0 {
+		count--
+		_, err = file.Write(data)
+		if err != nil {
+			log.Println("Error writing to file:", err)
+			return
+		}
+
+		err = file.Sync()
+		if err != nil {
+			log.Println("Error syncing file:", err)
+			return
+		}
+
+		time.Sleep(1 * time.Millisecond)
+	}
 }

@@ -47,9 +47,9 @@ func openHashIndex(options indexOptions) (*HashTable, error) {
 }
 
 // PutBatch put batch records to index.
-func (ht *HashTable) PutBatch(positions []*KeyPosition, matchKeyFunc ...diskhash.MatchKeyFunc) error {
+func (ht *HashTable) PutBatch(positions []*KeyPosition, matchKeyFunc ...diskhash.MatchKeyFunc) ([]*KeyPosition, error) {
 	if len(positions) == 0 {
-		return nil
+		return nil, nil
 	}
 	partitionRecords := make([][]*KeyPosition, ht.options.partitionNum)
 	matchKeys := make([][]diskhash.MatchKeyFunc, ht.options.partitionNum)
@@ -86,7 +86,7 @@ func (ht *HashTable) PutBatch(positions []*KeyPosition, matchKeyFunc ...diskhash
 			return nil
 		})
 	}
-	return g.Wait()
+	return nil, g.Wait()
 }
 
 // Get chunk position by key.
@@ -105,9 +105,9 @@ func (ht *HashTable) Get(key []byte, matchKeyFunc ...diskhash.MatchKeyFunc) (*Ke
 }
 
 // DeleteBatch delete batch records from index.
-func (ht *HashTable) DeleteBatch(keys [][]byte, matchKeyFunc ...diskhash.MatchKeyFunc) error {
+func (ht *HashTable) DeleteBatch(keys [][]byte, matchKeyFunc ...diskhash.MatchKeyFunc) ([]*KeyPosition, error) {
 	if len(keys) == 0 {
-		return nil
+		return nil, nil
 	}
 	partitionKeys := make([][][]byte, ht.options.partitionNum)
 	matchKeys := make([][]*diskhash.MatchKeyFunc, ht.options.partitionNum)
@@ -141,7 +141,7 @@ func (ht *HashTable) DeleteBatch(keys [][]byte, matchKeyFunc ...diskhash.MatchKe
 			return nil
 		})
 	}
-	return g.Wait()
+	return nil, g.Wait()
 }
 
 // Sync sync index data to disk.

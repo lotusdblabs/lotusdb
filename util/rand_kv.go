@@ -14,7 +14,7 @@ var (
 	letters = []byte("abcdefghijklmnopqrstuvwxyzABCDEFGHIJKLMNOPQRSTUVWXYZ0123456789")
 )
 
-func GetTestKey(i int) []byte {
+func GetTestKey(i int64) []byte {
 	return []byte(fmt.Sprintf("lotusdb-test-key-%09d", i))
 }
 
