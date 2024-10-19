@@ -50,7 +50,7 @@ func main() {
 	println(string(val))
 
 	// delete a key
-	err = db.Delete([]byte("name"), nil)
+	err = db.Delete([]byte("name"))
 	if err != nil {
 		panic(err)
 	}
