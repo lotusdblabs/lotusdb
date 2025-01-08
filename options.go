@@ -58,6 +58,9 @@ type Options struct {
 	// deprecatedtable force compaction rate
 	ForceCompactionRate float32
 
+	// whether enable disk monitor
+	EnableDiskIO bool
+
 	// sampling interval of diskIO, unit is millisecond
 	DiskIOSamplingInterval int
 
@@ -146,12 +149,14 @@ var DefaultOptions = Options{
 	//nolint:gomnd // default
 	ForceCompactionRate: 0.5,
 	//nolint:gomnd // default
+	EnableDiskIO: false,
+	//nolint:gomnd // default
 	DiskIOSamplingInterval: 100,
 	//nolint:gomnd // default
 	DiskIOSamplingWindow: 10,
 	//nolint:gomnd // default
 	DiskIOBusyRate:     0.5,
-	AutoCompactSupport: true,
+	AutoCompactSupport: false,
 	//nolint:gomnd // default
 	WaitMemSpaceTimeout: 100 * time.Millisecond,
 }
