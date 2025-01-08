@@ -67,6 +67,9 @@ type Options struct {
 	// rate of io time in the sampling time is used to represent the busy state of io
 	DiskIOBusyRate float32
 
+	// DiskIOSupport
+	DiskIOSupport bool
+
 	// AutoCompactSupport support
 	AutoCompactSupport bool
 
@@ -151,6 +154,7 @@ var DefaultOptions = Options{
 	DiskIOSamplingWindow: 10,
 	//nolint:gomnd // default
 	DiskIOBusyRate:     0.5,
+	DiskIOSupport:      false,
 	AutoCompactSupport: true,
 	//nolint:gomnd // default
 	WaitMemSpaceTimeout: 100 * time.Millisecond,

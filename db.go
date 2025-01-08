@@ -128,6 +128,7 @@ func Open(options Options) (*DB, error) {
 
 	// init diskIO
 	diskIO := new(DiskIO)
+	diskIO.support = options.DiskIOSupport
 	diskIO.targetPath = options.DirPath
 	diskIO.samplingInterval = options.DiskIOSamplingInterval
 	diskIO.windowSize = options.DiskIOSamplingWindow

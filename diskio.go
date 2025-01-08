@@ -12,6 +12,7 @@ import (
 )
 
 type DiskIO struct {
+	support          bool     // switch diskio
 	targetPath       string   // db path, we use it to find disk device
 	samplingInterval int      // sampling time, millisecond
 	samplingWindow   []uint64 // sampling window is used to sample the average IoTime over a period of time
@@ -76,7 +77,7 @@ func (io *DiskIO) IsFree() (bool, error) {
 	// if runtime.GOOS != "linux" {
 	// 	return true, nil
 	// }
-	if io.busyRate < 0 {
+	if io.busyRate < 0 || !io.support {
 		return true, nil
 	}
 	io.mu.Lock()
