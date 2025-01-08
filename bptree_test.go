@@ -10,10 +10,10 @@ import (
 
 	"github.com/cespare/xxhash/v2"
 	"github.com/google/uuid"
+	"github.com/lotusdblabs/bbolt"
 	"github.com/rosedblabs/wal"
 	"github.com/stretchr/testify/assert"
 	"github.com/stretchr/testify/require"
-	"go.etcd.io/bbolt"
 )
 
 func Test_openIndexBoltDB(t *testing.T) {

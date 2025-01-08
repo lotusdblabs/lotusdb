@@ -10,12 +10,12 @@ require (
 	github.com/rosedblabs/diskhash v0.0.0-20230910084041-289755737e2a
 	github.com/rosedblabs/wal v1.3.8
 	github.com/stretchr/testify v1.9.0
-	go.etcd.io/bbolt v1.3.8
 	golang.org/x/sync v0.5.0
 )
 
 require (
 	github.com/go-ole/go-ole v1.2.6 // indirect
+	github.com/lotusdblabs/bbolt v1.3.9-0.20250108061345-78c23c59588d // indirect
 	github.com/shirou/gopsutil v3.21.11+incompatible // indirect
 	github.com/yusufpapurcu/wmi v1.2.4 // indirect
 )
@@ -38,5 +38,3 @@ require (
 	golang.org/x/sys v0.15.0 // indirect
 	gopkg.in/yaml.v3 v3.0.1 // indirect
 )
-
-replace go.etcd.io/bbolt => github.com/yanxiaoqi932/bbolt v1.3.9-0.20240829105042-5b817c5f51f8
