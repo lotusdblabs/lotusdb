@@ -167,7 +167,9 @@ func Open(options Options) (*DB, error) {
 
 		// start disk IO monitoring,
 		// blocking low threshold compact operations when busy.
-		go db.listenDiskIOState()
+		if options.EnableDiskIO {
+			go db.listenDiskIOState()
+		}
 	}
 
 	return db, nil
@@ -608,9 +610,13 @@ func (db *DB) listenAutoCompact() {
 				thresholdstate = ThresholdState(UnarriveThreshold)
 			} else if thresholdstate == ThresholdState(ArriveAdvisedThreshold) {
 				// determine whether to do compact based on the current IO state
-				free, err := db.diskIO.IsFree()
-				if err != nil {
-					panic(err)
+				free := true
+				var err error = nil
+				if db.options.EnableDiskIO {
+					free, err = db.diskIO.IsFree()
+					if err != nil {
+						panic(err)
+					}
 				}
 				if free {
 					if firstCompact {
