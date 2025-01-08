@@ -9,9 +9,9 @@ import (
 	"path/filepath"
 
 	"github.com/google/uuid"
+	"github.com/lotusdblabs/bbolt"
 	"github.com/rosedblabs/diskhash"
 	"github.com/rosedblabs/wal"
-	"go.etcd.io/bbolt"
 	"golang.org/x/sync/errgroup"
 )
 
