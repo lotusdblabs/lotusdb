@@ -53,11 +53,14 @@ func TestDBOpen(t *testing.T) {
 		err = db.Close()
 		assert.NoError(t, err)
 	})
-	t.Run("Invalid options - no directory path", func(t *testing.T) {
+	t.Run("Empty directory path uses temporary directory", func(t *testing.T) {
 		options := DefaultOptions
 		options.DirPath = ""
-		_, err := Open(options)
-		require.Error(t, err, "Open should return an error")
+		db, err := Open(options)
+		require.NoError(t, err)
+		require.NotNil(t, db)
+		defer destroyDB(db)
+		assert.NotEmpty(t, db.options.DirPath)
 	})
 }
 

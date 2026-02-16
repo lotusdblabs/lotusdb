@@ -130,7 +130,7 @@ const (
 )
 
 var DefaultOptions = Options{
-	DirPath: tempDBDir(),
+	DirPath: "",
 	//nolint:gomnd // default
 	MemtableSize: 64 * MB,
 	//nolint:gomnd // default

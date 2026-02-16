@@ -345,7 +345,10 @@ func (db *DB) Exist(key []byte) (bool, error) {
 // validateOptions validates the given options.
 func validateOptions(options *Options) error {
 	if options.DirPath == "" {
-		return ErrDBDirectoryISEmpty
+		options.DirPath = tempDBDir()
+		if options.DirPath == "" {
+			return ErrDBDirectoryISEmpty
+		}
 	}
 	if options.MemtableSize <= 0 {
 		options.MemtableSize = DefaultOptions.MemtableSize
