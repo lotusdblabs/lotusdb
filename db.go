@@ -10,7 +10,6 @@ import (
 	"os"
 	"os/signal"
 	"path/filepath"
-	"reflect"
 	"sync"
 	"sync/atomic"
 	"syscall"
@@ -721,7 +720,7 @@ func (db *DB) Compact() error {
 				if keyPos == nil {
 					continue
 				}
-				if keyPos.partition == uint32(part) && reflect.DeepEqual(keyPos.position, pos) {
+				if keyPos.partition == uint32(part) && samePosition(keyPos.position, pos) {
 					validRecords = append(validRecords, record)
 				}
 
@@ -833,7 +832,7 @@ func (db *DB) CompactWithDeprecatedtable() error {
 					if keyPos == nil {
 						continue
 					}
-					if keyPos.partition == uint32(part) && reflect.DeepEqual(keyPos.position, pos) {
+					if keyPos.partition == uint32(part) && samePosition(keyPos.position, pos) {
 						validRecords = append(validRecords, record)
 					}
 				}
@@ -871,6 +870,19 @@ func (db *DB) CompactWithDeprecatedtable() error {
 	err := g.Wait()
 	db.vlog.cleanDeprecatedTable()
 	return err
+}
+
+// samePosition reports whether two chunk positions identify the same record.
+// A record that straddles a block boundary is stored as several physical
+// chunks, and the size reported when reading it back differs from the size
+// recorded when it was written, so ChunkSize does not identify a record.
+func samePosition(a, b *wal.ChunkPosition) bool {
+	if a == nil || b == nil {
+		return a == b
+	}
+	return a.SegmentId == b.SegmentId &&
+		a.BlockNumber == b.BlockNumber &&
+		a.ChunkOffset == b.ChunkOffset
 }
 
 func (db *DB) rewriteValidRecords(walFile *wal.WAL, validRecords []*ValueLogRecord, part int) error {
