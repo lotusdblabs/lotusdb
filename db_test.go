@@ -2,6 +2,7 @@ package lotusdb
 
 import (
 	"bytes"
+	"fmt"
 	"log"
 	"os"
 	"sync"
@@ -537,6 +538,79 @@ func TestDBCompactWitchDeprecatetable(t *testing.T) {
 			assert.Equal(t, log.value, value)
 		}
 	})
+}
+
+// TestDBCompactRecordStraddlingBlockBoundary is a regression test for records
+// that straddle a WAL block boundary (32 KB). The chunk size the WAL reader
+// reports for such a record differs from the size recorded when it was
+// written, because the record is split into several physical chunks. Compact
+// used to decide whether a value-log record was still live by comparing its
+// whole position (including chunk size) with reflect.DeepEqual, so any record
+// straddling a boundary was misjudged as stale: it was never rewritten into
+// the new value log, and its index entry kept pointing at the old file after
+// that file was deleted. Reading the key back afterwards returned an error or
+// panicked in the WAL reader on a bogus chunk header.
+func TestDBCompactRecordStraddlingBlockBoundary(t *testing.T) {
+	options := DefaultOptions
+	options.AutoCompactSupport = false
+	path, err := os.MkdirTemp("", "db-test-compact-block-boundary")
+	require.NoError(t, err)
+	options.DirPath = path
+	options.PartitionNum = 3
+	options.CompactBatchCapacity = 64 * 1024 // force the batched rewrite path
+	options.MemtableSize = 512 * 1024        // flush memtables often so the value log accumulates many blocks
+	options.MemtableNums = 15
+
+	const n = 20000
+	const padding = "xxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxx"
+	keys := make([][]byte, n)
+	wantValues := make([][]byte, n)
+
+	db, err := Open(options)
+	require.NoError(t, err)
+	for i := 0; i < n; i++ {
+		keys[i] = []byte(fmt.Sprintf("block-boundary-key-%05d", i))
+		value := []byte(fmt.Sprintf("value-%05d-%s", i, padding))
+		require.NoError(t, db.Put(keys[i], value))
+	}
+	// Overwrite half the keys so compaction has stale records to reclaim.
+	for i := 0; i < n/2; i++ {
+		value := []byte(fmt.Sprintf("NEWvalue-%05d-%s", i, padding))
+		require.NoError(t, db.Put(keys[i], value))
+		wantValues[i] = value
+	}
+	for i := n / 2; i < n; i++ {
+		wantValues[i] = []byte(fmt.Sprintf("value-%05d-%s", i, padding))
+	}
+	require.NoError(t, db.Close())
+
+	db, err = Open(options)
+	require.NoError(t, err)
+	require.NoError(t, db.Compact())
+	require.NoError(t, db.Close())
+
+	// Reopen so the read path exercises what actually survived on disk,
+	// rather than any in-memory state left over from compaction.
+	db, err = Open(options)
+	require.NoError(t, err)
+	defer destroyDB(db)
+
+	for i := 0; i < n; i++ {
+		i := i
+		func() {
+			defer func() {
+				if r := recover(); r != nil {
+					t.Errorf("key %s panicked on read after compact: %v", keys[i], r)
+				}
+			}()
+			got, err := db.Get(keys[i])
+			if err != nil {
+				t.Errorf("key %s missing after compact: %v", keys[i], err)
+				return
+			}
+			assert.Equalf(t, wantValues[i], got, "key %s has stale value after compact", keys[i])
+		}()
+	}
 }
 
 func TestDBAutoCompact(t *testing.T) {
